@@ -1,8 +1,0 @@
-[graphify extract] scanning /Volumes/Renato/PicoStation BR/PicoStation-MultiHouse-macOS
-[graphify extract] --code-only: skipping 2 non-code file(s) (1 docs, 0 papers, 1 images) — no LLM extraction
-[graphify extract] found 1 code, 0 docs, 0 papers, 0 images
-[graphify extract] 13 file(s) not classified (no supported extension or shebang), skipped: .gitignore, .graphify-autobuild.log, AppIcon.icns, LICENSE, Makefile, aliases.bin (+7 more)
-[graphify extract] AST extraction on 1 code files...
-[graphify extract] wrote /Volumes/Renato/PicoStation BR/PicoStation-MultiHouse-macOS/graphify-out/graph.json: 5 nodes, 6 edges, 1 communities
-[graphify extract] wrote /Volumes/Renato/PicoStation BR/PicoStation-MultiHouse-macOS/graphify-out/.graphify_analysis.json
-[graphify extract] next: run `graphify cluster-only /Volumes/Renato/PicoStation BR/PicoStation-MultiHouse-macOS` to generate GRAPH_REPORT.md and name communities
