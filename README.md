@@ -1,29 +1,29 @@
-# PicoStation Multi House V3 para macOS
+# PicoStation Multi House V3 for macOS
 
-Port nativo para macOS (Apple Silicon, arm64) do **PicoStation Multi House V3 Manager**, o programa
-que monta o cartão SD no layout "V2" do firmware PicoStation Multi House: cases, discos, capas,
-cheats GameShark, menu e música, gravados direto no SD.
+A native macOS (Apple Silicon, arm64) port of **PicoStation Multi House V3 Manager**, the tool that
+builds the "V2" SD card layout used by the PicoStation Multi House firmware: cases, discs, cover art,
+GameShark cheats, menu and music, written straight to the SD card.
 
-O original é um programa Windows x64. Este repositório o reimplementa em C11 (núcleo) e
-AppKit (interface), a partir de engenharia reversa do executável. Mesmos formatos de dados, mesmas
-regras de validação, mesmos textos de tela.
+The original is a Windows x64 program. This repository re-implements it in C11 (core) and AppKit (UI),
+based on reverse engineering the executable. Same data formats, same validation rules, same on-screen
+texts (Portuguese, as in the original).
 
-## Créditos
+## Credits
 
-O programa original, o firmware Multi House e os formatos de dados são obra de **ALBERONISSE**:
+The original program, the Multi House firmware and the data formats are the work of **ALBERONISSE**:
 
 - [alberonisse/PicoStation_MultiHouse](https://github.com/alberonisse/PicoStation_MultiHouse)
 - [alberonisse/PicoStation_Manager](https://github.com/alberonisse/PicoStation_Manager)
-- [alberonisse/PicoStation](https://github.com/alberonisse/PicoStation) (firmware, fork de [paulocode/picostation](https://github.com/paulocode/picostation))
+- [alberonisse/PicoStation](https://github.com/alberonisse/PicoStation) (firmware, a fork of [paulocode/picostation](https://github.com/paulocode/picostation))
 
-Este port é independente e não oficial. O design do Multi House é todo do ALBERONISSE.
-Os bancos de dados embutidos (identificação de discos, hashes Redump, cheats GameShark V5, menu do
-console, template de capa, música) foram extraídos do executável original com `tools/extract_embedded.py`;
-veja `docs/EMBEDDED_DATA.md`.
+This port is independent and unofficial. The design of Multi House belongs entirely to ALBERONISSE.
+The embedded databases (disc identification, Redump hashes, GameShark V5 cheats, the console menu, the
+case template and the music) were extracted from the original executable with
+`tools/extract_embedded.py`; see `docs/EMBEDDED_DATA.md`.
 
-## Instalar
+## Install
 
-Requer um Mac com Apple Silicon (M1 ou mais novo) e macOS 12 ou superior.
+Requires a Mac with Apple Silicon (M1 or newer) and macOS 12 or later.
 
 ```sh
 curl -L -o PicoStation-Multi-House-V3-macOS-arm64.zip \
@@ -32,84 +32,84 @@ curl -L -o PicoStation-Multi-House-V3-macOS-arm64.zip \
   && open "PicoStation Multi House V3.app"
 ```
 
-O `curl` não marca o arquivo como baixado da internet, então o Gatekeeper não bloqueia o app (ele é
-assinado ad-hoc, sem certificado de desenvolvedor). Se você baixar pelo navegador, o macOS vai
-recusar na primeira abertura: use clique direito, Abrir, ou rode
+`curl` does not mark the file as downloaded from the internet, so Gatekeeper does not block the app
+(it is ad-hoc signed, without a developer certificate). If you download it with a browser instead,
+macOS refuses the first launch: right-click the app and choose Open, or run
 `xattr -dr com.apple.quarantine "PicoStation Multi House V3.app"`.
 
-A soma SHA-256 do zip está no arquivo `.sha256` da mesma release.
+The SHA-256 of the zip is published as a `.sha256` file in the same release.
 
-### Capas padrão (opcional)
+### Default cover art (optional)
 
-As capas de jogos (`database/art/default/<SERIAL>-CASE.art` e `-CD.art`) não vão dentro do app. Se você
-tem a pasta `database` do pacote original, o app a procura nesta ordem:
+Game cover art (`database/art/default/<SERIAL>-CASE.art` and `-CD.art`) is not bundled in the app. If
+you have the `database` folder from the original package, the app looks for it in this order:
 
 1. `$MH_DATA_DIR/database`
-2. ao lado do `.app` (por exemplo `Managers/database`)
-3. dentro do app, em `Contents/Resources`
+2. next to the `.app` (for example `Managers/database`)
+3. inside the app, under `Contents/Resources`
 4. `~/Library/Application Support/PicoStation Multi House/database`
 
-Sem essas pastas tudo funciona; as capas vêm do gerador do próprio programa ou ficam em branco.
+Everything works without these folders; covers then come from the program's own generator or stay blank.
 
-## Usar
+## Usage
 
-1. Arraste pastas de jogos ou arquivos `.cue` para a janela, ou use **+ Adicionar Jogo** e
-   **+ Adicionar Disco**. Cada CUE é verificado (estrutura, serial, hash Redump) se
-   "Verificar ao adicionar" estiver marcado.
-2. Ajuste nomes, capas, cheats e o menu (botão **Menu**).
-3. Escolha o **Cartão SD** e clique em **CRIAR CARTÃO V2**. O macOS pede a senha de administrador para
-   abrir o disco bruto. Também dá para salvar tudo como imagem (**Imagem**) e abrir imagens e cartões
-   V2 existentes para edição.
+1. Drag game folders or `.cue` files onto the window, or use **+ Adicionar Jogo** and
+   **+ Adicionar Disco**. Each CUE is checked (structure, serial, Redump hash) when
+   "Verificar ao adicionar" is ticked.
+2. Adjust names, cover art, cheats and the menu (the **Menu** button).
+3. Pick the **Cartao SD** and press **CRIAR CARTAO V2**. macOS asks for an administrator password to open
+   the raw disk. You can also save everything as an image (**Imagem**), and open existing V2 images and
+   cards for editing.
 
-### Segurança da gravação
+### Write safety
 
-A gravação é bruta e destrói o conteúdo do cartão. O app só oferece discos inteiros que parecem
-cartões (USB, SD ou MMC, removíveis, até 130 GB), nunca o disco do sistema nem discos internos.
-Antes de gravar ele confere de novo a identidade do disco (número, tamanho, modelo, série), desmonta
-os volumes e exige a caixa de confirmação. Mesmo assim, confira o nome do disco na lista.
+Writing is raw and destroys everything on the card. The app only offers whole disks that look like
+cards (USB, SD or MMC, removable, up to 130 GB), never the system disk or internal disks. Before
+writing it re-checks the disk identity (number, size, model, serial), unmounts the volumes and requires
+the confirmation checkbox. Even so, double-check the disk name in the list.
 
-### Estado de verificação
+### Verification status
 
-- O layout do cartão foi conferido campo a campo contra o firmware V3 (`docs/FIRMWARE_CROSSCHECK.md`).
-- Imagens e dispositivos de disco virtual (`hdiutil attach -nomount`) foram gravados, relidos e validados.
-- **Ainda não foi testado com um cartão SD físico nem com o console.** Se for o primeiro uso, teste com
-  um cartão sem dados importantes e relate o resultado.
+- The card layout was checked field by field against the V3 firmware (`docs/FIRMWARE_CROSSCHECK.md`).
+- Images and virtual disk devices (`hdiutil attach -nomount`) were written, read back and validated.
+- **It has not yet been tested with a physical SD card or a console.** On first use, try a card with no
+  important data and report the result.
 
-## Limitações conhecidas (herdadas do original ou do firmware)
+## Known limitations (inherited from the original or the firmware)
 
-- Cheats personalizados em formato v4 com mais de 256 linhas são aceitos pelo programa, mas o firmware
-  os ignora (o disco fica sem cheats).
-- Títulos com acentos aparecem com espaços no menu do console (o firmware só exibe ASCII).
-- Várias mensagens ainda citam "Windows" ou "PhysicalDrive": os textos foram mantidos como no original.
+- Custom cheat profiles in the v4 format with more than 256 lines are accepted by the program, but the
+  firmware ignores them (the disc ends up without cheats).
+- Titles with accented characters show blanks in the console menu (the firmware only displays ASCII).
+- Several messages still mention "Windows" or "PhysicalDrive": the texts were kept as in the original.
 
-## Compilar
+## Build
 
 ```sh
-make app                # gera ~/.cache/picostation-mh-build/PicoStation Multi House V3.app
-tools/package.sh 0.1.0  # gera dist/PicoStation-Multi-House-V3-macOS-arm64.zip
-make test               # testes do núcleo (ASan/UBSan), leva alguns minutos
-make test-v2            # um módulo: base, disc, cheat, art, menu, v2, blockdev
+make app                # builds ~/.cache/picostation-mh-build/PicoStation Multi House V3.app
+tools/package.sh 0.1.0  # builds dist/PicoStation-Multi-House-V3-macOS-arm64.zip
+make test               # core tests (ASan/UBSan), takes a few minutes
+make test-v2            # one module: base, disc, cheat, art, menu, v2, blockdev
 ```
 
-Precisa das Xcode Command Line Tools. A saída vai para `~/.cache/picostation-mh-build` (mude com `BUILD=`).
-Os testes usam jogos reais de `/Volumes/Renato/PicoStation BR` quando existem e pulam o resto.
-Teste de disco sem hardware: `tools/test-disk.sh --images`.
+Needs the Xcode Command Line Tools. Output goes to `~/.cache/picostation-mh-build` (override with `BUILD=`).
+Tests use real games from `/Volumes/Renato/PicoStation BR` when present and skip the rest.
+Disk test without hardware: `tools/test-disk.sh --images`.
 
-## Como o port foi feito
+## How the port was made
 
-O executável original (mingw-w64, com símbolos) foi decompilado com Ghidra e cada função foi
-reescrita e auditada por um segundo revisor. As tabelas "função original para função do port" estão em
-`docs/map/`, os relatórios de auditoria em `docs/audit/`, as convenções em `docs/PORTING.md`.
+The original executable (mingw-w64, with symbols) was decompiled with Ghidra. Every function was
+rewritten and then audited by a second reviewer. The "original function to port function" tables are in
+`docs/map/`, the audit reports in `docs/audit/`, the conventions in `docs/PORTING.md`.
 
 ```
-core/        núcleo portátil em C11 (base, disc, cheat, art, menu, v2)
-platform/mac acesso a disco (DiskArbitration, authopen) e imagens (ImageIO)
-app/         interface AppKit
-resources/   dados extraídos do executável original e ícone
-docs/        mapas, formatos, auditorias, checagem contra o firmware
-tools/       extração de dados, empacotamento, testes de disco
+core/        portable C11 core (base, disc, cheat, art, menu, v2)
+platform/mac disk access (DiskArbitration, authopen) and images (ImageIO)
+app/         AppKit user interface
+resources/   data extracted from the original executable, and the icon
+docs/        maps, formats, audits, firmware cross-check
+tools/       data extraction, packaging, disk tests
 ```
 
-## Licença
+## License
 
-Apache License 2.0, a mesma dos repositórios PicoStation de origem. Veja `LICENSE`.
+Apache License 2.0, the same as the upstream PicoStation repositories. See `LICENSE`.
