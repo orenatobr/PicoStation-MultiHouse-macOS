@@ -1962,15 +1962,22 @@ static void device_changed(DADiskRef disk, void *ctx) {
     return YES;
 }
 
-/* Loads "<cue stem>-CASE.art" and "<cue stem>-DISC.art" from next to the .cue, when they exist.
+/* Loads "<cue stem>-CASE.art" (or the same name without "(Disc N)") and "<cue stem>-DISC.art" from next to the .cue, when they exist.
  * A file next to the .cue is the user's explicit choice, so it replaces any database default. Worker thread. */
 - (void)autoLoadArtNextToCue:(NSString *)cue case:(MhCase *)c disc:(MhDisc *)d {
     NSString *stem = cue.stringByDeletingPathExtension;
     NSFileManager *fm = NSFileManager.defaultManager;
     char err[MH_ERR_MSG_MAX];
-    NSString *casePath = [stem stringByAppendingString:@"-CASE.art"];
-    if ([fm fileExistsAtPath:casePath])
+    /* one case holds every disc of a game, so its art has no "(Disc N)" tag: try the exact name, then without it */
+    NSString *gameStem = [stem stringByReplacingOccurrencesOfString:@"\\s*\\(Disc \\d+\\)" withString:@""
+                                                           options:NSRegularExpressionSearch
+                                                             range:NSMakeRange(0, stem.length)];
+    for (NSString *base in @[ stem, gameStem ]) {
+        NSString *casePath = [base stringByAppendingString:@"-CASE.art"];
+        if (![fm fileExistsAtPath:casePath]) continue;
         [self importArt:casePath.fileSystemRepresentation isCase:YES forCase:c disc:d err:err size:sizeof err];
+        break;
+    }
     NSString *discPath = [stem stringByAppendingString:@"-DISC.art"];
     if (d && [fm fileExistsAtPath:discPath])
         [self importArt:discPath.fileSystemRepresentation isCase:NO forCase:c disc:d err:err size:sizeof err];
