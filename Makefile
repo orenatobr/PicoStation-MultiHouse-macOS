@@ -37,7 +37,7 @@ clean:
 
 .PHONY: lint-dash
 lint-dash:
-	@! grep -rIl --exclude-dir=.git --exclude-dir=build --exclude=LICENSE $$(printf '\xe2\x80\x94') . && echo "no em dash"
+	@! grep -rIl --exclude-dir=.git --exclude-dir=build --exclude=LICENSE --exclude=.graphify-autobuild.log --exclude-dir=graphify-out $$(printf '\xe2\x80\x94') . && echo "no em dash"
 
 # Universal-free, arm64-only app bundle, ad-hoc signed.
 app:
