@@ -220,7 +220,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
     mh_path_stem(cue_path, stem, sizeof stem);
     mh_normalize_title(stem, d->name, sizeof d->name);
     if (!mh_cue_read_text(cue_path, &text)) {
-        mh_disc_note(d, "Nao foi possivel abrir ou decodificar o CUE.");
+        mh_disc_note(d, "Could not open or decode the CUE.");
         return d;
     }
     mh_path_dirname(cue_path, cue_dir, sizeof cue_dir);
@@ -237,7 +237,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 size_t n = 0;
                 const char *q = c + 4;
                 if (nfiles > 98) {
-                    mh_disc_note(d, "Mais de 99 arquivos BIN no CUE.");
+                    mh_disc_note(d, "More than 99 BIN files in the CUE.");
                     d->flags |= MH_DF_INVALID;
                     break;
                 }
@@ -258,7 +258,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 skip_ws(&q);
                 mh_str_copy(type, sizeof type, q);
                 if (name[0] == 0) {
-                    mh_disc_note(d, "Linha FILE invalida.");
+                    mh_disc_note(d, "Invalid FILE line.");
                     break;
                 }
                 cur_file = (int)nfiles;
@@ -285,7 +285,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 }
                 if (mh_str_icmp(type, "BINARY") != 0) {
                     d->flags |= MH_DF_INVALID;
-                    mh_disc_note(d, "Somente arquivos BINARY sao aceitos nesta versao.");
+                    mh_disc_note(d, "Only BINARY files are supported in this version.");
                 }
                 nfiles++;
                 cur_track = -1;
@@ -297,7 +297,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 TmpTrack *t;
                 skip_ws(&q);
                 if (!parse_uint(&q, &num) || num < 1 || num > 99 || cur_file < 0 || ntracks >= 99) {
-                    mh_disc_note(d, "Linha TRACK invalida ou fora de ordem.");
+                    mh_disc_note(d, "Invalid or out-of-order TRACK line.");
                     break;
                 }
                 skip_ws(&q);
@@ -309,7 +309,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 else if (mh_str_icmp(type, "MODE2/2352") == 0) { t->mode = 2; t->kind = 2; }
                 else {
                     d->flags |= MH_DF_INVALID;
-                    mh_disc_note(d, "Modo de track nao suportado. Use AUDIO, MODE1/2352 ou MODE2/2352.");
+                    mh_disc_note(d, "Unsupported track mode. Use AUDIO, MODE1/2352 or MODE2/2352.");
                     t->mode = 0;
                     t->kind = 0;
                 }
@@ -322,12 +322,12 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 uint32_t idx = 0, fr = 0;
                 skip_ws(&q);
                 if (cur_track == -1 || *q < '0' || *q > '9' || !parse_uint(&q, &idx)) {
-                    mh_disc_note(d, "INDEX sem TRACK valido.");
+                    mh_disc_note(d, "INDEX without a valid TRACK.");
                     break;
                 }
                 skip_ws(&q);
                 if (!mh_cue_msf(q, &fr)) {
-                    mh_disc_note(d, "Tempo INDEX invalido.");
+                    mh_disc_note(d, "Invalid INDEX time.");
                     break;
                 }
                 if (idx == 0) { tt[cur_track].has0 = 1; tt[cur_track].idx0 = fr; }
@@ -340,28 +340,28 @@ MhDisc *mh_cue_parse(const char *cue_path)
                     tt[cur_track].has_pregap = 1;
                     tt[cur_track].pregap = fr;
                 } else {
-                    mh_disc_note(d, "PREGAP invalido.");
+                    mh_disc_note(d, "Invalid PREGAP.");
                     break;
                 }
             } else if (mh_str_starts_i(c, "FLAGS ")) {
                 const char *q = c + 5;
                 skip_ws(&q);
                 if (cur_track == -1) {
-                    mh_disc_note(d, "FLAGS sem TRACK valido.");
+                    mh_disc_note(d, "FLAGS without a valid TRACK.");
                     break;
                 }
                 if (mh_str_starts_i(q, "DCP") || mh_str_starts_i(q, "PRE DCP") || mh_str_starts_i(q, "4CH DCP"))
                     tt[cur_track].dcp = 1;
             } else if (mh_str_starts_i(c, "ISRC ")) {
                 if (cur_track == -1) {
-                    mh_disc_note(d, "ISRC sem TRACK valido.");
+                    mh_disc_note(d, "ISRC without a valid TRACK.");
                     break;
                 }
                 tt[cur_track].isrc = 1;
             } else if (mh_str_starts_i(c, "POSTGAP ")) {
                 if (cur_track != -1) tt[cur_track].postgap = 1;
                 d->flags |= MH_DF_INCOMPLETE;
-                mh_disc_note(d, "POSTGAP virtual nao e aceito com seguranca.");
+                mh_disc_note(d, "A virtual POSTGAP cannot be accepted safely.");
             }
         }
         if (!next) break;
@@ -380,24 +380,24 @@ MhDisc *mh_cue_parse(const char *cue_path)
         for (unsigned f = 0; f < nfiles; f++) {
             if (!used[f]) {
                 d->flags |= MH_DF_INVALID;
-                mh_disc_note(d, "Existe FILE sem nenhuma TRACK associada.");
+                mh_disc_note(d, "There is a FILE with no TRACK.");
             }
             for (unsigned g = 0; g < f; g++)
                 if (mh_str_icmp(d->files[f].path, d->files[g].path) == 0) {
                     d->flags |= MH_DF_INVALID;
-                    mh_disc_note(d, "O mesmo BIN foi declarado mais de uma vez; o layout e ambiguo.");
+                    mh_disc_note(d, "The same BIN is declared more than once, so the layout is ambiguous.");
                 }
         }
         if (tt[0].kind != 2) {
             d->flags |= MH_DF_INVALID;
-            mh_disc_note(d, "A primeira track de um disco PlayStation precisa ser de dados.");
+            mh_disc_note(d, "The first track of a PlayStation disc must be a data track.");
         }
         for (unsigned f = 0; f < nfiles; f++) {
             MhDiscFile *fl = &d->files[f];
             uint64_t sz;
             if (!mh_file_size64(fl->path, &sz)) {
                 d->flags |= MH_DF_MISSING_BIN;
-                mh_disc_note(d, "Um ou mais BINs referenciados nao foram encontrados.");
+                mh_disc_note(d, "One or more referenced BINs were not found.");
                 continue;
             }
             fl->size = sz;
@@ -409,11 +409,11 @@ MhDisc *mh_cue_parse(const char *cue_path)
                     total += (uint32_t)sec;
                 } else {
                     d->flags |= MH_DF_INVALID;
-                    mh_disc_note(d, "A imagem excede o limite seguro de 450.000 setores de CD.");
+                    mh_disc_note(d, "The image exceeds the safe limit of 450,000 CD sectors.");
                 }
             } else {
                 d->flags |= MH_DF_BAD_ALIGN;
-                mh_disc_note(d, "Um BIN nao esta alinhado em setores de 2352 bytes.");
+                mh_disc_note(d, "A BIN is not aligned to 2352-byte sectors.");
             }
         }
         d->total_sectors = total;
@@ -426,28 +426,28 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 const TmpTrack *t = &tt[i];
                 uint32_t pg;
                 if (t->number != i + 1) {
-                    mh_disc_note(d, "As tracks precisam ser continuas a partir de 01.");
+                    mh_disc_note(d, "Tracks must be consecutive starting at 01.");
                     ok = false; break;
                 }
                 if (!t->has1 || d->files[t->file].sectors <= t->idx1) {
-                    mh_disc_note(d, "INDEX 01 ausente ou fora do BIN.");
+                    mh_disc_note(d, "INDEX 01 is missing or outside the BIN.");
                     ok = false; break;
                 }
                 if (!t->has0) {
                     pg = 0;
                     if (t->has_pregap && t->pregap != 0) {
                         d->flags |= MH_DF_INCOMPLETE;
-                        mh_disc_note(d, "PREGAP virtual sem INDEX 00: imagem possivelmente incompleta.");
+                        mh_disc_note(d, "Virtual PREGAP without INDEX 00: the image may be incomplete.");
                         ok = false; break;
                     }
                 } else {
                     if (t->idx1 < t->idx0) {
-                        mh_disc_note(d, "INDEX 00 invalido.");
+                        mh_disc_note(d, "Invalid INDEX 00.");
                         ok = false; break;
                     }
                     pg = t->idx1 - t->idx0;
                     if (t->has_pregap && t->pregap != pg && t->pregap != 0) {
-                        mh_disc_note(d, "PREGAP e INDEX 00/01 informam valores diferentes.");
+                        mh_disc_note(d, "PREGAP and INDEX 00/01 give different values.");
                         ok = false; break;
                     }
                 }
@@ -456,7 +456,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
             }
             if (ok) {
                 if (!(start[0] == 0 && pregap[0] == 0)) {
-                    mh_disc_note(d, "A primeira track precisa iniciar no setor 0 sem pregap.");
+                    mh_disc_note(d, "The first track must start at sector 0 with no pregap.");
                     ok = false;
                 }
             }
@@ -465,7 +465,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
                 for (unsigned i = 1; i < ntracks; i++) {
                     uint32_t s = start[i];
                     if (s <= prev || s - pregap[i] < prev) {
-                        mh_disc_note(d, "INDEX das tracks fora de ordem ou pregap sobreposto.");
+                        mh_disc_note(d, "Track INDEX values are out of order or a pregap overlaps.");
                         ok = false; break;
                     }
                     prev = s;
@@ -493,7 +493,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
             mh_disc_scan_serial(d);
         }
     } else if (d->notes[0] == 0) {
-        mh_disc_note(d, "CUE sem FILE/TRACK validos.");
+        mh_disc_note(d, "CUE has no valid FILE/TRACK.");
     }
     mh_disc_refresh_status(d);
     return d;

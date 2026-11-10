@@ -24,13 +24,13 @@ extern "C" {
 #define MH_IOERR_SHORT_WRITE 0x1d
 #define MH_IOERR_COMPARE 0x17   /* read-back differs */
 #define MH_IOERR_ALIGN 0x57     /* offset not a multiple of 512 */
-/* Text printed before the number by mh_ioerr_append ("Erro Windows" in the original). */
-#define MH_IOERR_CODE_LABEL "Erro Windows"
+/* Text printed before the number by mh_ioerr_append ("Error code" in the original). */
+#define MH_IOERR_CODE_LABEL "Error code"
 
 typedef struct MhIoErr {
     int set;                  /* 1 when a failure was recorded */
     int code;                 /* errno, or one of MH_IOERR_* */
-    const char *what;         /* static text, Portuguese, exact original (e.g. "Escrita no destino") */
+    const char *what;         /* static text, Portuguese, exact original (e.g. "Destination write") */
     uint64_t offset;          /* byte offset of the failing request */
     uint32_t requested;       /* bytes asked for in the failing piece */
     uint32_t transferred;     /* bytes confirmed in the failing piece */
@@ -38,15 +38,15 @@ typedef struct MhIoErr {
 
 void mh_ioerr_clear(MhIoErr *e);
 /* Appends the original report to w, starting with "\r\n":
- *   "\r\n<what>. Erro Windows: <code>\r\nOffset: <n> bytes; LBA512: <n>\r\nSolicitado: <n>;
- *    transferido confirmado: <n> bytes."
+ *   "\r\n<what>. Error code: <code>\r\nOffset: <n> bytes; LBA512: <n>\r\nRequested: <n>;
+ *    confirmed transferred: <n> bytes."
  * (one line per \r\n, exactly the text built by the SD writer). Does nothing if !e->set. */
 bool mh_ioerr_append(MhWbuf *w, const MhIoErr *e);
 
 typedef struct MhIo {
     int fd;
     int is_dest;  /* orig compared the handle with the global destination: read errors are
-                     labelled "Leitura do destino" for it and "Leitura da origem" otherwise */
+                     labelled "Destination read" for it and "Source read" otherwise */
     MhIoErr *err; /* where failures are recorded; points to own_err unless shared */
     MhIoErr own_err;
 } MhIo;
@@ -65,13 +65,13 @@ bool mh_io_size(MhIo *io, uint64_t *size);
 /* orig: v1_io_read. Reads exactly len bytes at off, in pieces of MH_IO_CHUNK. A system error
  * or a short piece fails and records the failure. */
 bool mh_io_read(MhIo *io, uint64_t off, void *buf, size_t len);
-/* orig: v1_io_write. Same for writing; a short write records "Escrita parcial no destino". */
+/* orig: v1_io_write. Same for writing; a short write records "Partial destination write". */
 bool mh_io_write(MhIo *io, uint64_t off, const void *buf, size_t len);
 /* orig: v1_io_flush (+ .part.0). F_FULLFSYNC, falling back to fsync when the device does not
- * support it. On failure records "Sincronizacao do destino" with err_offset as the offset. */
+ * support it. On failure records "Destination sync" with err_offset as the offset. */
 bool mh_io_flush(MhIo *io, uint64_t err_offset);
 /* orig: io_write_block_verified. Writes one 512 byte block, flushes, reads it back and
- * compares. off must be a multiple of 512 ("Alinhamento do controle" otherwise). */
+ * compares. off must be a multiple of 512 ("Verify alignment" otherwise). */
 bool mh_io_write_block_verified(MhIo *io, uint64_t off, const void *block512);
 /* orig: handle_sync_blocks_verified. Makes the device region [off, off+len) equal to src:
  * reads it in 256 KiB pieces and rewrites (verified) every 512 byte block that differs, then

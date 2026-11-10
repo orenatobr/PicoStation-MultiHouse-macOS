@@ -141,7 +141,7 @@ static void test_files(void) {
     char err[256];
     mh_path_join(dir, "menu.bin", menu, sizeof menu);
     assert(!mh_menu_validate_file(menu, false, emb, emb_n, err, sizeof err));
-    assert(!strcmp(err, "Nao foi possivel ler o menu selecionado."));
+    assert(!strcmp(err, "Could not read the selected menu."));
     assert(!mh_menu_validate_file("", false, emb, emb_n, NULL, 0));
     assert(mh_write_entire_file(menu, emb, emb_n));
     assert(mh_menu_validate_file(menu, true, emb, emb_n, err, sizeof err) && err[0] == 0);
@@ -150,7 +150,7 @@ static void test_files(void) {
     assert(mh_write_entire_file(menu, img, emb_n));
     assert(mh_menu_validate_file(menu, false, emb, emb_n, err, sizeof err));
     assert(!mh_menu_validate_file(menu, true, emb, emb_n, err, sizeof err));
-    assert(!strcmp(err, "O menu selecionado nao corresponde ao menu PSn00bSDK incorporado neste Manager."));
+    assert(!strcmp(err, "The selected menu does not match the PSn00bSDK menu built into this app."));
     free(img);
     uint8_t *e2;
     uint64_t n2;
@@ -211,7 +211,7 @@ static void test_validate(void) {
     assert(mh_menu_validate_blob(emb, emb_n, MH_MENU_SECTOR, NULL, 0));
     char err[256];
     assert(mh_menu_validate_blob(emb, emb_n, MH_MENU_SECTOR, err, sizeof err) && err[0] == 0);
-    const char *e_count = "O menu deve possuir de 1 a 93 setores RAW completos para este firmware.";
+    const char *e_count = "The menu must have 1 to 93 complete RAW sectors for this firmware.";
     expect_err(NULL, 0, MH_MENU_SECTOR, e_count);
     expect_err(emb, 0, MH_MENU_SECTOR, e_count);
     expect_err(emb, emb_n - 1, MH_MENU_SECTOR, e_count);
@@ -225,10 +225,10 @@ static void test_validate(void) {
     for (int i = 0; i < 93; i++) memcpy(raw + (size_t)i * MH_MENU_SLOT, emb + (size_t)i * MH_MENU_SECTOR, MH_MENU_SECTOR);
     assert(mh_menu_validate_blob(raw, 93 * MH_MENU_SLOT, MH_MENU_SLOT, NULL, 0));
     raw[5 * MH_MENU_SLOT + 0x935] = 1;
-    expect_err(raw, 93 * MH_MENU_SLOT, MH_MENU_SLOT, "O padding PSXRAW do menu nao esta zerado.");
+    expect_err(raw, 93 * MH_MENU_SLOT, MH_MENU_SLOT, "The menu's PSXRAW padding is not zeroed.");
     free(raw);
 
-    const char *e_raw = "O menu possui setor CD-ROM RAW invalido.";
+    const char *e_raw = "The menu has an invalid RAW CD-ROM sector.";
     uint8_t *img = copy_emb();
     img[40 * 0x930] = 1;
     expect_err(img, emb_n, MH_MENU_SECTOR, e_raw);
@@ -244,7 +244,7 @@ static void test_validate(void) {
     memcpy(img, emb, emb_n); img[40 * 0x930 + 0x100] ^= 0x55;
     assert(mh_menu_validate_blob(img, emb_n, MH_MENU_SECTOR, NULL, 0));
 
-    const char *e_pvd = "O menu nao possui PVD ISO9660 valido no setor 16.";
+    const char *e_pvd = "The menu has no valid ISO9660 PVD at sector 16.";
     memcpy(img, emb, emb_n); img[16 * 0x930 + 0x18] = 2;
     expect_err(img, emb_n, MH_MENU_SECTOR, e_pvd);
     memcpy(img, emb, emb_n); img[16 * 0x930 + 0x19] = 'X';
@@ -255,17 +255,17 @@ static void test_validate(void) {
 
     const uint32_t pv = 16 * 0x930 + 0x18;
     memcpy(img, emb, emb_n); img[pv + 0x9c] = 0x21;
-    expect_err(img, emb_n, MH_MENU_SECTOR, "O diretorio raiz ISO9660 do menu e invalido.");
+    expect_err(img, emb_n, MH_MENU_SECTOR, "The menu's ISO9660 root directory is invalid.");
     memcpy(img, emb, emb_n); img[pv + 0x9e] = 93;
-    expect_err(img, emb_n, MH_MENU_SECTOR, "O diretorio raiz ISO9660 aponta para fora do menu.");
+    expect_err(img, emb_n, MH_MENU_SECTOR, "The ISO9660 root directory points outside the menu.");
     memcpy(img, emb, emb_n); memset(img + pv + 0xa6, 0, 4);
-    expect_err(img, emb_n, MH_MENU_SECTOR, "O diretorio raiz ISO9660 aponta para fora do menu.");
+    expect_err(img, emb_n, MH_MENU_SECTOR, "The ISO9660 root directory points outside the menu.");
     memcpy(img, emb, emb_n); img[pv + 0xa8] = 0x05; /* 0x50800 bytes: more than 8 sectors */
-    expect_err(img, emb_n, MH_MENU_SECTOR, "O diretorio raiz ISO9660 excede o limite seguro do menu.");
+    expect_err(img, emb_n, MH_MENU_SECTOR, "The ISO9660 root directory exceeds the menu's safe limit.");
     memcpy(img, emb, emb_n); img[pv + 0x9e] = 90; img[pv + 0xa7] = 0x30; /* 6 sectors starting at 90: past the end */
-    expect_err(img, emb_n, MH_MENU_SECTOR, "O diretorio raiz ISO9660 excede o limite seguro do menu.");
+    expect_err(img, emb_n, MH_MENU_SECTOR, "The ISO9660 root directory exceeds the menu's safe limit.");
 
-    const char *e_cnf = "SYSTEM.CNF nao foi encontrado na raiz do menu.";
+    const char *e_cnf = "SYSTEM.CNF was not found in the menu root.";
     memcpy(img, emb, emb_n); img[22 * 0x930 + 0x18 + 0x60 + 0x21] = 'X'; /* renames the third entry */
     free(img);
     img = copy_emb();
@@ -275,8 +275,8 @@ static void test_validate(void) {
     }
     expect_err(img, emb_n, MH_MENU_SECTOR, e_cnf);
 
-    const char *e_boot = "SYSTEM.CNF do menu nao possui BOOT=cdrom valido.";
-    const char *e_exe = "O executavel indicado pelo SYSTEM.CNF nao e um PS-X EXE valido.";
+    const char *e_boot = "The menu's SYSTEM.CNF has no valid BOOT=cdrom entry.";
+    const char *e_exe = "The executable named by SYSTEM.CNF is not a valid PS-X EXE.";
     struct { const char *txt; const char *err; } cases[] = {
         {"BOOT=cdrom:\\SCES_313.37;1\r\nTCB=4\r\n", NULL},
         {"boot = CDROM:SCES_313.37;1\n", NULL},

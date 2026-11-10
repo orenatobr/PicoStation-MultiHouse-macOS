@@ -152,7 +152,7 @@ static void test_label(void) {
     d.label[0] = 0;
     d.has_v2 = 0;
     mh_disk_label_text(&d, t, sizeof t);
-    assert(!strcmp(t, "disk4 | Dispositivo USB/SD | 29.8 GB"));
+    assert(!strcmp(t, "disk4 | USB/SD device | 29.8 GB"));
     mh_disk_label_text(&d, t, 8);
     assert(strlen(t) < 8);
 }

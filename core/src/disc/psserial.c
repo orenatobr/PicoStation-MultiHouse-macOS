@@ -12,13 +12,13 @@
 const char *mh_psserial_status_text(unsigned s)
 {
     switch (s) {
-    case 1: return "FORTE_INTERNO";
-    case 2: return "PROVAVEL";
-    case 3: return "AMBIGUO";
-    case 4: return "ERRO_IO";
-    case 5: return "IMAGEM_INVALIDA";
-    case 6: return "CONFIRMADO_HASH_TRACKSET";
-    default: return "NAO_LOCALIZADO";
+    case 1: return "STRONG_INTERNAL";
+    case 2: return "PROBABLE";
+    case 3: return "AMBIGUOUS";
+    case 4: return "IO_ERROR";
+    case 5: return "INVALID_IMAGE";
+    case 6: return "TRACKSET_HASH_CONFIRMED";
+    default: return "NOT_FOUND";
     }
 }
 
@@ -27,10 +27,10 @@ const char *mh_psserial_source_text(unsigned s)
 {
     switch (s) {
     case 1: return "SYSTEM_CNF";
-    case 2: return "NOME_EXECUTAVEL";
-    case 3: return "CONTEUDO_EXECUTAVEL";
+    case 2: return "EXECUTABLE_NAME";
+    case 3: return "EXECUTABLE_CONTENT";
     case 4: return "HASH_TRACKSET";
-    default: return "NENHUMA";
+    default: return "NONE";
     }
 }
 
@@ -698,13 +698,13 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
     uint32_t ret;
     if (!f) {
         r->status = MH_PSS_IO_ERROR;
-        mh_str_copy(r->message, sizeof r->message, "Nao foi possivel abrir a imagem.");
+        mh_str_copy(r->message, sizeof r->message, "Could not open the image.");
         return r->status;
     }
     if (!mh_io_open(&f->io, path, MH_IO_READ, false, NULL)) {
         free(f);
         r->status = MH_PSS_IO_ERROR;
-        mh_str_copy(r->message, sizeof r->message, "Nao foi possivel abrir a imagem.");
+        mh_str_copy(r->message, sizeof r->message, "Could not open the image.");
         return r->status;
     }
     if (sectors != 0) {
@@ -716,7 +716,7 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
             mh_io_close(&f->io);
             free(f);
             r->status = MH_PSS_IO_ERROR;
-            mh_str_copy(r->message, sizeof r->message, "Nao foi possivel abrir a imagem.");
+            mh_str_copy(r->message, sizeof r->message, "Could not open the image.");
             return r->status;
         }
         f->size = fsize;
@@ -746,7 +746,7 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
             }
         }
         if (!found)
-            return fail(r, f, MH_PSS_BAD_IMAGE, "PVD ISO9660/layout invalido ou diretorio raiz fora da imagem.");
+            return fail(r, f, MH_PSS_BAD_IMAGE, "Invalid ISO9660 PVD/layout, or the root directory is outside the image.");
     }
     r->iso_sectors = iso.volume;
     r->file_sectors = (uint32_t)(f->size / iso.stride);
@@ -757,11 +757,11 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
     cd = calloc(1, sizeof *cd);
     if (!sc || !ex || !cd) {
         free(sc); free(ex); free(cd);
-        return fail(r, f, MH_PSS_IO_ERROR, "Nao foi possivel abrir a imagem.");
+        return fail(r, f, MH_PSS_IO_ERROR, "Could not open the image.");
     }
     if (!ps_walk(&iso, iso.root_lba, iso.root_len, "", 0, v_system_cnf, sc)) {
         free(sc); free(ex); free(cd);
-        return fail(r, f, MH_PSS_IO_ERROR, "Falha ao percorrer o sistema de arquivos ISO9660.");
+        return fail(r, f, MH_PSS_IO_ERROR, "Failed to walk the ISO9660 file system.");
     }
 
     if (sc->count != 0) {
@@ -795,7 +795,7 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
                                     mh_str_copy(r->serial, sizeof r->serial, canon);
                                     mh_str_copy(r->cand[0], 16, canon);
                                     mh_str_copy(r->message, sizeof r->message,
-                                                "Serial extraido do BOOT do SYSTEM.CNF; use trackset hash para confirmar a revisao fisica.");
+                                                "Serial extracted from the SYSTEM.CNF BOOT entry; use the trackset hash to confirm the physical revision.");
                                     free(fc); free(cnf); free(sc); free(ex); free(cd);
                                     ret = r->status;
                                     ps_close(f);
@@ -804,8 +804,8 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
                                 memset(cd, 0, sizeof *cd);
                                 if (scan_executable(&iso, be, cd)) {
                                     cand_finish(r, cd, MH_PSSRC_EXE_CONTENT,
-                                                "Serial unico encontrado heuristicamente no executavel de boot.",
-                                                "Multiplos serials encontrados no executavel de boot.");
+                                                "Single serial found heuristically in the boot executable.",
+                                                "Multiple serials found in the boot executable.");
                                     if (cd->count != 0) {
                                         free(fc); free(cnf); free(sc); free(ex); free(cd);
                                         ret = r->status;
@@ -828,20 +828,20 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
     ex->psx_index = -1;
     if (!ps_walk(&iso, iso.root_lba, iso.root_len, "", 0, v_collect_exes, ex)) {
         free(sc); free(ex); free(cd);
-        return fail(r, f, MH_PSS_IO_ERROR, "Falha ao enumerar executaveis PS-X EXE.");
+        return fail(r, f, MH_PSS_IO_ERROR, "Failed to enumerate PS-X EXE executables.");
     }
     if (ex->psx_index < 0) {
         if (ex->cands.overflow != 0 || ex->cands.count != 0) {
             cand_finish(r, &ex->cands, MH_PSSRC_EXE_NAME,
-                        "Executavel PS-X EXE com nome de serial unico, sem SYSTEM.CNF.",
-                        "Mais de um serial de executavel e possivel sem SYSTEM.CNF.");
+                        "PS-X EXE executable with a single serial name, no SYSTEM.CNF.",
+                        "More than one executable serial is possible without SYSTEM.CNF.");
             r->boot_exe_valid = 1;
         } else if (ex->overflow == 0 && ex->count < 0x41) {
             if (ex->count == 0) {
                 r->status = MH_PSS_NOT_FOUND;
                 r->needs_hash = 1;
                 mh_str_copy(r->message, sizeof r->message,
-                            "SYSTEM.CNF e executavel PS-X EXE identificavel nao encontrados; resolver pelo trackset hash.");
+                            "SYSTEM.CNF and an identifiable PS-X EXE executable were not found; resolve by trackset hash.");
                 free(sc); free(ex); free(cd);
                 ps_close(f);
                 return r->status;
@@ -851,20 +851,20 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
             for (uint32_t i = 0; i < ex->count; i++) {
                 if (!scan_executable(&iso, &ex->exe[i], cd)) {
                     free(sc); free(ex); free(cd);
-                    return fail(r, f, MH_PSS_IO_ERROR, "Falha durante a leitura de executavel PS-X EXE.");
+                    return fail(r, f, MH_PSS_IO_ERROR, "Failed while reading a PS-X EXE executable.");
                 }
             }
             cand_finish(r, cd, MH_PSSRC_EXE_CONTENT,
-                        "Serial unico encontrado em executavel PS-X EXE; boot nao confirmado.",
-                        "Multiplos serials encontrados em executaveis PS-X EXE; boot nao confirmado.");
+                        "Single serial found in a PS-X EXE executable; boot not confirmed.",
+                        "Multiple serials found in PS-X EXE executables; boot not confirmed.");
             if (cd->count == 0)
                 mh_str_copy(r->message, sizeof r->message,
-                            "Executavel PS-X EXE localizado sem serial interno; resolver pelo trackset hash.");
+                            "PS-X EXE executable found without an internal serial; resolve by trackset hash.");
         } else {
             r->status = MH_PSS_AMBIGUOUS;
             r->needs_hash = 1;
             mh_str_copy(r->message, sizeof r->message,
-                        "Quantidade de executaveis excede o limite heuristico; resolver pelo trackset hash.");
+                        "Number of executables exceeds the heuristic limit; resolve by trackset hash.");
         }
     } else {
         PsEntry *pe = &ex->exe[ex->psx_index];
@@ -875,13 +875,13 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
         mh_str_copy(r->path, sizeof r->path, pe->path);
         scanned = scan_executable(&iso, pe, cd);
         if (scanned)
-            cand_finish(r, cd, MH_PSSRC_EXE_CONTENT, "PSX.EXE valido; serial interno unico encontrado heuristicamente.",
-                        "PSX.EXE valido, mas contem multiplos candidatos de serial.");
+            cand_finish(r, cd, MH_PSSRC_EXE_CONTENT, "Valid PSX.EXE; single internal serial found heuristically.",
+                        "Valid PSX.EXE, but it contains multiple serial candidates.");
         if (!scanned || cd->count == 0) {
             r->status = MH_PSS_NOT_FOUND;
             r->needs_hash = 1;
             mh_str_copy(r->message, sizeof r->message,
-                        "PSX.EXE valido localizado, mas ele nao fornece serial; resolver pelo trackset hash.");
+                        "Valid PSX.EXE found, but it provides no serial; resolve by trackset hash.");
         }
     }
     free(sc); free(ex); free(cd);
@@ -903,7 +903,7 @@ uint32_t mh_psserial_extract(MhPsSerial *r, const char *path)
     mh_psserial_init(r);
     if (!path || !path[0]) {
         r->status = MH_PSS_IO_ERROR;
-        mh_str_copy(r->message, sizeof r->message, "Caminho da imagem vazio.");
+        mh_str_copy(r->message, sizeof r->message, "The image path is empty.");
         return r->status;
     }
     return extract_mapped(r, path, 0, 0);
@@ -916,7 +916,7 @@ uint32_t mh_psserial_extract_raw(MhPsSerial *r, const char *path, uint64_t lba51
     mh_psserial_init(r);
     if (!path || !path[0]) {
         r->status = MH_PSS_IO_ERROR;
-        mh_str_copy(r->message, sizeof r->message, "Caminho da imagem vazio.");
+        mh_str_copy(r->message, sizeof r->message, "The image path is empty.");
         return r->status;
     }
     return extract_mapped(r, path, lba512, sectors);

@@ -51,7 +51,7 @@ bool mh_db_apply_disc(const MhDb *db, MhDisc *d)
         }
     }
     if (ambiguous) {
-        cat_note(d, "\r\nO serial corresponde a mais de uma edicao no banco de discos.");
+        cat_note(d, "\r\nThe serial matches more than one edition in the disc database.");
         return false;
     }
     if (best != 0xffffffffu) {
@@ -64,13 +64,13 @@ bool mh_db_apply_disc(const MhDb *db, MhDisc *d)
                 const uint8_t *e = mh_db_entry_ptr(db, first + k);
                 if (e && d->tracks[k].kind != e[1]) {
                     d->flags |= MH_DF_TRACKS_SUSPECT;
-                    cat_note(d, "\r\nOs tipos de track diferem do banco original.");
+                    cat_note(d, "\r\nThe track types differ from the original database.");
                     break;
                 }
             }
         } else {
             d->flags |= MH_DF_TRACKS_SUSPECT;
-            cat_note(d, "\r\nO banco original indica quantidade de tracks diferente. Verifique ou recupere o CUE original.");
+            cat_note(d, "\r\nThe original database lists a different number of tracks. Check or recover the original CUE.");
         }
         mh_disc_refresh_status(d);
         return true;
@@ -176,7 +176,7 @@ bool mh_db_match_trackset(const MhDb *db, MhDisc *d, const uint8_t *sha1s, unsig
             d->ps.trackset_id = mh_rd32(r + 0x20);
             mh_str_copy(d->ps.trackset_serial, sizeof d->ps.trackset_serial, (const char *)r + 0x30);
             mh_str_copy(d->ps.message, sizeof d->ps.message,
-                        "Edicao fisica confirmada somente pela sequencia completa e ordenada dos SHA-1 de todas as tracks.");
+                        "Physical edition confirmed only by the complete, ordered sequence of SHA-1 hashes of all tracks.");
             if (d->serial[0] == 0 && mh_canonical_serial((const char *)r + 0x30, canon)) {
                 mh_str_copy(d->serial, sizeof d->serial, canon);
                 d->flags |= MH_DF_SERIAL;
@@ -192,7 +192,7 @@ bool mh_db_match_trackset(const MhDb *db, MhDisc *d, const uint8_t *sha1s, unsig
                 d->flags |= MH_DF_SBI;
                 d->sbi_data = db->trackset + mh_rd32(r + 0x24);
             }
-            cat_note(d, "\r\nCONFIRMADO_HASH_TRACKSET: identidade fisica resolvida por todas as tracks, na ordem do CUE.");
+            cat_note(d, "\r\nTRACKSET_HASH_CONFIRMED: physical identity resolved by all tracks, in CUE order.");
             mh_disc_refresh_status(d);
             return true;
         }
@@ -200,12 +200,12 @@ bool mh_db_match_trackset(const MhDb *db, MhDisc *d, const uint8_t *sha1s, unsig
             d->ps.status = MH_PSS_AMBIGUOUS;
             d->ps.source = MH_PSSRC_NONE;
             mh_str_copy(d->ps.message, sizeof d->ps.message,
-                        "Mais de um registro possui a mesma sequencia completa e ordenada de SHA-1.");
+                        "More than one record has the same complete, ordered SHA-1 sequence.");
             return false;
         }
     }
     d->flags |= MH_DF_TRACKSET_CHECKED | MH_DF_INTEGRITY_BAD;
-    cat_note(d, "\r\nTrackset completo nao localizado; nenhuma heuristica foi promovida.");
+    cat_note(d, "\r\nComplete trackset not found; no heuristic was promoted.");
     return false;
 }
 
@@ -261,7 +261,7 @@ bool mh_db_recover_track_map(const MhDb *db, MhDisc *d)
     if (cum != t->total_sectors || t->tracks[0].kind != 2 || t->tracks[0].pregap != 0) goto done;
     t->ntracks = (uint16_t)ntr;
     t->flags = (t->flags & ~(uint32_t)MH_DF_TRACKS_SUSPECT) | MH_DF_TRACKS_FIXED | MH_DF_STRUCT_OK;
-    cat_note(t, "\r\nMapa de tracks corrigido automaticamente pelo banco de referencia; os BINs originais nao foram alterados.");
+    cat_note(t, "\r\nTrack map fixed automatically from the reference database; the original BINs were not changed.");
     mh_disc_refresh_status(t);
     if (!mh_io_open(&io, d->files[0].path, MH_IO_READ, false, NULL)) goto done;
     io_open = true;
@@ -287,7 +287,7 @@ bool mh_db_recover_track_map(const MhDb *db, MhDisc *d)
     d->db_index = t->db_index;
     d->sbi_data = t->sbi_data;
     d->sbi_len = t->sbi_len;
-    cat_note(d, "\r\nCUE reparado em memoria: mapa confirmado pelos SHA-1 de todas as tracks na ordem. Arquivos originais preservados.");
+    cat_note(d, "\r\nCUE repaired in memory: map confirmed by the SHA-1 hashes of all tracks in order. Original files preserved.");
     mh_disc_refresh_status(d);
     ok = true;
 done:
@@ -351,7 +351,7 @@ bool mh_db_verify_redump(const MhDb *db, MhDisc *d, MhProgress *prog)
             mh_sha1_update(&total_sha, buf, want);
             pos += want;
             done += want;
-            if (prog && !mh_progress_report(prog, done, total_bytes, "Verificando integridade dos BINs")) {
+            if (prog && !mh_progress_report(prog, done, total_bytes, "Verifying BIN integrity")) {
                 mh_io_close(&io);
                 mh_free(buf);
                 return false;
@@ -398,12 +398,12 @@ bool mh_db_verify_redump(const MhDb *db, MhDisc *d, MhProgress *prog)
     if (all_ok && any_found) {
         d->flags = (d->flags & ~(uint32_t)MH_DF_INTEGRITY_BAD) | MH_DF_TRACKSET_CHECKED | MH_DF_TRACKSET_OK;
         if (d->db_index == 0xffffffffu && game[0]) mh_str_copy(d->title, sizeof d->title, game);
-        cat_note(d, "\r\nIntegridade confirmada pelo DAT Redump.");
+        cat_note(d, "\r\nIntegrity confirmed by the Redump DAT.");
         mh_disc_refresh_status(d);
         return true;
     }
     d->flags |= MH_DF_TRACKSET_CHECKED | MH_DF_INTEGRITY_BAD;
-    cat_note(d, "\r\nO hash nao foi localizado no DAT Redump ou algum BIN difere.");
+    cat_note(d, "\r\nThe hash was not found in the Redump DAT, or a BIN differs.");
     mh_disc_refresh_status(d);
     return false;
 }

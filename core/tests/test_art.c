@@ -190,7 +190,7 @@ static void test_generate(void) {
     assert(!mh_art_init(&a, NULL));
     assert(mh_art_init(&a, fake_load));
     assert(!mh_art_generate_plain(&a, "missing.png", dst, err, sizeof err));
-    assert(!strcmp(err, "Nao foi possivel carregar PNG, JPG, BMP, GIF ou TIFF pelo GDI+."));
+    assert(!strcmp(err, "Could not load the image. Supported formats: PNG, JPG, BMP, GIF and TIFF."));
     assert(mh_art_generate_plain(&a, "a.png", dst, err, sizeof err) && err[0] == 0);
     uint8_t *f; uint64_t n;
     assert(mh_read_entire_file(dst, &f, &n) && n == MH_ART_FILE_SIZE);
@@ -204,7 +204,7 @@ static void test_generate(void) {
     free(bg); free(f);
     /* case without a template fails with the original text */
     assert(!mh_art_generate_case(&a, "a.png", dst, err, sizeof err));
-    assert(!strcmp(err, "Falha ao montar a imagem na case padrao."));
+    assert(!strcmp(err, "Failed to compose the image on the default Case."));
     if (mh_art_load_case_template(&a, TEMPLATE)) {
         assert(mh_art_generate_case(&a, "a.png", dst, err, sizeof err));
         assert(mh_read_entire_file(dst, &f, &n) && n == MH_ART_FILE_SIZE);
@@ -212,14 +212,14 @@ static void test_generate(void) {
     }
     /* unwritable destination */
     assert(!mh_art_generate_plain(&a, "a.png", "/nonexistent_dir_x/y.art", err, sizeof err));
-    assert(!strcmp(err, "Falha ao escrever o arquivo ART."));
+    assert(!strcmp(err, "Failed to write the ART file."));
     /* import: .art copy rules */
     char src[MH_PATH_MAX], dst2[MH_PATH_MAX];
     mh_path_join(tmpdir, "in.ART", src, sizeof src);
     mh_path_join(tmpdir, "out.art", dst2, sizeof dst2);
     assert(mh_write_entire_file(src, "short", 5));
     assert(!mh_art_import(&a, false, src, dst2, err, sizeof err));
-    assert(!strcmp(err, "O arquivo ART precisa ter exatamente 10.240 bytes."));
+    assert(!strcmp(err, "The ART file must be exactly 10,240 bytes."));
     uint8_t full[MH_ART_FILE_SIZE] = {7};
     assert(mh_write_entire_file(src, full, sizeof full));
     assert(mh_art_import(&a, true, src, dst2, err, sizeof err));

@@ -52,23 +52,23 @@ static void test_parse_filename(void)
 static void test_status_texts(void)
 {
     CHECK_STR(mh_disc_status_text(1), "OK");
-    CHECK_STR(mh_disc_status_text(2), "OBSERVACAO");
-    CHECK_STR(mh_disc_status_text(3), "CORRIGIVEL");
-    CHECK_STR(mh_disc_status_text(4), "ERRO");
-    CHECK_STR(mh_disc_status_text(0), "VAZIO");
-    CHECK_STR(mh_disc_status_text(9), "VAZIO");
-    CHECK_STR(mh_psserial_status_text(0), "NAO_LOCALIZADO");
-    CHECK_STR(mh_psserial_status_text(1), "FORTE_INTERNO");
-    CHECK_STR(mh_psserial_status_text(2), "PROVAVEL");
-    CHECK_STR(mh_psserial_status_text(3), "AMBIGUO");
-    CHECK_STR(mh_psserial_status_text(4), "ERRO_IO");
-    CHECK_STR(mh_psserial_status_text(5), "IMAGEM_INVALIDA");
-    CHECK_STR(mh_psserial_status_text(6), "CONFIRMADO_HASH_TRACKSET");
-    CHECK_STR(mh_psserial_status_text(77), "NAO_LOCALIZADO");
-    CHECK_STR(mh_psserial_source_text(0), "NENHUMA");
+    CHECK_STR(mh_disc_status_text(2), "Review");
+    CHECK_STR(mh_disc_status_text(3), "Fixable");
+    CHECK_STR(mh_disc_status_text(4), "Error");
+    CHECK_STR(mh_disc_status_text(0), "Empty");
+    CHECK_STR(mh_disc_status_text(9), "Empty");
+    CHECK_STR(mh_psserial_status_text(0), "NOT_FOUND");
+    CHECK_STR(mh_psserial_status_text(1), "STRONG_INTERNAL");
+    CHECK_STR(mh_psserial_status_text(2), "PROBABLE");
+    CHECK_STR(mh_psserial_status_text(3), "AMBIGUOUS");
+    CHECK_STR(mh_psserial_status_text(4), "IO_ERROR");
+    CHECK_STR(mh_psserial_status_text(5), "INVALID_IMAGE");
+    CHECK_STR(mh_psserial_status_text(6), "TRACKSET_HASH_CONFIRMED");
+    CHECK_STR(mh_psserial_status_text(77), "NOT_FOUND");
+    CHECK_STR(mh_psserial_source_text(0), "NONE");
     CHECK_STR(mh_psserial_source_text(1), "SYSTEM_CNF");
-    CHECK_STR(mh_psserial_source_text(2), "NOME_EXECUTAVEL");
-    CHECK_STR(mh_psserial_source_text(3), "CONTEUDO_EXECUTAVEL");
+    CHECK_STR(mh_psserial_source_text(2), "EXECUTABLE_NAME");
+    CHECK_STR(mh_psserial_source_text(3), "EXECUTABLE_CONTENT");
     CHECK_STR(mh_psserial_source_text(4), "HASH_TRACKSET");
 }
 
@@ -80,7 +80,7 @@ static void test_serial_images(void)
     MhPsSerial r;
     uint8_t *exe = make_exe(4000, NULL);
 
-    /* 1. SYSTEM.CNF -> BOOT target with a serial name: FORTE_INTERNO */
+    /* 1. SYSTEM.CNF -> BOOT target with a serial name: STRONG_INTERNAL */
     {
         const char *cnf = "BOOT = cdrom:\\SLUS_009.69;1\r\nTCB = 4\r\nEVENT = 10\r\nSTACK = 801FFF00\r\n";
         IsoFile f[2] = {{"SYSTEM.CNF;1", cnf, (uint32_t)strlen(cnf), NULL}, {"SLUS_009.69;1", exe, 4000, NULL}};
@@ -94,8 +94,8 @@ static void test_serial_images(void)
         CHECK(r.system_cnf_found == 1 && r.boot_path_found == 1 && r.boot_exe_valid == 1);
         CHECK(r.cand_count == 1 && r.needs_hash == 1);
         CHECK(r.iso_sectors == iso.sectors && r.file_sectors == iso.sectors && r.truncated == 0);
-        CHECK_STR(r.message, "Serial extraido do BOOT do SYSTEM.CNF; use trackset hash para confirmar a revisao fisica.");
-        CHECK_STR(mh_psserial_status_text(r.status), "FORTE_INTERNO");
+        CHECK_STR(r.message, "Serial extracted from the SYSTEM.CNF BOOT entry; use the trackset hash to confirm the physical revision.");
+        CHECK_STR(mh_psserial_status_text(r.status), "STRONG_INTERNAL");
         {
             char s[16];
             CHECK(mh_psserial_extract_serial(s, p)); CHECK_STR(s, "SLUS-00969");
@@ -119,7 +119,7 @@ static void test_serial_images(void)
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_STRONG); CHECK_STR(r.serial, "SCES-12345");
         iso_free(&iso);
     }
-    /* 2. BOOT target with a non serial name, serial inside the executable: PROVAVEL */
+    /* 2. BOOT target with a non serial name, serial inside the executable: PROBABLE */
     {
         const char *cnf = "BOOT = \"cdrom:\\GAME\\MAIN.EXE;1\"\r\n";
         uint8_t *e2 = make_exe(3000, "xx SLPS_012.34 yy");
@@ -131,7 +131,7 @@ static void test_serial_images(void)
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_PROBABLE);
         CHECK_STR(r.serial, "SLPS-01234"); CHECK(r.source == MH_PSSRC_EXE_CONTENT);
         CHECK_STR(r.path, "GAME/MAIN.EXE");
-        CHECK_STR(r.message, "Serial unico encontrado heuristicamente no executavel de boot.");
+        CHECK_STR(r.message, "Single serial found heuristically in the boot executable.");
         { char s[16]; CHECK(mh_psserial_extract_serial(s, p)); CHECK_STR(s, "SLPS-01234"); }
         iso_free(&iso); free(e2);
     }
@@ -146,7 +146,7 @@ static void test_serial_images(void)
         tmp_path("b2.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_AMBIGUOUS);
         CHECK(r.cand_count == 2); CHECK_STR(r.cand[0], "SLPS-01234"); CHECK_STR(r.cand[1], "SLUS-00555");
-        CHECK_STR(r.message, "Multiplos serials encontrados no executavel de boot.");
+        CHECK_STR(r.message, "Multiple serials found in the boot executable.");
         { char s[16]; CHECK(!mh_psserial_extract_serial(s, p)); }
         iso_free(&iso); free(e2);
     }
@@ -172,7 +172,7 @@ static void test_serial_images(void)
         tmp_path("c.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_PROBABLE);   /* only one exe has a serial name */
         CHECK(r.source == MH_PSSRC_EXE_NAME); CHECK_STR(r.serial, "SLUS-00969");
-        CHECK_STR(r.message, "Executavel PS-X EXE com nome de serial unico, sem SYSTEM.CNF.");
+        CHECK_STR(r.message, "PS-X EXE executable with a single serial name, no SYSTEM.CNF.");
         iso_free(&iso);
     }
     /* 3b. same value twice is fine; BOOT2 accepted */
@@ -196,7 +196,7 @@ static void test_serial_images(void)
         tmp_path("d.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_PROBABLE);
         CHECK_STR(r.serial, "SCUS-94455"); CHECK(r.source == MH_PSSRC_EXE_CONTENT);
-        CHECK_STR(r.message, "PSX.EXE valido; serial interno unico encontrado heuristicamente.");
+        CHECK_STR(r.message, "Valid PSX.EXE; single internal serial found heuristically.");
         iso_free(&iso); free(e2);
     }
     /* 4b. PSX.EXE without a serial */
@@ -207,7 +207,7 @@ static void test_serial_images(void)
         iso_write(&iso, "d2.bin");
         tmp_path("d2.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_NOT_FOUND);
-        CHECK_STR(r.message, "PSX.EXE valido localizado, mas ele nao fornece serial; resolver pelo trackset hash.");
+        CHECK_STR(r.message, "Valid PSX.EXE found, but it provides no serial; resolve by trackset hash.");
         iso_free(&iso);
     }
     /* 5. nothing identifiable */
@@ -219,10 +219,10 @@ static void test_serial_images(void)
         iso_write(&iso, "e.bin");
         tmp_path("e.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_NOT_FOUND);
-        CHECK_STR(r.message, "SYSTEM.CNF e executavel PS-X EXE identificavel nao encontrados; resolver pelo trackset hash.");
+        CHECK_STR(r.message, "SYSTEM.CNF and an identifiable PS-X EXE executable were not found; resolve by trackset hash.");
         iso_free(&iso);
     }
-    /* 6. several executables, no SYSTEM.CNF: the contents are scanned (PROVAVEL / AMBIGUO) */
+    /* 6. several executables, no SYSTEM.CNF: the contents are scanned (PROBABLE / AMBIGUO) */
     {
         uint8_t *e1 = make_exe(3000, "SLUS_000.01"), *e2 = make_exe(3000, "SLUS_000.02");
         IsoFile f[2] = {{"A.EXE;1", e1, 3000, NULL}, {"B.EXE;1", e2, 3000, NULL}};
@@ -231,14 +231,14 @@ static void test_serial_images(void)
         iso_write(&iso, "f.bin");
         tmp_path("f.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_AMBIGUOUS);
-        CHECK_STR(r.message, "Multiplos serials encontrados em executaveis PS-X EXE; boot nao confirmado.");
+        CHECK_STR(r.message, "Multiple serials found in PS-X EXE executables; boot not confirmed.");
         iso_free(&iso);
         f[1].data = e1;                                   /* same serial in both: unique */
         iso_build(&iso, f, 2, 2352, 0x18, 2, 0);
         iso_write(&iso, "f2.bin");
         tmp_path("f2.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_PROBABLE);
-        CHECK_STR(r.message, "Serial unico encontrado em executavel PS-X EXE; boot nao confirmado.");
+        CHECK_STR(r.message, "Single serial found in a PS-X EXE executable; boot not confirmed.");
         iso_free(&iso); free(e1); free(e2);
     }
     /* 7. declared volume larger than the file: truncated */
@@ -281,14 +281,14 @@ static void test_serial_images(void)
     {
         tmp_path("missing.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_IO_ERROR);
-        CHECK_STR(r.message, "Nao foi possivel abrir a imagem.");
+        CHECK_STR(r.message, "Could not open the image.");
         CHECK(mh_psserial_extract(&r, "") == MH_PSS_IO_ERROR);
-        CHECK_STR(r.message, "Caminho da imagem vazio.");
+        CHECK_STR(r.message, "The image path is empty.");
         CHECK(mh_psserial_extract(&r, NULL) == MH_PSS_IO_ERROR);
         put_zero_bin("zeros.bin", 2352 * 40);
         tmp_path("zeros.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_BAD_IMAGE);
-        CHECK_STR(r.message, "PVD ISO9660/layout invalido ou diretorio raiz fora da imagem.");
+        CHECK_STR(r.message, "Invalid ISO9660 PVD/layout, or the root directory is outside the image.");
         put_zero_bin("tiny.bin", 100);
         tmp_path("tiny.bin", p);
         CHECK(mh_psserial_extract(&r, p) == MH_PSS_BAD_IMAGE);
@@ -317,11 +317,11 @@ static void test_recover(void)
 
     d->kind = MH_DISC_KIND_CUE;
     CHECK(mh_disc_recover_serial(d, NULL, proj, false, msg, sizeof msg) == MH_RECOVER_UNAVAILABLE);
-    CHECK_STR(msg, "O CUE/BIN original nao esta disponivel para identificar o serial.");
+    CHECK_STR(msg, "The original CUE/BIN is not available to identify the serial.");
     tmp_path("r.bin", d->files[0].path);
     d->nfiles = 1;
     CHECK(mh_disc_recover_serial(d, NULL, proj, true, msg, sizeof msg) == MH_RECOVER_OK);
-    CHECK_STR(msg, "Serial interno comprovado recuperado. Aplique as alteracoes ao SD.");
+    CHECK_STR(msg, "Proven internal serial recovered. Apply the changes to the card.");
     CHECK_STR(d->serial, "SLUS-00969"); CHECK(d->flags & MH_DF_SERIAL); CHECK(proj->dirty);
     CHECK(d->ps.status == MH_PSS_STRONG);
     CHECK(mh_disc_recover_serial(d, NULL, proj, false, msg, sizeof msg) == MH_RECOVER_SKIPPED);   /* has a serial */
@@ -329,14 +329,14 @@ static void test_recover(void)
     memset(d, 0, sizeof *d);
     d->kind = MH_DISC_KIND_V2_IMAGE;
     CHECK(mh_disc_recover_serial(d, NULL, NULL, false, msg, sizeof msg) == MH_RECOVER_UNAVAILABLE);
-    CHECK_STR(msg, "O registro RAW nao possui localizacao valida para leitura.");
+    CHECK_STR(msg, "The RAW record has no valid location to read from.");
     d->v2_raw_lba512 = 5; d->total_sectors = iso.sectors;
     CHECK(mh_disc_recover_serial(d, NULL, NULL, false, msg, sizeof msg) == MH_RECOVER_UNAVAILABLE);
-    CHECK_STR(msg, "A origem RAW do disco nao esta disponivel.");
+    CHECK_STR(msg, "The disc's RAW source is not available.");
     CHECK(mh_disc_recover_serial(d, NULL, NULL, true, msg, sizeof msg) == MH_RECOVER_UNAVAILABLE && msg[0] == 0);
     tmp_path("r.img", d->source_path);
     CHECK(mh_disc_recover_serial(d, NULL, NULL, false, msg, sizeof msg) == MH_RECOVER_OK);
-    CHECK_STR(msg, "Serial interno recuperado: SLUS-00969. O RAW do jogo foi preservado. Aplique as alteracoes para gravar a identidade no cartao.");
+    CHECK_STR(msg, "Internal serial recovered: SLUS-00969. The game's RAW was preserved. Apply the changes to write the identity to the card.");
     /* kind 4 uses the device path given by the caller */
     memset(d, 0, sizeof *d);
     d->kind = MH_DISC_KIND_V2_DEVICE; d->v2_raw_lba512 = 5; d->total_sectors = iso.sectors;
@@ -347,11 +347,11 @@ static void test_recover(void)
     d->kind = MH_DISC_KIND_V2_IMAGE; d->v2_raw_lba512 = 1; d->total_sectors = iso.sectors;
     tmp_path("r.img", d->source_path);
     CHECK(mh_disc_recover_serial(d, NULL, NULL, false, msg, sizeof msg) == MH_RECOVER_NOT_FOUND);
-    CHECK_STR(msg, "Nao foi encontrado um serial interno comprovado. Nenhum dado foi alterado.\r\n\r\nPVD ISO9660/layout invalido ou diretorio raiz fora da imagem.");
+    CHECK_STR(msg, "No proven internal serial was found. No data was changed.\r\n\r\nInvalid ISO9660 PVD/layout, or the root directory is outside the image.");
     CHECK(d->serial[0] == 0);
     d->kind = 3;
     CHECK(mh_disc_recover_serial(d, NULL, NULL, false, msg, sizeof msg) == MH_RECOVER_UNAVAILABLE);
-    CHECK_STR(msg, "Esta origem nao permite recuperar o serial.");
+    CHECK_STR(msg, "This source does not allow recovering the serial.");
     CHECK(mh_disc_recover_serial(NULL, NULL, NULL, false, msg, sizeof msg) == MH_RECOVER_SKIPPED);
     iso_free(&iso);
     free(exe);
@@ -434,9 +434,9 @@ static void test_cue_valid(void)
     CHECK((d->tracks[1].flags & (MH_TRACK_DCP | MH_TRACK_ISRC | MH_TRACK_HAS_INDEX0)) == (MH_TRACK_DCP | MH_TRACK_ISRC | MH_TRACK_HAS_INDEX0));
     CHECK(d->tracks[2].pregap == 0 && d->tracks[2].start == 1300 && d->tracks[2].length == 200);
     CHECK_STR(d->name, "OK");
-    /* ISO is absent: serial unknown, so a note and status OBSERVACAO */
+    /* ISO is absent: serial unknown, so a note and status Review */
     CHECK(d->serial[0] == 0 && d->status == MH_DISC_STATUS_NOTE);
-    CHECK_STR(d->notes, "Serial nao identificado automaticamente.");
+    CHECK_STR(d->notes, "Serial not identified automatically.");
     CHECK(d->db_index == 0xffffffffu);
     CHECK(d->ps.status == MH_PSS_BAD_IMAGE);
 
@@ -531,7 +531,7 @@ static void test_cue_text(void)
     tmp_path("nothere.cue", p);
     d = mh_cue_parse(p);
     CHECK(d->flags == 0 && d->status == MH_DISC_STATUS_ERROR);
-    CHECK_STR(d->notes, "Nao foi possivel abrir ou decodificar o CUE.");
+    CHECK_STR(d->notes, "Could not open or decode the CUE.");
     mh_disc_free(d);
     CHECK(mh_cue_count_files(p) == 0);
 }
@@ -546,67 +546,67 @@ static void test_cue_errors(void)
 
     put_text("e0.cue", "\n");   /* an empty file fails to decode (test_disc_audit.c) */
     d = parse_tmp_cue("e0.cue");
-    CHECK_STR(d->notes, "CUE sem FILE/TRACK validos."); CHECK(d->status == MH_DISC_STATUS_ERROR); mh_disc_free(d);
+    CHECK_STR(d->notes, "CUE has no valid FILE/TRACK."); CHECK(d->status == MH_DISC_STATUS_ERROR); mh_disc_free(d);
 
     put_text("e1.cue", "TRACK 01 MODE2/2352\n");
     d = parse_tmp_cue("e1.cue");
-    CHECK(note_has(d, "Linha TRACK invalida ou fora de ordem.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid or out-of-order TRACK line.")); mh_disc_free(d);
 
     put_text("e2.cue", "FILE \"a.bin\" BINARY\nTRACK 100 MODE2/2352\n");
     d = parse_tmp_cue("e2.cue");
-    CHECK(note_has(d, "Linha TRACK invalida ou fora de ordem.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid or out-of-order TRACK line.")); mh_disc_free(d);
     put_text("e2b.cue", "FILE \"a.bin\" BINARY\nTRACK 00 MODE2/2352\n");
     d = parse_tmp_cue("e2b.cue");
-    CHECK(note_has(d, "Linha TRACK invalida ou fora de ordem.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid or out-of-order TRACK line.")); mh_disc_free(d);
     put_text("e2c.cue", "FILE \"a.bin\" BINARY\nTRACK x MODE2/2352\n");
     d = parse_tmp_cue("e2c.cue");
-    CHECK(note_has(d, "Linha TRACK invalida ou fora de ordem.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid or out-of-order TRACK line.")); mh_disc_free(d);
 
     put_text("e3.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2336\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e3.cue");
-    CHECK(note_has(d, "Modo de track nao suportado. Use AUDIO, MODE1/2352 ou MODE2/2352.")); CHECK(d->flags & MH_DF_INVALID); mh_disc_free(d);
+    CHECK(note_has(d, "Unsupported track mode. Use AUDIO, MODE1/2352 or MODE2/2352.")); CHECK(d->flags & MH_DF_INVALID); mh_disc_free(d);
 
     put_text("e4.cue", "FILE \"a.bin\" WAVE\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e4.cue");
-    CHECK(note_has(d, "Somente arquivos BINARY sao aceitos nesta versao.")); CHECK(d->flags & MH_DF_INVALID); mh_disc_free(d);
+    CHECK(note_has(d, "Only BINARY files are supported in this version.")); CHECK(d->flags & MH_DF_INVALID); mh_disc_free(d);
 
     put_text("e5.cue", "FILE\nTRACK 01 MODE2/2352\n");
     d = parse_tmp_cue("e5.cue");      /* "FILE" without a blank is not a FILE line: TRACK without FILE */
-    CHECK(note_has(d, "Linha TRACK invalida ou fora de ordem.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid or out-of-order TRACK line.")); mh_disc_free(d);
     put_text("e5b.cue", "FILE \"\" BINARY\nTRACK 01 MODE2/2352\n");
     d = parse_tmp_cue("e5b.cue");
-    CHECK(note_has(d, "Linha FILE invalida.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid FILE line.")); mh_disc_free(d);
     put_text("e5c.cue", "FILE   \nTRACK 01 MODE2/2352\n");
     d = parse_tmp_cue("e5c.cue");     /* trimmed to "FILE": not a FILE line */
-    CHECK(note_has(d, "Linha TRACK invalida ou fora de ordem.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid or out-of-order TRACK line.")); mh_disc_free(d);
 
     put_text("e6.cue", "FILE \"a.bin\" BINARY\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e6.cue");
-    CHECK(note_has(d, "INDEX sem TRACK valido.")); mh_disc_free(d);
+    CHECK(note_has(d, "INDEX without a valid TRACK.")); mh_disc_free(d);
     put_text("e6b.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00\n");
     d = parse_tmp_cue("e6b.cue");
-    CHECK(note_has(d, "Tempo INDEX invalido.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid INDEX time.")); mh_disc_free(d);
     put_text("e6c.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX xx 00:00:00\n");
     d = parse_tmp_cue("e6c.cue");
-    CHECK(note_has(d, "INDEX sem TRACK valido.")); mh_disc_free(d);
+    CHECK(note_has(d, "INDEX without a valid TRACK.")); mh_disc_free(d);
 
     put_text("e7.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nPREGAP bad\n");
     d = parse_tmp_cue("e7.cue");
-    CHECK(note_has(d, "PREGAP invalido.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid PREGAP.")); mh_disc_free(d);
     put_text("e7b.cue", "FILE \"a.bin\" BINARY\nPREGAP 00:02:00\n");
     d = parse_tmp_cue("e7b.cue");
-    CHECK(note_has(d, "PREGAP invalido.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid PREGAP.")); mh_disc_free(d);
 
     put_text("e8.cue", "FILE \"a.bin\" BINARY\nFLAGS DCP\n");
     d = parse_tmp_cue("e8.cue");
-    CHECK(note_has(d, "FLAGS sem TRACK valido.")); mh_disc_free(d);
+    CHECK(note_has(d, "FLAGS without a valid TRACK.")); mh_disc_free(d);
     put_text("e8b.cue", "FILE \"a.bin\" BINARY\nISRC ABC\n");
     d = parse_tmp_cue("e8b.cue");
-    CHECK(note_has(d, "ISRC sem TRACK valido.")); mh_disc_free(d);
+    CHECK(note_has(d, "ISRC without a valid TRACK.")); mh_disc_free(d);
 
     put_text("e9.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nPOSTGAP 00:02:00\n");
     d = parse_tmp_cue("e9.cue");
-    CHECK(note_has(d, "POSTGAP virtual nao e aceito com seguranca.")); CHECK(d->flags & MH_DF_INCOMPLETE);
+    CHECK(note_has(d, "A virtual POSTGAP cannot be accepted safely.")); CHECK(d->flags & MH_DF_INCOMPLETE);
     CHECK(d->flags & MH_DF_STRUCT_OK);     /* a warning only */
     CHECK(d->status == MH_DISC_STATUS_ERROR);   /* ... but refresh_status treats 0x100 as an error */
     mh_disc_free(d);
@@ -619,7 +619,7 @@ static void test_cue_errors(void)
         put_text("e10.cue", mh_wbuf_cstr(&w));
         mh_wbuf_free(&w);
         d = parse_tmp_cue("e10.cue");
-        CHECK(note_has(d, "Mais de 99 arquivos BIN no CUE.")); CHECK(d->flags & MH_DF_INVALID); CHECK(d->nfiles == 99);
+        CHECK(note_has(d, "More than 99 BIN files in the CUE.")); CHECK(d->flags & MH_DF_INVALID); CHECK(d->nfiles == 99);
         mh_disc_free(d);
         /* exactly 99 is accepted by the line parser (and then reported as unused / duplicated) */
         mh_wbuf_init(&w);
@@ -633,75 +633,75 @@ static void test_cue_errors(void)
 
     put_text("e11.cue", "FILE \"a.bin\" BINARY\nFILE \"b.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e11.cue");
-    CHECK(note_has(d, "Existe FILE sem nenhuma TRACK associada.")); mh_disc_free(d);
+    CHECK(note_has(d, "There is a FILE with no TRACK.")); mh_disc_free(d);
 
     put_text("e12.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nFILE \"A.BIN\" BINARY\nTRACK 02 AUDIO\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e12.cue");
-    CHECK(note_has(d, "O mesmo BIN foi declarado mais de uma vez; o layout e ambiguo.")); mh_disc_free(d);
+    CHECK(note_has(d, "The same BIN is declared more than once, so the layout is ambiguous.")); mh_disc_free(d);
 
     put_text("e13.cue", "FILE \"a.bin\" BINARY\nTRACK 01 AUDIO\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e13.cue");
-    CHECK(note_has(d, "A primeira track de um disco PlayStation precisa ser de dados.")); mh_disc_free(d);
+    CHECK(note_has(d, "The first track of a PlayStation disc must be a data track.")); mh_disc_free(d);
 
     put_text("e14.cue", "FILE \"nothere.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e14.cue");
-    CHECK(note_has(d, "Um ou mais BINs referenciados nao foram encontrados.")); CHECK(d->flags & MH_DF_MISSING_BIN);
+    CHECK(note_has(d, "One or more referenced BINs were not found.")); CHECK(d->flags & MH_DF_MISSING_BIN);
     CHECK(d->status == MH_DISC_STATUS_FIXABLE); mh_disc_free(d);
 
     put_text("e15.cue", "FILE \"odd.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e15.cue");
-    CHECK(note_has(d, "Um BIN nao esta alinhado em setores de 2352 bytes.")); CHECK(d->flags & MH_DF_BAD_ALIGN);
+    CHECK(note_has(d, "A BIN is not aligned to 2352-byte sectors.")); CHECK(d->flags & MH_DF_BAD_ALIGN);
     CHECK(d->status == MH_DISC_STATUS_ERROR); mh_disc_free(d);
     put_text("e15b.cue", "FILE \"empty.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e15b.cue");
-    CHECK(note_has(d, "Um BIN nao esta alinhado em setores de 2352 bytes.")); mh_disc_free(d);
+    CHECK(note_has(d, "A BIN is not aligned to 2352-byte sectors.")); mh_disc_free(d);
 
     put_text("e16.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nTRACK 03 AUDIO\nINDEX 01 00:00:10\n");
     d = parse_tmp_cue("e16.cue");
-    CHECK(note_has(d, "As tracks precisam ser continuas a partir de 01.")); mh_disc_free(d);
+    CHECK(note_has(d, "Tracks must be consecutive starting at 01.")); mh_disc_free(d);
 
     put_text("e17.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 00 00:00:00\n");
     d = parse_tmp_cue("e17.cue");
-    CHECK(note_has(d, "INDEX 01 ausente ou fora do BIN.")); mh_disc_free(d);
+    CHECK(note_has(d, "INDEX 01 is missing or outside the BIN.")); mh_disc_free(d);
     put_text("e17b.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:01:00\n");   /* 75 > 50 sectors */
     d = parse_tmp_cue("e17b.cue");
-    CHECK(note_has(d, "INDEX 01 ausente ou fora do BIN.")); mh_disc_free(d);
+    CHECK(note_has(d, "INDEX 01 is missing or outside the BIN.")); mh_disc_free(d);
 
     put_text("e18.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nPREGAP 00:02:00\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e18.cue");
-    CHECK(note_has(d, "PREGAP virtual sem INDEX 00: imagem possivelmente incompleta.")); CHECK(d->flags & MH_DF_INCOMPLETE); mh_disc_free(d);
+    CHECK(note_has(d, "Virtual PREGAP without INDEX 00: the image may be incomplete.")); CHECK(d->flags & MH_DF_INCOMPLETE); mh_disc_free(d);
 
     put_text("e19.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 00 00:00:10\nINDEX 01 00:00:05\n");
     d = parse_tmp_cue("e19.cue");
-    CHECK(note_has(d, "INDEX 00 invalido.")); mh_disc_free(d);
+    CHECK(note_has(d, "Invalid INDEX 00.")); mh_disc_free(d);
 
     put_text("e20.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nPREGAP 00:00:07\nINDEX 00 00:00:00\nINDEX 01 00:00:05\n");
     d = parse_tmp_cue("e20.cue");
-    CHECK(note_has(d, "PREGAP e INDEX 00/01 informam valores diferentes.")); mh_disc_free(d);
+    CHECK(note_has(d, "PREGAP and INDEX 00/01 give different values.")); mh_disc_free(d);
 
     put_text("e21.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:05\n");
     d = parse_tmp_cue("e21.cue");
-    CHECK(note_has(d, "A primeira track precisa iniciar no setor 0 sem pregap.")); mh_disc_free(d);
+    CHECK(note_has(d, "The first track must start at sector 0 with no pregap.")); mh_disc_free(d);
 
     put_text("e22.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nTRACK 02 AUDIO\nINDEX 01 00:00:10\nTRACK 03 AUDIO\nINDEX 01 00:00:10\n");
     d = parse_tmp_cue("e22.cue");
-    CHECK(note_has(d, "INDEX das tracks fora de ordem ou pregap sobreposto.")); mh_disc_free(d);
+    CHECK(note_has(d, "Track INDEX values are out of order or a pregap overlaps.")); mh_disc_free(d);
     put_text("e22b.cue", "FILE \"a.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nTRACK 02 AUDIO\nINDEX 01 00:00:20\nTRACK 03 AUDIO\nINDEX 00 00:00:10\nINDEX 01 00:00:30\n");
     d = parse_tmp_cue("e22b.cue");    /* the pregap of track 3 reaches back into track 2 */
-    CHECK(note_has(d, "INDEX das tracks fora de ordem ou pregap sobreposto.")); mh_disc_free(d);
+    CHECK(note_has(d, "Track INDEX values are out of order or a pregap overlaps.")); mh_disc_free(d);
 
     /* 450000 sector limit (sparse files, 1.06 GB logical) */
     put_zero_bin("big1.bin", 2352ull * 449999);
     put_zero_bin("big2.bin", 2352ull * 2);
     put_text("e23.cue", "FILE \"big1.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\nFILE \"big2.bin\" BINARY\nTRACK 02 AUDIO\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e23.cue");
-    CHECK(note_has(d, "A imagem excede o limite seguro de 450.000 setores de CD.")); CHECK(d->flags & MH_DF_INVALID);
+    CHECK(note_has(d, "The image exceeds the safe limit of 450,000 CD sectors.")); CHECK(d->flags & MH_DF_INVALID);
     CHECK(d->total_sectors == 449999);
     mh_disc_free(d);
     put_zero_bin("big3.bin", 2352ull * 450001);
     put_text("e24.cue", "FILE \"big3.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e24.cue");
-    CHECK(note_has(d, "A imagem excede o limite seguro de 450.000 setores de CD.")); mh_disc_free(d);
+    CHECK(note_has(d, "The image exceeds the safe limit of 450,000 CD sectors.")); mh_disc_free(d);
     put_zero_bin("big4.bin", 2352ull * 450000);
     put_text("e25.cue", "FILE \"big4.bin\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n");
     d = parse_tmp_cue("e25.cue");
@@ -733,13 +733,13 @@ static void test_project_discs(void)
 
     c = mh_project_add_case(p, 0);
     CHECK(c && c->slot == 0 && c->in_use == 1);
-    CHECK_STR(c->title, "NOVO JOGO");
+    CHECK_STR(c->title, "NEW GAME");
     CHECK(p->dirty == 1 && p->case_count == 1);
     c5 = mh_project_add_case(p, 5);
     CHECK(c5 && c5->slot == 5);
     CHECK(mh_project_add_case(p, 5)->slot == 6);          /* next free slot at or after 5 */
     CHECK(mh_project_add_case(p, 0)->slot == 1);
-    CHECK(mh_project_find_case_title(p, "novo jogo") == &p->cases[0]);
+    CHECK(mh_project_find_case_title(p, "new game") == &p->cases[0]);
     CHECK(mh_project_find_case_title(p, "nope") == NULL);
     CHECK(mh_project_find_case_title(p, "") == NULL);
     CHECK(mh_project_remove_case(p, 6));
@@ -1062,13 +1062,13 @@ static void test_db_apply(void)
     d = disc_like_record(db, 9634);
     d->ntracks = 3;
     CHECK(mh_db_apply_disc(db, d));
-    CHECK((d->flags & MH_DF_TRACKS_SUSPECT) && note_has(d, "\r\nO banco original indica quantidade de tracks diferente. Verifique ou recupere o CUE original."));
+    CHECK((d->flags & MH_DF_TRACKS_SUSPECT) && note_has(d, "\r\nThe original database lists a different number of tracks. Check or recover the original CUE."));
     CHECK(d->status == MH_DISC_STATUS_NOTE);
     mh_disc_free(d);
     d = disc_like_record(db, 9634);
     d->tracks[0].kind = 1;
     CHECK(mh_db_apply_disc(db, d));
-    CHECK((d->flags & MH_DF_TRACKS_SUSPECT) && note_has(d, "\r\nOs tipos de track diferem do banco original."));
+    CHECK((d->flags & MH_DF_TRACKS_SUSPECT) && note_has(d, "\r\nThe track types differ from the original database."));
     mh_disc_free(d);
     d = fake_disc("X", "ZZZZ-00000");
     CHECK(!mh_db_apply_disc(db, d) && !(d->flags & MH_DF_DB_MATCH)); mh_disc_free(d);
@@ -1103,7 +1103,7 @@ static void test_db_apply(void)
         if (amb != 0xffffffffu) {
             d = disc_like_record(db, amb);
             CHECK(!mh_db_apply_disc(db, d));
-            CHECK(note_has(d, "\r\nO serial corresponde a mais de uma edicao no banco de discos."));
+            CHECK(note_has(d, "\r\nThe serial matches more than one edition in the disc database."));
             CHECK(!(d->flags & MH_DF_DB_MATCH));
             mh_disc_free(d);
         } else {
@@ -1208,8 +1208,8 @@ static void test_db_trackset(void)
         CHECK_STR(d->serial, canon); CHECK(d->flags & MH_DF_SERIAL);
         CHECK(d->ps.trackset_id == (r[0x20] | r[0x21] << 8 | r[0x22] << 16 | (uint32_t)r[0x23] << 24));
         CHECK(d->title[0] != 0);
-        CHECK_STR(d->ps.message, "Edicao fisica confirmada somente pela sequencia completa e ordenada dos SHA-1 de todas as tracks.");
-        CHECK(note_has(d, "\r\nCONFIRMADO_HASH_TRACKSET: identidade fisica resolvida por todas as tracks, na ordem do CUE."));
+        CHECK_STR(d->ps.message, "Physical edition confirmed only by the complete, ordered sequence of SHA-1 hashes of all tracks.");
+        CHECK(note_has(d, "\r\nTRACKSET_HASH_CONFIRMED: physical identity resolved by all tracks, in CUE order."));
         CHECK(d->flags & MH_DF_DB_MATCH);
         /* damaged hash: not found, state returns to the saved one */
         sha[3] ^= 1;
@@ -1218,7 +1218,7 @@ static void test_db_trackset(void)
         CHECK(!(d->flags & MH_DF_SERIAL) && d->serial[0] == 0);       /* strong serial was absent before */
         CHECK((d->flags & MH_DF_INTEGRITY_BAD) && (d->flags & MH_DF_TRACKSET_CHECKED));
         CHECK_STR(d->ps.message, "saved text");
-        CHECK(note_has(d, "\r\nTrackset completo nao localizado; nenhuma heuristica foi promovida."));
+        CHECK(note_has(d, "\r\nComplete trackset not found; no heuristic was promoted."));
     }
     mh_disc_free(d);
 
@@ -1295,7 +1295,7 @@ static void test_manager(void)
     h.ask = hook_ask_record;                                  /* yes, but nothing to locate with */
     d = mh_manager_parse(NULL, p, &h);
     CHECK(d->flags & MH_DF_MISSING_BIN);
-    CHECK_STR(g_asked, "O CUE referencia um BIN que nao foi encontrado:\r\n\r\ngone.bin\r\n\r\nDeseja localizar esse BIN agora?");
+    CHECK_STR(g_asked, "The CUE references a BIN that was not found:\r\n\r\ngone.bin\r\n\r\nDo you want to locate that BIN now?");
     mh_disc_free(d);
 }
 
@@ -1329,7 +1329,7 @@ static void test_manager_locate(void)
     CHECK(!(d->flags & MH_DF_MISSING_BIN) && (d->flags & MH_DF_STRUCT_OK));
     CHECK(d->nfiles == 1 && strstr(d->files[0].path, "found/real.bin") != NULL);
     CHECK_STR(d->cue_path, p);
-    CHECK(note_has(d, "Nomes/caminhos dos BINs corrigidos somente para esta gravacao; arquivos originais preservados."));
+    CHECK(note_has(d, "BIN names and paths were fixed for this write only; original files preserved."));
     mh_disc_free(d);
 }
 
@@ -1378,7 +1378,7 @@ static void test_add_cue(void)
     put_text("Third.cue", "FILE \"game2.bin\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n");
     tmp_path("Third.cue", p);
     st = mh_project_add_cue(proj, NULL, p, 1, &h, &res, err, sizeof err);
-    CHECK(st == MH_ADD_LIMIT); CHECK_STR(err, "A Case selecionada ja possui 5 discos.");
+    CHECK(st == MH_ADD_LIMIT); CHECK_STR(err, "The selected Case already has 5 discs.");
     CHECK(proj->disc_count == 7);
     /* unused target slot falls back to automatic placement */
     st = mh_project_add_cue(proj, NULL, p, 200, &h, &res, err, sizeof err);
@@ -1392,7 +1392,7 @@ static void test_add_cue(void)
     CHECK(proj->disc_count == 256);
     tmp_path("Third.cue", p);
     st = mh_project_add_cue(proj, NULL, p, 256, &h, &res, err, sizeof err);
-    CHECK(st == MH_ADD_LIMIT); CHECK_STR(err, "A V2 aceita no maximo 256 discos no total.");
+    CHECK(st == MH_ADD_LIMIT); CHECK_STR(err, "V2 accepts at most 256 discs in total.");
     /* auto placement: a case with 5 discs of the same game */
     mh_project_clear(proj);
     {
@@ -1405,7 +1405,7 @@ static void test_add_cue(void)
         for (int i = 0; i < 4; i++) CHECK(mh_case_add_disc(proj, c, fake_disc("F", "")));
         tmp_path("Game (Disc 2).cue", p);
         st = mh_project_add_cue(proj, NULL, p, 256, &h, &res, err, sizeof err);
-        CHECK(st == MH_ADD_LIMIT); CHECK_STR(err, "O jogo ja possui cinco discos; o disco adicional nao foi incluido.");
+        CHECK(st == MH_ADD_LIMIT); CHECK_STR(err, "The game already has five discs; the extra disc was not added.");
     }
     mh_project_clear(proj);
     free(proj);
@@ -1457,7 +1457,7 @@ static void test_fixtures(void)
         if (access(p, R_OK) == 0) {
             d = mh_cue_parse(p);
             CHECK(d->serial[0] == 0 && d->ps.status == MH_PSS_NOT_FOUND && d->status == MH_DISC_STATUS_NOTE);
-            CHECK_STR(d->notes, "Serial nao identificado automaticamente.");
+            CHECK_STR(d->notes, "Serial not identified automatically.");
             mh_disc_free(d);
         }
     }

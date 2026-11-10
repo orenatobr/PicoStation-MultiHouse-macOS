@@ -9,10 +9,10 @@ const char *mh_disc_status_text(unsigned s)
 {
     switch (s) {
     case 1: return "OK";
-    case 2: return "OBSERVACAO";
-    case 3: return "CORRIGIVEL";
-    case 4: return "ERRO";
-    default: return "VAZIO";
+    case 2: return "Review";
+    case 3: return "Fixable";
+    case 4: return "Error";
+    default: return "Empty";
     }
 }
 
@@ -45,7 +45,7 @@ void mh_disc_refresh_status(MhDisc *d)
     }
     if (d->serial[0] == 0) {
         d->status = MH_DISC_STATUS_NOTE;
-        if (d->notes[0] == 0) mh_str_copy(d->notes, sizeof d->notes, "Serial nao identificado automaticamente.");
+        if (d->notes[0] == 0) mh_str_copy(d->notes, sizeof d->notes, "Serial not identified automatically.");
         return;
     }
     if ((f & MH_DF_INTEGRITY_BAD) || d->total_sectors < d->ps.iso_sectors) {
@@ -53,7 +53,7 @@ void mh_disc_refresh_status(MhDisc *d)
         return;
     }
     d->status = MH_DISC_STATUS_OK;
-    if (d->notes[0] == 0) mh_str_copy(d->notes, sizeof d->notes, "Estrutura CUE/BIN valida.");
+    if (d->notes[0] == 0) mh_str_copy(d->notes, sizeof d->notes, "Valid CUE/BIN structure.");
 }
 
 /* orig: disc_scan_serial @0x140018220 */
@@ -71,13 +71,13 @@ bool mh_disc_scan_serial(MhDisc *d)
     if (d->total_sectors < d->ps.iso_sectors) {
         MhWbuf w;
         mh_wbuf_init(&w);
-        mh_wbuf_puts(&w, "ISO declara ");
+        mh_wbuf_puts(&w, "ISO declares ");
         mh_wbuf_u32(&w, d->ps.iso_sectors);
-        mh_wbuf_puts(&w, " setores; CUE/BIN contem ");
+        mh_wbuf_puts(&w, " sectors; CUE/BIN contains ");
         mh_wbuf_u32(&w, d->total_sectors);
-        mh_wbuf_puts(&w, ". Faltam ");
+        mh_wbuf_puts(&w, ". Missing ");
         mh_wbuf_u32(&w, d->ps.iso_sectors - d->total_sectors);
-        mh_wbuf_puts(&w, " setores em relacao ao volume declarado. Integridade completa nao confirmada; BIN preservado.");
+        mh_wbuf_puts(&w, " sectors compared with the declared volume. Full integrity not confirmed; BIN preserved.");
         mh_disc_note(d, mh_wbuf_cstr(&w));
         mh_wbuf_free(&w);
     }
@@ -252,24 +252,24 @@ MhRecoverStatus mh_disc_recover_serial(MhDisc *d, const char *device_path, MhPro
     if (!d || d->serial[0]) return MH_RECOVER_SKIPPED;
     if (d->kind == MH_DISC_KIND_CUE) {
         if (d->nfiles == 0 || d->files[0].path[0] == 0) {
-            if (!silent) mh_str_copy(msg, msgn, "O CUE/BIN original nao esta disponivel para identificar o serial.");
+            if (!silent) mh_str_copy(msg, msgn, "The original CUE/BIN is not available to identify the serial.");
             return MH_RECOVER_UNAVAILABLE;
         }
         st = mh_psserial_extract(&res, d->files[0].path);
     } else if (d->kind == MH_DISC_KIND_V2_DEVICE || d->kind == MH_DISC_KIND_V2_IMAGE) {
         const char *path;
         if (d->v2_raw_lba512 == 0 || d->total_sectors == 0) {
-            if (!silent) mh_str_copy(msg, msgn, "O registro RAW nao possui localizacao valida para leitura.");
+            if (!silent) mh_str_copy(msg, msgn, "The RAW record has no valid location to read from.");
             return MH_RECOVER_UNAVAILABLE;
         }
         path = d->kind == MH_DISC_KIND_V2_IMAGE ? d->source_path : device_path;
         if (!path || !path[0]) {
-            if (!silent) mh_str_copy(msg, msgn, "A origem RAW do disco nao esta disponivel.");
+            if (!silent) mh_str_copy(msg, msgn, "The disc's RAW source is not available.");
             return MH_RECOVER_UNAVAILABLE;
         }
         st = mh_psserial_extract_raw(&res, path, d->v2_raw_lba512, d->total_sectors);
     } else {
-        if (!silent) mh_str_copy(msg, msgn, "Esta origem nao permite recuperar o serial.");
+        if (!silent) mh_str_copy(msg, msgn, "This source does not allow recovering the serial.");
         return MH_RECOVER_UNAVAILABLE;
     }
     if (st == MH_PSS_STRONG && res.serial[0]) {
@@ -281,19 +281,19 @@ MhRecoverStatus mh_disc_recover_serial(MhDisc *d, const char *device_path, MhPro
             mh_project_recount(p);
         }
         if (silent) {
-            mh_str_copy(msg, msgn, "Serial interno comprovado recuperado. Aplique as alteracoes ao SD.");
+            mh_str_copy(msg, msgn, "Proven internal serial recovered. Apply the changes to the card.");
         } else {
             MhWbuf w;
             mh_wbuf_init(&w);
-            mh_wbuf_puts(&w, "Serial interno recuperado: ");
+            mh_wbuf_puts(&w, "Internal serial recovered: ");
             mh_wbuf_puts(&w, d->serial);
-            mh_wbuf_puts(&w, ". O RAW do jogo foi preservado. Aplique as alteracoes para gravar a identidade no cartao.");
+            mh_wbuf_puts(&w, ". The game's RAW was preserved. Apply the changes to write the identity to the card.");
             mh_str_copy(msg, msgn, mh_wbuf_cstr(&w));
             mh_wbuf_free(&w);
         }
         return MH_RECOVER_OK;
     }
-    fail_text = "Nao foi encontrado um serial interno comprovado. Nenhum dado foi alterado.\r\n\r\n";
+    fail_text = "No proven internal serial was found. No data was changed.\r\n\r\n";
     if (!silent) {
         MhWbuf w;
         mh_wbuf_init(&w);

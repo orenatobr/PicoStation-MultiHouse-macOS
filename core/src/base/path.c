@@ -391,7 +391,7 @@ static bool collect(MhCollect *c, const char *path, int depth)
     size_t nn = 0, cap = 0, i;
     bool ok = true;
 
-    if (lstat(path, &st) != 0) return col_fail(c, "Nao foi possivel acessar:", path);
+    if (lstat(path, &st) != 0) return col_fail(c, "Could not access:", path);
     if (S_ISLNK(st.st_mode)) { /* orig: reparse points are skipped */
         c->ignored++;
         return true;
@@ -408,19 +408,19 @@ static bool collect(MhCollect *c, const char *path, int depth)
                 return true;
             }
         if (c->count >= MH_COLLECT_MAX)
-            return col_fail(c, "O lote excede 256 CUEs. Divida a importacao em lotes menores.", path);
+            return col_fail(c, "The batch exceeds 256 CUEs. Split the import into smaller batches.", path);
         if (!mh_path_full(path, c->paths[c->count], MH_PATH_MAX))
-            return col_fail(c, "Caminho invalido:", path);
+            return col_fail(c, "Invalid path:", path);
         c->count++;
         return true;
     }
-    if (depth == MH_COLLECT_MAX_DEPTH) return col_fail(c, "Limite de subpastas excedido:", path);
-    if (strlen(path) + 3 >= MH_PATH_MAX) return col_fail(c, "Caminho muito longo:", path);
+    if (depth == MH_COLLECT_MAX_DEPTH) return col_fail(c, "Subfolder limit exceeded:", path);
+    if (strlen(path) + 3 >= MH_PATH_MAX) return col_fail(c, "Path too long:", path);
 
     d = opendir(path);
     if (!d) {
         if (errno == ENOENT) return true; /* orig: ERROR_FILE_NOT_FOUND counts as empty */
-        return col_fail(c, "Nao foi possivel listar a pasta:", path);
+        return col_fail(c, "Could not list the folder:", path);
     }
     for (;;) {
         struct dirent *e;
@@ -431,23 +431,23 @@ static bool collect(MhCollect *c, const char *path, int depth)
         if (e->d_name[0] == '.' && e->d_name[1] == '_') continue; /* AppleDouble, not in orig */
         if (nn == cap) {
             char **t = realloc(names, (cap ? cap * 2 : 64) * sizeof *names);
-            if (!t) { ok = col_fail(c, "Nao foi possivel listar a pasta:", path); break; }
+            if (!t) { ok = col_fail(c, "Could not list the folder:", path); break; }
             names = t;
             cap = cap ? cap * 2 : 64;
         }
         names[nn] = strdup(e->d_name);
-        if (!names[nn]) { ok = col_fail(c, "Nao foi possivel listar a pasta:", path); break; }
+        if (!names[nn]) { ok = col_fail(c, "Could not list the folder:", path); break; }
         nn++;
     }
     if (ok && errno != 0)
-        ok = col_fail(c, "A pasta foi desconectada ou mudou durante a leitura:", path);
+        ok = col_fail(c, "The folder was disconnected or changed while reading:", path);
     closedir(d);
     if (ok) {
         qsort(names, nn, sizeof *names, name_cmp);
         for (i = 0; ok && i < nn; i++) {
             struct stat cs;
             if (strlen(path) + 2 + strlen(names[i]) >= MH_PATH_MAX) {
-                ok = col_fail(c, "Caminho muito longo:", path);
+                ok = col_fail(c, "Path too long:", path);
                 break;
             }
             mh_path_join(path, names[i], child, sizeof child);

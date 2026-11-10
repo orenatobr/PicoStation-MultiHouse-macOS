@@ -83,7 +83,7 @@ void mh_err_fail(MhErr *e, int code, const char *fmt, ...) /* ok=0 */
     __attribute__((format(printf, 3, 4)))
 #endif
     ;
-/* orig result_io_msg: msg, then " (erro Win32 <code>)" when code != 0. ok=0. */
+/* orig result_io_msg: msg, then " (error <code>)" when code != 0. ok=0. */
 void mh_err_fail_code(MhErr *e, const char *msg, int code);
 
 #ifdef __cplusplus

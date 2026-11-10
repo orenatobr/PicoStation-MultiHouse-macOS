@@ -128,7 +128,7 @@ bool mh_menu_validate_blob(const uint8_t *img, uint64_t size, uint32_t stride, c
     if (err && en) err[0] = 0;
     if (!img || (stride != MH_MENU_SLOT && stride != MH_MENU_SECTOR) || size == 0 ||
         size % stride != 0 || size / stride > MH_MENU_MAX_SECTORS) {
-        mh_err_set(err, en, "O menu deve possuir de 1 a 93 setores RAW completos para este firmware.");
+        mh_err_set(err, en, "The menu must have 1 to 93 complete RAW sectors for this firmware.");
         return false;
     }
     uint32_t n = (uint32_t)(size / stride);
@@ -137,13 +137,13 @@ bool mh_menu_validate_blob(const uint8_t *img, uint64_t size, uint32_t stride, c
         const uint8_t *d;
         uint32_t dl;
         if (!mh_menu_user_sector(img, stride, n, s, &d, &dl)) {
-            mh_err_set(err, en, "O menu possui setor CD-ROM RAW invalido.");
+            mh_err_set(err, en, "The menu has an invalid RAW CD-ROM sector.");
             return false;
         }
         if (stride == MH_MENU_SLOT)
             for (uint32_t i = MH_MENU_SECTOR; i < MH_MENU_SLOT; i++)
                 if (p[i]) {
-                    mh_err_set(err, en, "O padding PSXRAW do menu nao esta zerado.");
+                    mh_err_set(err, en, "The menu's PSXRAW padding is not zeroed.");
                     return false;
                 }
     }
@@ -152,21 +152,21 @@ bool mh_menu_validate_blob(const uint8_t *img, uint64_t size, uint32_t stride, c
     /* the original read sector 16 without checking the sector count */
     if (!mh_menu_user_sector(img, stride, n, 0x10, &pvd, &pl) || pl < 0x800 || pvd[0] != 1 ||
         memcmp(pvd + 1, "CD001", 5) != 0 || pvd[6] != 1) {
-        mh_err_set(err, en, "O menu nao possui PVD ISO9660 valido no setor 16.");
+        mh_err_set(err, en, "The menu has no valid ISO9660 PVD at sector 16.");
         return false;
     }
     if (pvd[0x9c] < 0x22) {
-        mh_err_set(err, en, "O diretorio raiz ISO9660 do menu e invalido.");
+        mh_err_set(err, en, "The menu's ISO9660 root directory is invalid.");
         return false;
     }
     uint32_t root_lba = rd32(pvd + 0x9e), root_size = rd32(pvd + 0xa6);
     if (root_size == 0 || n <= root_lba) {
-        mh_err_set(err, en, "O diretorio raiz ISO9660 aponta para fora do menu.");
+        mh_err_set(err, en, "The ISO9660 root directory points outside the menu.");
         return false;
     }
     uint32_t root_secs = (root_size + 0x7ffu) >> 11;
     if (root_secs - 1 > 7 || n - root_lba < root_secs) {
-        mh_err_set(err, en, "O diretorio raiz ISO9660 excede o limite seguro do menu.");
+        mh_err_set(err, en, "The ISO9660 root directory exceeds the menu's safe limit.");
         return false;
     }
     uint32_t cnf_lba, cnf_size;
@@ -174,13 +174,13 @@ bool mh_menu_validate_blob(const uint8_t *img, uint64_t size, uint32_t stride, c
     uint32_t cl;
     if (!mh_menu_find_root_file(img, stride, n, root_lba, root_secs, "SYSTEM.CNF", true, &cnf_lba, &cnf_size) ||
         !mh_menu_user_sector(img, stride, n, cnf_lba, &cnf, &cl)) {
-        mh_err_set(err, en, "SYSTEM.CNF nao foi encontrado na raiz do menu.");
+        mh_err_set(err, en, "SYSTEM.CNF was not found in the menu root.");
         return false;
     }
     if (cnf_size < cl) cl = cnf_size;
     char exe[0x80];
     if (!boot_name(cnf, cl, exe)) {
-        mh_err_set(err, en, "SYSTEM.CNF do menu nao possui BOOT=cdrom valido.");
+        mh_err_set(err, en, "The menu's SYSTEM.CNF has no valid BOOT=cdrom entry.");
         return false;
     }
     uint32_t exe_lba, exe_size, el;
@@ -188,7 +188,7 @@ bool mh_menu_validate_blob(const uint8_t *img, uint64_t size, uint32_t stride, c
     if (!mh_menu_find_root_file(img, stride, n, root_lba, root_secs, exe, false, &exe_lba, &exe_size) ||
         exe_size <= 7 || !mh_menu_user_sector(img, stride, n, exe_lba, &ex, &el) || el <= 7 ||
         memcmp(ex, "PS-X EXE", 8) != 0) {
-        mh_err_set(err, en, "O executavel indicado pelo SYSTEM.CNF nao e um PS-X EXE valido.");
+        mh_err_set(err, en, "The executable named by SYSTEM.CNF is not a valid PS-X EXE.");
         return false;
     }
     return true;
@@ -201,12 +201,12 @@ bool mh_menu_validate_file(const char *path, bool must_match, const uint8_t *emb
     uint64_t n = 0;
     if (err && en) err[0] = 0;
     if (!path || !*path || !mh_read_entire_file(path, &d, &n)) {
-        mh_err_set(err, en, "Nao foi possivel ler o menu selecionado.");
+        mh_err_set(err, en, "Could not read the selected menu.");
         return false;
     }
     bool ok = mh_menu_validate_blob(d, n, MH_MENU_SECTOR, err, en);
     if (ok && must_match && !mh_menu_defaults_compatible(d, n, emb, emb_size)) {
-        mh_err_set(err, en, "O menu selecionado nao corresponde ao menu PSn00bSDK incorporado neste Manager.");
+        mh_err_set(err, en, "The selected menu does not match the PSn00bSDK menu built into this app.");
         ok = false;
     }
     free(d);

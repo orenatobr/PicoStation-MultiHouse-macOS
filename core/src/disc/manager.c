@@ -24,9 +24,9 @@ MhDisc *mh_manager_parse(const MhDb *db, const char *cue_path, const MhCueHooks 
                 MhWbuf w;
                 bool yes = false;
                 mh_wbuf_init(&w);
-                mh_wbuf_puts(&w, "O CUE referencia um BIN que nao foi encontrado:\r\n\r\n");
+                mh_wbuf_puts(&w, "The CUE references a BIN that was not found:\r\n\r\n");
                 mh_wbuf_puts(&w, d->files[k].name);
-                mh_wbuf_puts(&w, "\r\n\r\nDeseja localizar esse BIN agora?");
+                mh_wbuf_puts(&w, "\r\n\r\nDo you want to locate that BIN now?");
                 if (hooks && hooks->ask && hooks->ask(hooks->ctx, mh_wbuf_cstr(&w)) && hooks->locate &&
                     hooks->locate(hooks->ctx, store[k]))
                     yes = true;
@@ -52,7 +52,7 @@ MhDisc *mh_manager_parse(const MhDb *db, const char *cue_path, const MhCueHooks 
                     if (nd) {
                         mh_str_copy(nd->cue_path, sizeof nd->cue_path, cue_path);
                         nd->card_index = 0xffff;
-                        mh_disc_note(nd, "Nomes/caminhos dos BINs corrigidos somente para esta gravacao; arquivos originais preservados.");
+                        mh_disc_note(nd, "BIN names and paths were fixed for this write only; original files preserved.");
                         mh_disc_free(d);
                         d = nd;
                     }
@@ -110,7 +110,7 @@ MhAddStatus mh_project_add_cue(MhProject *p, const MhDb *db, const char *cue_pat
     if (mh_project_contains_cue(p, cue_path)) return MH_ADD_DUPLICATE;
     d = mh_manager_parse(db, cue_path, hooks);
     if (!d) {
-        mh_err_set(err, errn, "Nao foi possivel analisar um CUE.");
+        mh_err_set(err, errn, "Could not parse a CUE.");
         return MH_ADD_PARSE_FAILED;
     }
     if (hooks && hooks->admit && !hooks->admit(hooks->ctx, d)) {
@@ -125,14 +125,14 @@ MhAddStatus mh_project_add_cue(MhProject *p, const MhDb *db, const char *cue_pat
     grouped = mh_case_title_for_disc(d, tmp, sizeof tmp);
     mh_project_recount(p);
     if (p->disc_count > 0xff) {
-        mh_err_set(err, errn, "A V2 aceita no maximo 256 discos no total.");
+        mh_err_set(err, errn, "V2 accepts at most 256 discs in total.");
         mh_disc_free(d);
         return MH_ADD_LIMIT;
     }
     if (target_slot < 0x100 && p->cases[target_slot].in_use) {
         c = &p->cases[target_slot];
         if (c->disc_count > 4) {
-            mh_err_set(err, errn, "A Case selecionada ja possui 5 discos.");
+            mh_err_set(err, errn, "The selected Case already has 5 discs.");
             mh_disc_free(d);
             return MH_ADD_LIMIT;
         }
@@ -147,7 +147,7 @@ MhAddStatus mh_project_add_cue(MhProject *p, const MhDb *db, const char *cue_pat
         }
     }
     if (c->disc_count > 4) {
-        mh_err_set(err, errn, "O jogo ja possui cinco discos; o disco adicional nao foi incluido.");
+        mh_err_set(err, errn, "The game already has five discs; the extra disc was not added.");
         mh_disc_free(d);
         return MH_ADD_LIMIT;
     }

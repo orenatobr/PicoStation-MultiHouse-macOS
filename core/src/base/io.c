@@ -36,8 +36,8 @@ bool mh_ioerr_append(MhWbuf *w, const MhIoErr *e)
            mh_wbuf_puts(w, ". " MH_IOERR_CODE_LABEL ": ") && mh_wbuf_u32(w, (uint32_t)e->code) &&
            mh_wbuf_puts(w, "\r\nOffset: ") && mh_wbuf_u64(w, e->offset) &&
            mh_wbuf_puts(w, " bytes; LBA512: ") && mh_wbuf_u64(w, e->offset / MH_IO_BLOCK) &&
-           mh_wbuf_puts(w, "\r\nSolicitado: ") && mh_wbuf_u32(w, e->requested) &&
-           mh_wbuf_puts(w, "; transferido confirmado: ") && mh_wbuf_u32(w, e->transferred) &&
+           mh_wbuf_puts(w, "\r\nRequested: ") && mh_wbuf_u32(w, e->requested) &&
+           mh_wbuf_puts(w, "; confirmed transferred: ") && mh_wbuf_u32(w, e->transferred) &&
            mh_wbuf_puts(w, " bytes.");
 }
 
@@ -112,9 +112,9 @@ bool mh_io_read(MhIo *io, uint64_t off, void *buf, size_t len)
 {
     uint8_t *p = buf;
     size_t done = 0;
-    const char *label = io->is_dest ? "Leitura do destino" : "Leitura da origem";
+    const char *label = io->is_dest ? "Destination read" : "Source read";
     if (!range_ok(off, len)) {
-        rec(io, "Posicionamento de leitura", EINVAL, off, (uint32_t)len, 0);
+        rec(io, "Read seek", EINVAL, off, (uint32_t)len, 0);
         return false;
     }
     while (done < len) {
@@ -140,7 +140,7 @@ bool mh_io_write(MhIo *io, uint64_t off, const void *buf, size_t len)
     const uint8_t *p = buf;
     size_t done = 0;
     if (!range_ok(off, len)) {
-        rec(io, "Posicionamento de escrita", EINVAL, off, (uint32_t)len, 0);
+        rec(io, "Write seek", EINVAL, off, (uint32_t)len, 0);
         return false;
     }
     while (done < len) {
@@ -148,11 +148,11 @@ bool mh_io_write(MhIo *io, uint64_t off, const void *buf, size_t len)
         ssize_t n;
         do n = pwrite(io->fd, p + done, chunk, (off_t)(off + done)); while (n < 0 && errno == EINTR);
         if (n < 0) {
-            rec(io, "Escrita no destino", syscode(), off + done, (uint32_t)chunk, 0);
+            rec(io, "Destination write", syscode(), off + done, (uint32_t)chunk, 0);
             return false;
         }
         if ((size_t)n != chunk) {
-            rec(io, "Escrita parcial no destino", MH_IOERR_SHORT_WRITE, off + done, (uint32_t)chunk, (uint32_t)n);
+            rec(io, "Partial destination write", MH_IOERR_SHORT_WRITE, off + done, (uint32_t)chunk, (uint32_t)n);
             return false;
         }
         done += chunk;
@@ -165,7 +165,7 @@ bool mh_io_flush(MhIo *io, uint64_t err_offset)
 {
     if (fcntl(io->fd, F_FULLFSYNC) == 0) return true;
     if (fsync(io->fd) == 0) return true;
-    rec(io, "Sincronizacao do destino", syscode(), err_offset, 0, 0);
+    rec(io, "Destination sync", syscode(), err_offset, 0, 0);
     return false;
 }
 
@@ -174,14 +174,14 @@ bool mh_io_write_block_verified(MhIo *io, uint64_t off, const void *block)
 {
     uint8_t back[MH_IO_BLOCK];
     if (off % MH_IO_BLOCK != 0) {
-        rec(io, "Alinhamento do controle", MH_IOERR_ALIGN, off, MH_IO_BLOCK, 0);
+        rec(io, "Verify alignment", MH_IOERR_ALIGN, off, MH_IO_BLOCK, 0);
         return false;
     }
     if (!mh_io_write(io, off, block, MH_IO_BLOCK)) return false;
     if (!mh_io_flush(io, off)) return false;
     if (!mh_io_read(io, off, back, MH_IO_BLOCK)) return false;
     if (memcmp(block, back, MH_IO_BLOCK) != 0) {
-        rec(io, "Comparacao do controle", MH_IOERR_COMPARE, off, MH_IO_BLOCK, MH_IO_BLOCK);
+        rec(io, "Verify comparison", MH_IOERR_COMPARE, off, MH_IO_BLOCK, MH_IO_BLOCK);
         return false;
     }
     return true;

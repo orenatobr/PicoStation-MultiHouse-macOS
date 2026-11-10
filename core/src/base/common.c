@@ -91,7 +91,7 @@ void mh_err_fail(MhErr *e, int code, const char *fmt, ...)
 void mh_err_fail_code(MhErr *e, const char *msg, int code)
 {
     if (code != 0)
-        mh_err_fail(e, code, "%s (erro Win32 %u)", msg ? msg : "", (unsigned)code);
+        mh_err_fail(e, code, "%s (error %u)", msg ? msg : "", (unsigned)code);
     else
         mh_err_fail(e, 0, "%s", msg ? msg : "");
 }

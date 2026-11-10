@@ -1,5 +1,7 @@
 # Module `disc`: disc model, serial recovery, CUE, database, project
 
+> Note: the user-visible texts quoted here were translated to EN-US after the port. The Portuguese originals below are kept as the reverse-engineering record; docs/i18n/base-disc-art-menu-platform.md lists the strings deliberately left untranslated.
+
 Header `core/include/mh/disc.h`, code `core/src/disc/{psserial,cue,disc,db,dbmatch,project,manager}.c`
 (+ `disc_internal.h`), tests `core/tests/test_disc.c` (unit, synthetic ISO images, fixtures) and
 `core/tests/test_disc_redump.c` (slow: Redump verification of two real discs and a track map recovery),

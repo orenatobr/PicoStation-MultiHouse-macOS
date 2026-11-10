@@ -14,7 +14,7 @@
  * Defaults record (MH_MENU_DEFAULTS_SIZE = 64 bytes, "menu-defaults.dat" holds exactly one):
  *   0x00 "PST_DEFAULTS_V1!"   0x10 u32 0x00400001   0x14 u16 width 0x140/0x170/0x200
  *   0x16 u16 height 0xF0/0x100   0x18 u8 theme 0..2 (PS One Slim, PlayStation Fat, Umbrella)
- *   0x19 u8 language 0..2 (Portugues, English, Espanol)   0x1A u8 visual 0..1 (Lista, Carrossel)
+ *   0x19 u8 language 0..2 (Portuguese, English, Spanish)   0x1A u8 visual 0..1 (List, Carousel)
  *   0x1B u8 start in favourites 0/1   0x1C u8 Umbrella theme music 0/1   0x1D u8 volume 0..100
  *   0x1E..0x3B zero   0x3C u32 CRC-32 of bytes 0..0x3B.
  * Inside the menu image the record is stored in the user data of a Mode 2 Form 1 sector
@@ -56,7 +56,7 @@ void mh_menu_defaults_seal(uint8_t rec[MH_MENU_DEFAULTS_SIZE]);
 bool mh_menu_defaults_parse(const uint8_t rec[MH_MENU_DEFAULTS_SIZE], MhMenuDefaults *out);
 /* Builds and seals a record. False if a field is out of range (volume > 100, ...). */
 bool mh_menu_defaults_build(uint8_t rec[MH_MENU_DEFAULTS_SIZE], const MhMenuDefaults *d);
-/* "Restaurar padroes" button: 320x240, theme 1, Portugues, Lista, favourites off, music on,
+/* "Restaurar padroes" button: 320x240, theme 1, Portuguese, List, favourites off, music on,
  * volume 68, sealed. */
 void mh_menu_defaults_factory(uint8_t rec[MH_MENU_DEFAULTS_SIZE]);
 

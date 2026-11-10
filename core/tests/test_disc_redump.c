@@ -22,7 +22,7 @@ static void test_redump(const MhDb *db)
         CHECK(mh_db_verify_redump(db, d, &pr));
         CHECK((d->flags & MH_DF_TRACKSET_OK) && !(d->flags & MH_DF_INTEGRITY_BAD) && (d->flags & MH_DF_TRACKSET_CHECKED));
         CHECK(d->crc32 != 0);
-        CHECK(note_has_end(d, "\r\nIntegridade confirmada pelo DAT Redump."));
+        CHECK(note_has_end(d, "\r\nIntegrity confirmed by the Redump DAT."));
         CHECK(d->status == MH_DISC_STATUS_OK);
         mh_disc_free(d);
     }
@@ -39,7 +39,7 @@ static void test_redump_negative(const MhDb *db)
     d = mh_cue_parse(p);
     CHECK(!mh_db_verify_redump(db, d, NULL));
     CHECK((d->flags & MH_DF_INTEGRITY_BAD) && !(d->flags & MH_DF_TRACKSET_OK));
-    CHECK(note_has_end(d, "\r\nO hash nao foi localizado no DAT Redump ou algum BIN difere."));
+    CHECK(note_has_end(d, "\r\nThe hash was not found in the Redump DAT, or a BIN differs."));
     CHECK(d->crc32 != 0 || d->sha1[0] != 0);                    /* CRC of 235200 zero bytes */
     CHECK(d->status == MH_DISC_STATUS_NOTE);
     mh_disc_free(d);
@@ -74,7 +74,7 @@ static void test_recovery(const MhDb *db)
     CHECK(d->tracks[1].kind == 2 && d->tracks[1].pregap == 150 && d->tracks[1].start == 274413 && d->tracks[1].length == 18388);
     CHECK(d->tracks[1].index0 == 274263 && d->tracks[1].index1 == 274413);
     CHECK(d->ps.status == MH_PSS_TRACKSET && (d->flags & MH_DF_TRACKSET_OK));
-    CHECK(note_has_end(d, "\r\nCUE reparado em memoria: mapa confirmado pelos SHA-1 de todas as tracks na ordem. Arquivos originais preservados."));
+    CHECK(note_has_end(d, "\r\nCUE repaired in memory: map confirmed by the SHA-1 hashes of all tracks in order. Original files preserved."));
     mh_disc_free(d);
     /* the whole manager flow does the same */
     d = mh_manager_parse(db, p, NULL);

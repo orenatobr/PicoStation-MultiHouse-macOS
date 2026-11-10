@@ -182,7 +182,7 @@ bool mh_art_build(const MhArt *a, MhArtKind kind, const uint8_t *src, uint32_t w
                          ? mh_art_make_case600(a->case_template, a->case_template_size, src, w, h)
                          : NULL;
         if (!c) {
-            mh_err_set(err, err_n, "Falha ao montar a imagem na case padrao.");
+            mh_err_set(err, err_n, "Failed to compose the image on the default Case.");
             return false;
         }
         mh_art_resize96(c, MH_CASE_TEMPLATE_DIM, MH_CASE_TEMPLATE_DIM, px);
@@ -199,7 +199,7 @@ bool mh_art_build(const MhArt *a, MhArtKind kind, const uint8_t *src, uint32_t w
 /* orig: generate @0x14001b3d0 */
 bool mh_art_generate(const MhArt *a, MhArtKind kind, const char *src, const char *dst,
                      char *err, size_t err_n) {
-    static const char kLoadFail[] = "Nao foi possivel carregar PNG, JPG, BMP, GIF ou TIFF pelo GDI+.";
+    static const char kLoadFail[] = "Could not load the image. Supported formats: PNG, JPG, BMP, GIF and TIFF.";
     uint8_t *img = NULL;
     int w = 0, h = 0;
     if (err && err_n) err[0] = 0;
@@ -212,12 +212,12 @@ bool mh_art_generate(const MhArt *a, MhArtKind kind, const char *src, const char
     uint8_t *out = malloc(MH_ART_FILE_SIZE);
     if (!out) {
         free(img);
-        mh_err_set(err, err_n, "Memoria insuficiente.");
+        mh_err_set(err, err_n, "Not enough memory.");
         return false;
     }
     bool ok = mh_art_build(a, kind, img, (uint32_t)w, (uint32_t)h, out, err, err_n);
     if (ok && !mh_write_entire_file(dst, out, MH_ART_FILE_SIZE)) {
-        mh_err_set(err, err_n, "Falha ao escrever o arquivo ART.");
+        mh_err_set(err, err_n, "Failed to write the ART file.");
         ok = false;
     }
     free(out);
@@ -251,7 +251,7 @@ bool mh_art_import(const MhArt *a, bool is_case, const char *src, const char *ds
     if (mh_str_ends_i(src, ".art")) {
         uint64_t sz;
         if (!mh_file_size64(src, &sz) || sz != MH_ART_FILE_SIZE || !mh_copy_file_safe(src, dst)) {
-            mh_err_set(err, err_n, "O arquivo ART precisa ter exatamente 10.240 bytes.");
+            mh_err_set(err, err_n, "The ART file must be exactly 10,240 bytes.");
             return false;
         }
         return true;
