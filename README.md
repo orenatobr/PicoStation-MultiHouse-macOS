@@ -72,6 +72,20 @@ the card picker and the primary button. Dark mode is supported.
 
 All commands are also in the menu bar, and the whole UI works from the keyboard.
 
+### Art next to the CUE
+
+When you add a CUE, the app looks in the same folder for two files named after it and loads them into
+the inspector automatically:
+
+| File | Loaded as |
+| --- | --- |
+| `<cue name>-CASE.art` | Case art |
+| `<cue name>-DISC.art` | Disc art |
+
+For example, `Alundra (USA) (Rev 1).cue` picks up `Alundra (USA) (Rev 1)-CASE.art` and
+`Alundra (USA) (Rev 1)-DISC.art`. Either file is optional, and a file found this way replaces the
+default art. Both must be valid 10,240 byte `.art` files; otherwise the default art stays.
+
 ### Write safety
 
 Writing is raw and destroys everything on the card. The app only offers whole disks that look like

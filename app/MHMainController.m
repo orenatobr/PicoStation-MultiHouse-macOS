@@ -1272,6 +1272,8 @@ static void hook_attach(void *ctx, MhDisc *d) { mh_v2_auto_attach_cheats(MHApp.s
     switch (st) {
         case MH_ADD_OK:
             { int sl = res.cas->slot, di = res.disc_index; MHMain(^{ self->_app.curCase = sl; self->_app.curDisc = di; }); }
+            if (res.disc_index >= 0 && res.disc_index < res.cas->disc_count)
+                [self autoLoadArtNextToCue:path case:res.cas disc:res.cas->discs[res.disc_index]];
             return YES;
         case MH_ADD_PARSE_FAILED:
             MHMessage(@"Couldn't Read Disc", err[0] ? MHStr(err) : @"A CUE file could not be parsed.", MHIconError);
@@ -1945,6 +1947,35 @@ static void device_changed(DADiskRef disk, void *ctx) {
     }];
 }
 
+/* Imports src into custom/art and points the case (isCase) or disc at it. Any thread. */
+- (BOOL)importArt:(const char *)src isCase:(BOOL)isCase forCase:(MhCase *)c disc:(MhDisc *)d err:(char *)err size:(size_t)n {
+    char dir[MH_PATH_MAX], name[128], dst[MH_PATH_MAX];
+    mh_path_join(_app.dataDir.fileSystemRepresentation, "custom/art", dir, sizeof dir);
+    mh_ensure_dir(dir);
+    const char *serial = d ? (d->serial[0] ? d->serial : d->name) : "";
+    mh_art_custom_name(isCase, serial, c->slot, name, sizeof name);
+    mh_path_join(dir, name, dst, sizeof dst);
+    if (!mh_art_import(_app.art, isCase, src, dst, err, n)) return NO;
+    if (isCase) mh_str_copy(c->art_path, sizeof c->art_path, dst);
+    else mh_str_copy(d->cd_art_path, sizeof d->cd_art_path, dst);
+    _app.project->dirty = 1;
+    return YES;
+}
+
+/* Loads "<cue stem>-CASE.art" and "<cue stem>-DISC.art" from next to the .cue, when they exist.
+ * A file next to the .cue is the user's explicit choice, so it replaces any database default. Worker thread. */
+- (void)autoLoadArtNextToCue:(NSString *)cue case:(MhCase *)c disc:(MhDisc *)d {
+    NSString *stem = cue.stringByDeletingPathExtension;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    char err[MH_ERR_MSG_MAX];
+    NSString *casePath = [stem stringByAppendingString:@"-CASE.art"];
+    if ([fm fileExistsAtPath:casePath])
+        [self importArt:casePath.fileSystemRepresentation isCase:YES forCase:c disc:d err:err size:sizeof err];
+    NSString *discPath = [stem stringByAppendingString:@"-DISC.art"];
+    if (d && [fm fileExistsAtPath:discPath])
+        [self importArt:discPath.fileSystemRepresentation isCase:NO forCase:c disc:d err:err size:sizeof err];
+}
+
 /* orig: make_custom_art.isra.0 (the file picker and the project update; the art is the core's) */
 - (void)makeCustomArtForCase:(BOOL)isCase {
     MhCase *c0 = _app.currentCase;
@@ -1962,19 +1993,11 @@ static void device_changed(DADiskRef disk, void *ctx) {
         MhCase *c = [self->_app caseAt:cslot];
         MhDisc *d = (c && ddisc >= 0 && ddisc < c->disc_count) ? c->discs[ddisc] : NULL;
         if (!c || (!isCase && !d) || self->_app.busy) return;
-        char dir[MH_PATH_MAX], name[128], dst[MH_PATH_MAX], err[MH_ERR_MSG_MAX] = "";
-        mh_path_join(self->_app.dataDir.fileSystemRepresentation, "custom/art", dir, sizeof dir);
-        mh_ensure_dir(dir);
-        const char *serial = d ? (d->serial[0] ? d->serial : d->name) : "";
-        mh_art_custom_name(isCase, serial, c->slot, name, sizeof name);
-        mh_path_join(dir, name, dst, sizeof dst);
-        if (!mh_art_import(self->_app.art, isCase, op.URL.fileSystemRepresentation, dst, err, sizeof err)) {
+        char err[MH_ERR_MSG_MAX] = "";
+        if (![self importArt:op.URL.fileSystemRepresentation isCase:isCase forCase:c disc:d err:err size:sizeof err]) {
             MHMessage(@"Couldn't Replace Art", MHStr(err), MHIconError);
             return;
         }
-        if (isCase) mh_str_copy(c->art_path, sizeof c->art_path, dst);
-        else mh_str_copy(d->cd_art_path, sizeof d->cd_art_path, dst);
-        self->_app.project->dirty = 1;
         [self refreshProject];
     }];
 }
