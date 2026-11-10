@@ -457,6 +457,56 @@ static void test_hash(void)
     }
 }
 
+/* The fast CRC-32 and SHA-1 paths (hardware instructions on Apple Silicon) must agree with the portable
+ * reference on data of every alignment and length, including the odd tails. */
+static void test_hash_fast_paths(void)
+{
+    enum { N = 1 << 20 };
+    uint8_t *buf = malloc(N + 64);
+    uint32_t x = 12345u, h1[5], h2[5];
+    size_t i, off, len;
+    MhSha1 a, b;
+    uint8_t da[20], db[20];
+
+    CHECK(buf != NULL);
+    for (i = 0; i < N + 64; i++) { /* xorshift filler */
+        x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+        buf[i] = (uint8_t)x;
+    }
+    for (off = 0; off < 9; off++) {
+        static const size_t lens[] = {0, 1, 7, 8, 9, 63, 64, 65, 4095, 4096, 100003, N - 8};
+        for (i = 0; i < sizeof lens / sizeof lens[0]; i++) {
+            len = lens[i];
+            CHECK(mh_crc32_update(0xFFFFFFFFu, buf + off, len) == mh_crc32_update_portable(0xFFFFFFFFu, buf + off, len));
+        }
+    }
+    {   /* a CRC carried across two calls */
+        uint32_t c = mh_crc32_update(mh_crc32_begin(), buf + 3, 12345);
+        c = mh_crc32_update(c, buf + 12348, 777);
+        CHECK(c == mh_crc32_update_portable(mh_crc32_update_portable(mh_crc32_begin(), buf + 3, 12345), buf + 12348, 777));
+    }
+    for (off = 0; off < 5; off++) { /* multi block SHA-1 against block-by-block */
+        memcpy(h1, "\x01\x23\x45\x67\x89\xab\xcd\xef\xfe\xdc\xba\x98\x76\x54\x32\x10\xf0\xe1\xd2\xc3", 20);
+        memcpy(h2, h1, 20);
+        mh_sha1_blocks(h1, buf + off, 1000);
+        for (i = 0; i < 1000; i++) mh_sha1_block(h2, buf + off + 64 * i);
+        CHECK(memcmp(h1, h2, 20) == 0);
+    }
+    /* the streaming update with awkward chunk sizes against one call */
+    mh_sha1_init(&a);
+    mh_sha1_update(&a, buf, N);
+    mh_sha1_final(&a, da);
+    mh_sha1_init(&b);
+    for (off = 0, i = 1; off < N; i = i * 3 % 1021 + 1) {
+        len = i < N - off ? i : N - off;
+        mh_sha1_update(&b, buf + off, len);
+        off += len;
+    }
+    mh_sha1_final(&b, db);
+    CHECK(memcmp(da, db, 20) == 0);
+    free(buf);
+}
+
 /* End-to-end check of SHA-256 and CRC-32 against the original: the cheat database embedded in
  * the exe is an LZ4 block; its SHA-256 (kExpectedSha256 @0x140f1d080) and CRC-32 (the compare
  * against 0xA06CFC31 in cheat_db_load) are constants of the original program. */
@@ -655,6 +705,7 @@ int main(void)
     test_paths();
     test_natural();
     test_hash();
+    test_hash_fast_paths();
     test_embedded_cheats();
     test_collect();
     printf("test_base: %d checks passed\n", g_checks);
