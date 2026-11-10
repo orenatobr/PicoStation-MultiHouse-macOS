@@ -10,5 +10,5 @@ APP="$BUILD/PicoStation Multi House V3.app"
 mkdir -p dist
 OUT="dist/PicoStation-Multi-House-V3-macOS-arm64.zip"
 rm -f "$OUT"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$OUT"
+ditto -c -k --norsrc --noextattr --noqtn --keepParent "$APP" "$OUT"
 shasum -a 256 "$OUT" | tee "$OUT.sha256"
