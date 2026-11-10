@@ -16,7 +16,7 @@ APPNAME := PicoStation Multi House V3
 APPDIR  := $(BUILD)/$(APPNAME).app
 APP_M   := $(wildcard app/*.m) $(wildcard platform/mac/*.m)
 APP_C   := $(wildcard core/src/*/*.c) $(wildcard platform/mac/*.c)
-APP_FW  := -framework Cocoa -framework DiskArbitration -framework IOKit -framework ImageIO -framework CoreGraphics -framework CoreFoundation -framework UniformTypeIdentifiers
+APP_FW  := -framework Cocoa -framework DiskArbitration -framework IOKit -framework ImageIO -framework CoreGraphics -framework CoreFoundation -framework UniformTypeIdentifiers -framework QuartzCore
 test:
 	@set -e; for f in $$(ls core/tests/test_*.c 2>/dev/null); do \
 	  m=$$(basename $$f .c); m=$${m#test_}; m=$${m%%_*}; echo $$m; done | sort -u | while read m; do $(MAKE) --no-print-directory test-$$m || exit 1; done
