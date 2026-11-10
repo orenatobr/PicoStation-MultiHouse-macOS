@@ -175,6 +175,12 @@ The region +0x99c8 .. +0x41f47 of the original block is never referenced by any 
 ## Deviations and additions
 
 * ISO directory walk (`ps_walk`): the original only limited recursion depth (17), so a crafted BIN with directories pointing at the same or an ancestor extent could blow up exponentially. The port keeps a visited set of directory extents per walk (a repeated extent is skipped, never walked twice) and a budget of 200000 directory records and 50000 sector reads per walk (2048 distinct directories); exceeding it aborts like a read error. Valid discs are unaffected.
+* `decode_cue` (and so `cue_parse`, `cue_count_files`, `cue_rewrite_files`) fails for an empty file, as the original did
+  (`MultiByteToWideChar` returns 0 for 0 bytes): the note is "Nao foi possivel abrir ou decodificar o CUE.". The CUE size
+  cap is 64 MiB (original 2 GiB).
+* `cue_rewrite_files` writes one more empty line (CRLF) when the source ends with a line break, like the original.
+* The executable content scan (`psserial_scan_executable`) has a budget of 256 MiB per recovery (the original read
+  whatever the directory records claimed). Real executables are under 2 MiB.
 * Paths are UTF-8, 1024 bytes. A CUE name beginning with `/` is taken as an absolute path (the corrected temporary CUE
   that `manager_parse` writes holds absolute paths, which on Windows start with a drive letter). CP1252 is assumed for
   the "ANSI" fallback of `decode_cue`.
