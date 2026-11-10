@@ -26,6 +26,14 @@ Requires a Mac with Apple Silicon (M1 or newer) and macOS 12 or later. Intel Mac
 (the build is arm64 only).
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/orenatobr/PicoStation-MultiHouse-macOS/main/install.sh | bash
+```
+
+The script downloads the latest release, checks its SHA-256, installs the app into `/Applications` without
+the quarantine flag, and replaces an existing install, so running it again updates the app. To install by
+hand instead:
+
+```sh
 curl -L -o ~/Downloads/PicoStation-Multi-House-V3-macOS-arm64.zip \
   https://github.com/orenatobr/PicoStation-MultiHouse-macOS/releases/latest/download/PicoStation-Multi-House-V3-macOS-arm64.zip \
   && ditto -x -k ~/Downloads/PicoStation-Multi-House-V3-macOS-arm64.zip /Applications \
