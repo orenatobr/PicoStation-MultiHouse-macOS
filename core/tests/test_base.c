@@ -569,6 +569,22 @@ static void test_collect(void)
     }
     mh_collect_free(c);
 
+    {   /* NTFS lists names in upper case order: '_' (0x5F) sorts after letters, not before */
+        char want[1300];
+        c = mh_collect_new();
+        touch(root, "ord/a_b.cue");
+        touch(root, "ord/ab.cue");
+        touch(root, "ord/aB2.cue");
+        snprintf(p, sizeof p, "%s/ord", root);
+        CHECK(mh_import_collect(c, p) && c->count == 3);
+        snprintf(want, sizeof want, "%s/ord/ab.cue", root);
+        CHECK_STR(c->paths[0], want);
+        snprintf(want, sizeof want, "%s/ord/aB2.cue", root);
+        CHECK_STR(c->paths[1], want);
+        snprintf(want, sizeof want, "%s/ord/a_b.cue", root);
+        CHECK_STR(c->paths[2], want);
+        mh_collect_free(c);
+    }
     {   /* more than 256 CUEs */
         int i;
         char name[64];

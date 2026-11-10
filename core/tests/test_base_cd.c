@@ -337,10 +337,44 @@ static void test_real_disc(const char *path, long stride)
     fclose(f);
 }
 
+/* Known answers from an independent Python implementation of ECMA-130 (GF(2^8) with
+ * polynomial 0x11D, Reed-Solomon parity solved from the syndrome equations, Q diagonals as
+ * word index (44*i + 43*j) mod 1118). The implementation reproduces real Mode 2 Form 1
+ * sectors bit for bit; no real Mode 1 dump exists in the library, so Mode 1 (header inside the
+ * ECC, EDC from byte 0, reserved bytes) is covered by these vectors. */
+static void sha1_hex(const uint8_t *p, size_t n, char out[41])
+{
+    uint8_t h[20];
+    int i;
+    mh_sha1(p, n, h);
+    for (i = 0; i < 20; i++) snprintf(out + 2 * i, 3, "%02x", h[i]);
+}
+
+static void test_independent(void)
+{
+    uint8_t s[MH_SECTOR_RAW];
+    char hex[41];
+    unsigned i;
+    mk_header(s, 1, 1234);
+    for (i = 0; i < 2048; i++) s[0x10 + i] = (uint8_t)(i * 7 + 3);
+    CHECK(mh_cd_sector_recode(s) == (MH_SECTOR_BAD_EDC | MH_SECTOR_BAD_ECC));
+    sha1_hex(s, sizeof s, hex);
+    CHECK(!strcmp(hex, "9ebc93e8e73d798a3b63ce20f2a0a2857788c7ed"));
+    CHECK(s[0x810] == 0xea && s[0x811] == 0x96 && s[0x812] == 0xae && s[0x813] == 0x96);
+    mk_header(s, 2, 4321);
+    memcpy(s + 0x10, "\x01\x02\x08\x00\x01\x02\x08\x00", 8);
+    for (i = 0; i < 2048; i++) s[0x18 + i] = (uint8_t)(i * 5 + 1);
+    mh_cd_repair_sector(s);
+    sha1_hex(s, sizeof s, hex);
+    CHECK(!strcmp(hex, "c0ecaa09644262fde38179f15d2b0c710f50fc21"));
+    CHECK(mh_cd_sector_check(s) == 0);
+}
+
 int main(void)
 {
     test_tables();
     test_synthetic();
+    test_independent();
     test_malformed();
     test_ecc_header_handling();
     test_track_sector();

@@ -363,10 +363,23 @@ static bool col_fail(MhCollect *c, const char *msg, const char *path)
     return false;
 }
 
+/* NTFS orders names by their upper case form (it matters for '_' and the other characters
+ * between 'Z' and 'a'); ties fall back to the raw bytes so the order is deterministic. */
 static int name_cmp(const void *x, const void *y)
 {
-    int r = mh_str_icmp(*(char *const *)x, *(char *const *)y);
-    return r ? r : strcmp(*(char *const *)x, *(char *const *)y);
+    const unsigned char *a = (const unsigned char *)*(char *const *)x;
+    const unsigned char *b = (const unsigned char *)*(char *const *)y;
+    for (; *a && *a == *b; a++, b++) {}
+    for (;;) {
+        int p = *a, q = *b;
+        if (p >= 'a' && p <= 'z') p -= 32;
+        if (q >= 'a' && q <= 'z') q -= 32;
+        if (p != q) return p < q ? -1 : 1;
+        if (!p) break;
+        a++;
+        b++;
+    }
+    return strcmp(*(char *const *)x, *(char *const *)y);
 }
 
 /* orig: collect @0x1400120a0 */
