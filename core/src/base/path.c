@@ -125,10 +125,18 @@ bool mh_path_full(const char *path, char *out, size_t n)
 bool mh_path_equal_full(const char *a, const char *b)
 {
     char fa[4096], fb[4096];
+    struct stat sa, sb;
     if (!a || !b || !*a || !*b) return false;
-    if (!mh_path_full(a, fa, sizeof fa) || !mh_path_full(b, fb, sizeof fb))
-        return mh_str_icmp(a, b) == 0;
-    return mh_str_icmp(fa, fb) == 0;
+    if (!mh_path_full(a, fa, sizeof fa) || !mh_path_full(b, fb, sizeof fb)) {
+        if (mh_str_icmp(a, b) == 0) return true;
+    } else if (mh_str_icmp(fa, fb) == 0) {
+        return true;
+    }
+    /* Not in the original (Windows has few ways to alias a file): symlinks, hard links and
+     * differently normalised names are the same file when device and inode agree. Callers use
+     * this to refuse overwriting a source, so a false negative would destroy user data. */
+    return stat(a, &sa) == 0 && stat(b, &sb) == 0 && sa.st_ino != 0 && sa.st_ino == sb.st_ino &&
+           sa.st_dev == sb.st_dev;
 }
 
 /* orig: game_directory @0x14001b2e0 */
@@ -254,6 +262,20 @@ bool mh_read_entire_file(const char *path, uint8_t **data, uint64_t *size)
     return true;
 }
 
+/* O_WRONLY|O_CREAT|O_TRUNC for regular files only: a device node (a typed /dev/rdiskN) is
+ * refused before anything is written or truncated. */
+static int open_regular_trunc(const char *path)
+{
+    struct stat st;
+    int fd = open(path, O_WRONLY | O_CREAT, 0666);
+    if (fd < 0) return -1;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || ftruncate(fd, 0) != 0) {
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
 static void flush_fd(int fd)
 {
     if (fcntl(fd, F_FULLFSYNC) != 0) (void)fsync(fd);
@@ -266,7 +288,7 @@ bool mh_write_entire_file(const char *path, const void *data, uint64_t size)
     uint64_t done = 0;
     int fd;
     if (!path) return false;
-    fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    fd = open_regular_trunc(path);
     if (fd < 0) return false;
     while (done < size) {
         size_t want = size - done > FILE_CHUNK ? FILE_CHUNK : (size_t)(size - done);
@@ -298,7 +320,7 @@ bool mh_copy_file_safe(const char *src, const char *dst)
         close(in);
         return false;
     }
-    out = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    out = open_regular_trunc(dst);
     buf = malloc(FILE_CHUNK);
     if (out < 0 || !buf) {
         if (out >= 0) close(out);

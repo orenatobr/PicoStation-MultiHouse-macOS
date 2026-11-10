@@ -7,6 +7,10 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#ifdef __APPLE__
+#include <sys/disk.h>
+#include <sys/ioctl.h>
+#endif
 #include <unistd.h>
 
 void mh_ioerr_clear(MhIoErr *e) { memset(e, 0, sizeof *e); }
@@ -47,8 +51,18 @@ void mh_io_attach(MhIo *io, int fd, bool is_dest, MhIoErr *shared_err)
 
 bool mh_io_open(MhIo *io, const char *path, MhIoMode mode, bool is_dest, MhIoErr *shared_err)
 {
-    int flags = mode == MH_IO_READ ? O_RDONLY : mode == MH_IO_RDWR ? O_RDWR : (O_RDWR | O_CREAT | O_TRUNC);
+    int flags = mode == MH_IO_READ ? O_RDONLY : mode == MH_IO_RDWR ? O_RDWR : (O_RDWR | O_CREAT);
     int fd = open(path, flags | O_CLOEXEC, 0666);
+    /* Writers only ever get regular files: raw disks are opened by mh_blockdev_open_write after
+     * its eligibility and identity checks, never by a path someone typed into a save panel. */
+    if (fd >= 0 && mode != MH_IO_READ) {
+        struct stat st;
+        if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || (mode == MH_IO_CREATE && ftruncate(fd, 0) != 0)) {
+            close(fd);
+            fd = -1;
+            errno = EPERM;
+        }
+    }
     if (fd < 0) {
         memset(io, 0, sizeof *io);
         io->fd = -1;
@@ -74,6 +88,17 @@ bool mh_io_size(MhIo *io, uint64_t *size)
         *size = (uint64_t)st.st_size;
         return true;
     }
+#ifdef __APPLE__
+    /* lseek(SEEK_END) on /dev/rdiskN returns 0 on macOS: ask the driver for the geometry. */
+    {
+        uint32_t bs = 0;
+        uint64_t cnt = 0;
+        if (ioctl(io->fd, DKIOCGETBLOCKSIZE, &bs) == 0 && ioctl(io->fd, DKIOCGETBLOCKCOUNT, &cnt) == 0 && bs) {
+            *size = cnt * bs;
+            return true;
+        }
+    }
+#endif
     end = lseek(io->fd, 0, SEEK_END);
     if (end < 0) return false;
     *size = (uint64_t)end;

@@ -35,7 +35,9 @@ void mh_path_change_ext(const char *path, const char *ext, char *out, size_t n);
 bool mh_path_full(const char *path, char *out, size_t n);
 /* orig: path_equal_full. Both paths made absolute (mh_path_full), compared with ASCII case
  * folding (the original did the same on a case-insensitive file system, as does default APFS).
- * NULL or empty gives false. If a path is too long to normalise the raw strings are compared. */
+ * NULL or empty gives false. If a path is too long to normalise the raw strings are compared.
+ * Deviation (audit): two names that exist and refer to the same file (symlink, hard link, other
+ * normalisation: same device and non-zero inode) are also equal. */
 bool mh_path_equal_full(const char *a, const char *b);
 /* orig: game_directory. Directory that groups a game: dirname(full path of cue); when the
  * name of that directory normalises (mh_normalize_title) to something starting with

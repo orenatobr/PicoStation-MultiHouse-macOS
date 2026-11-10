@@ -60,6 +60,10 @@ bool mh_v2_write_image_direct(const MhV2Writer *w, MhProject *p, const char *pat
             if (d && (d->flags & MH_DF_KEEP_PACKAGE) && d->v2_pkg_path[0] &&
                 mh_path_equal_full(d->v2_pkg_path, path))
                 existing = true;
+            /* Not in the original: mh_v2w_classify treats such a disc as "in place" (its RAW slots
+             * are expected in the file), so the file must not be truncated by CREATE_ALWAYS. */
+            if (d && d->kind == MH_DISC_KIND_V2_IMAGE && mh_path_equal_full(d->source_path, path))
+                existing = true;
         }
     }
     if (!mh_io_open(&io, path, existing ? MH_IO_RDWR : MH_IO_CREATE, true, NULL))
