@@ -1538,6 +1538,7 @@ static NSPasteboardType const kRowType = @"br.picostation.multihouse.cheatrow";
 }
 
 - (id<NSPasteboardWriting>)tableView:(NSTableView *)tv pasteboardWriterForRow:(NSInteger)row {
+    if (row < 0 || row >= (NSInteger)_rows.count) return nil;
     NSPasteboardItem *it = [[NSPasteboardItem alloc] init];
     [it setString:_rows[row].stringValue forType:kRowType];
     return it;
