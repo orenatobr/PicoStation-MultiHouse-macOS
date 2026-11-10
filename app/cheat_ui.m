@@ -1104,6 +1104,9 @@ static NSPasteboardType const kRowType = @"br.picostation.multihouse.cheatrow";
 @property uint8_t scope;           /* orig ctx+0x74 */
 @property uint32_t variant;        /* orig ctx+0x1f8 */
 @property BOOL accepted, done;
+@property NSUInteger otherDiscs; /* other discs of the case that can receive these cheats */
+@property BOOL applyToAll;
+@property NSButton *chkAll;
 @property NSMutableArray<NSNumber *> *rows;
 @property MHTable *table;
 @property NSScrollView *tableSV;
@@ -1300,7 +1303,16 @@ static NSPasteboardType const kRowType = @"br.picostation.multihouse.cheatrow";
     Prominent(_bApply);
     _bApply.controlSize = NSControlSizeLarge;
     _bApply.toolTip = @"Keep these changes and close (Return)";
-    NSStackView *footer = Row(@[ _bCancel, _bApply ], MHSpace12);
+    NSMutableArray<NSView *> *footerViews = [NSMutableArray arrayWithObjects:_bCancel, _bApply, nil];
+    if (_otherDiscs) {
+        _chkAll = [NSButton checkboxWithTitle:_otherDiscs == 1 ? @"Also apply to the other disc of this case"
+                                                               : [NSString stringWithFormat:@"Also apply to the other %lu discs of this case", (unsigned long)_otherDiscs]
+                                       target:nil action:nil];
+        _chkAll.toolTip = @"Copies this list to the other discs of the case, each with its own serial. "
+                           "Codes written for one disc may not suit another, so check them.";
+        [footerViews insertObject:_chkAll atIndex:0];
+    }
+    NSStackView *footer = Row(footerViews, MHSpace12);
 
     for (NSView *v in @[ tile, textStack, meters, sep1, topRow, tableCard, actions, _countLabel, detCard, footer ]) [cv addSubview:v];
     [NSLayoutConstraint activateConstraints:@[
@@ -1782,6 +1794,7 @@ static NSPasteboardType const kRowType = @"br.picostation.multihouse.cheatrow";
         return;
     }
     _accepted = YES;
+    _applyToAll = _chkAll.state == NSControlStateValueOn;
     [_window close];
 }
 - (void)cancel:(id)sender { [_window close]; }
@@ -2094,8 +2107,8 @@ static NSPasteboardType const kRowType = @"br.picostation.multihouse.cheatrow";
 
 /* ---- entry point (orig: cheat_ui_edit) --------------------------------------------------------- */
 
-BOOL MHCheatEditProfile(NSWindow *parent, const MhCheatDb *db, NSString *headerText, const char *serial, uint8_t scope,
-                        MhCheatProfile **profile) {
+BOOL MHCheatEditProfileEx(NSWindow *parent, const MhCheatDb *db, NSString *headerText, const char *serial, uint8_t scope,
+                          MhCheatProfile **profile, NSUInteger otherDiscs, BOOL *applyToAll) {
     MhCheatProfile *clone = mh_cheat_profile_clone(profile ? *profile : NULL);
     if (!clone) return NO;
     mh_cheat_profile_prepare_hardware(clone, serial ? serial : "");
@@ -2104,6 +2117,7 @@ BOOL MHCheatEditProfile(NSWindow *parent, const MhCheatDb *db, NSString *headerT
     m.db = db;
     m.profile = clone;
     m.scope = scope;
+    m.otherDiscs = otherDiscs;
     m.variant = MH_NONE;
     uint32_t title = MH_NONE;
     MhCheatVariantInfo vi;
@@ -2120,5 +2134,11 @@ BOOL MHCheatEditProfile(NSWindow *parent, const MhCheatDb *db, NSString *headerT
         *profile = m.profile;
         m.profile = NULL;
     }
+    if (applyToAll) *applyToAll = m.accepted && m.applyToAll;
     return m.accepted;
+}
+
+BOOL MHCheatEditProfile(NSWindow *parent, const MhCheatDb *db, NSString *headerText, const char *serial, uint8_t scope,
+                        MhCheatProfile **profile) {
+    return MHCheatEditProfileEx(parent, db, headerText, serial, scope, profile, 0, NULL);
 }
