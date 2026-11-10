@@ -7,7 +7,7 @@ CSTD     := -std=c11 -D_DARWIN_C_SOURCE
 WARN     := -Wall -Wextra -Wno-unused-parameter
 SAN      := -fsanitize=address,undefined -fno-omit-frame-pointer
 CFLAGS_T := $(CSTD) $(WARN) -g -O1 $(SAN) -Icore/include
-BUILD    := build
+BUILD    ?= $(HOME)/.cache/picostation-mh-build
 
 .PHONY: test clean app
 test:
@@ -26,7 +26,7 @@ test-%:
 	done
 
 clean:
-	rm -rf $(BUILD)
+	rm -rf "$(BUILD)"
 
 .PHONY: lint-dash
 lint-dash:

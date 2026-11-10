@@ -77,3 +77,4 @@ Reading hints:
   original) and `/Users/renato.pereira/Downloads/PICOSTATION BR` (original `database/art`, firmware).
   Tests must skip, not fail, when fixtures are absent.
 * Never write to a block device in tests. Use regular files as stand-ins.
+The repository may live on a non-APFS volume, so build output goes to ~/.cache/picostation-mh-build (override with BUILD=...).
