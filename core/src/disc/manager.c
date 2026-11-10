@@ -79,13 +79,15 @@ MhDisc *mh_manager_parse(const MhDb *db, const char *cue_path, const MhCueHooks 
             if (t[0]) {
                 mh_utf8_from_latin1(t, w, sizeof w);
                 mh_normalize_title(w, d->title, sizeof d->title);
-                mh_short_disc_name(d->title, d->name, sizeof d->name);
+                d->title_base_len = (uint16_t)mh_title_base_len(w);
+                mh_fit_name(d->title, d->title_base_len, d->name, MH_NAME_FIT);
             }
             have_db_title = true;
         }
         if (d->title[0] == 0) {
             mh_path_stem(cue_path, stem, sizeof stem);
             mh_normalize_title(stem, d->title, sizeof d->title);
+            d->title_base_len = (uint16_t)mh_title_base_len(stem);
         }
         if (have_db_title) {
             const char *t = mh_db_record_title(db, d->db_index);
@@ -93,7 +95,7 @@ MhDisc *mh_manager_parse(const MhDb *db, const char *cue_path, const MhCueHooks 
         }
     }
     if (d->title[0] == 0) return d;
-    if ((d->flags & MH_DF_USER_NAMED) == 0) mh_short_disc_name(d->title, d->name, sizeof d->name);
+    if ((d->flags & MH_DF_USER_NAMED) == 0) mh_fit_name(d->title, d->title_base_len, d->name, MH_NAME_FIT);
     return d;
 }
 

@@ -182,7 +182,11 @@ Anything that could make a card written by the port unreadable:
    of `mh_cheat_blob_validate` check `u32(+0x18) <= 0x100`.
 3. Non-ASCII names (informational): every byte outside 0x20..0x7E of a Case name, Disc title or
    serial is shown as a blank by the Pico. The card stays readable, but accented titles lose letters.
-   The writer copies the UTF-8 bytes unchanged.
+   The writer copies the UTF-8 bytes unchanged. Printable ASCII, parentheses included (0x28, 0x29), is
+   shown as is, so the firmware has no restriction on them; the Manager's title normaliser (a port of
+   the original) is what turns "(USA)" into "USA". The display limit is 31 characters for a Case name
+   and for a Disc title: the port cuts the game name and keeps the tags after it (region, revision,
+   disc) via `mh_fit_name`.
 4. Music longer than 0x80030 bytes would be accepted by the Manager but never played (see table). The
    embedded resource is fine; do not replace it by a longer file.
 
