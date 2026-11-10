@@ -1,5 +1,7 @@
 # disk module (macOS disk layer)
 
+> Note: the user-visible texts quoted here were translated to EN-US after the port. The Portuguese originals below are kept as the reverse-engineering record; docs/i18n/base-disc-art-menu-platform.md lists the strings deliberately left untranslated.
+
 Headers: `core/include/mh/blockdev.h` (interface used by the portable SD code).
 Sources: `core/src/blockdev/blockdev.c` (rules, text, file stand-in, handle dispatch),
 `platform/mac/mh_disk_mac.{h,m,c}` (DiskArbitration, IOKit, authopen).

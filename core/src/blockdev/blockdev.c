@@ -126,19 +126,19 @@ MhBlockDev *mh_blockdev_open_file(const char *path, bool writable, uint64_t size
                                   size_t errn) {
     int fd = open(path, writable ? (O_RDWR | O_CREAT) : O_RDONLY, 0644);
     if (fd < 0) {
-        mh_err_set(err, errn, "Nao foi possivel abrir o arquivo: %s", strerror(errno));
+        mh_err_set(err, errn, "Could not open the file: %s", strerror(errno));
         return NULL;
     }
     struct stat st;
     if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
         close(fd);
-        mh_err_set(err, errn, "O alvo de teste nao e um arquivo regular.");
+        mh_err_set(err, errn, "The test target is not a regular file.");
         return NULL;
     }
     if (size == 0) size = (uint64_t)st.st_size;
     if (writable && (uint64_t)st.st_size < size && ftruncate(fd, (off_t)size) != 0) {
         close(fd);
-        mh_err_set(err, errn, "Nao foi possivel dimensionar o arquivo: %s", strerror(errno));
+        mh_err_set(err, errn, "Could not resize the file: %s", strerror(errno));
         return NULL;
     }
     MhBlockDev *dev = calloc(1, sizeof *dev);

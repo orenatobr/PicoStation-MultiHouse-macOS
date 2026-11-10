@@ -119,7 +119,7 @@ int main(void)
         disk.size = 0x600000;
         setdev(P("card"));
         assert(mh_sd_write_image(&disk, NULL, P("image"), NULL, err, sizeof err));
-        assert(strstr(err, "SD gravado, relido e confirmado") == err);
+        assert(strstr(err, "Card written, read back and confirmed") == err);
         assert(mh_sd_verify_image(&disk, NULL, P("image"), NULL, err, sizeof err) || true);
         /* device content: body equal, headers valid, tail beyond the image zero */
         {
@@ -141,24 +141,24 @@ int main(void)
             close(fd);
         }
         assert(!mh_sd_verify_image(&disk, NULL, P("image"), NULL, err, sizeof err));
-        assert(strcmp(err, "O readback do SD divergiu da imagem.") == 0);
+        assert(strcmp(err, "The card read-back differs from the image.") == 0);
         /* identity failure */
         g_v2_identity_ok = 0;
         assert(!mh_sd_write_image(&disk, NULL, P("image"), NULL, err, sizeof err));
-        assert(strcmp(err, "O SD mudou, foi removido ou falhou na verificacao de identidade.") == 0);
+        assert(strcmp(err, "The card changed, was removed, or failed the identity check.") == 0);
         assert(!mh_sd_verify_image(&disk, NULL, P("image"), NULL, err, sizeof err));
-        assert(strcmp(err, "O SD selecionado mudou ou nao e seguro.") == 0);
+        assert(strcmp(err, "The selected card changed or is not safe.") == 0);
         g_v2_identity_ok = 1;
         /* an image whose B header differs is refused */
         img[0xa00 + 0x10] ^= 1;
         wr(P("bad"), img, 0x500000);
         assert(!mh_sd_write_image(&disk, NULL, P("bad"), NULL, err, sizeof err));
-        assert(strcmp(err, "A imagem nao possui o par de headers V2 valido e identico.") == 0);
+        assert(strcmp(err, "The image does not have a valid, identical pair of V2 headers.") == 0);
         /* image larger than the card */
         wr(P("small"), img, 0x500000);
         disk.size = 0x400000;
         assert(!mh_sd_write_image(&disk, NULL, P("small"), NULL, err, sizeof err));
-        assert(strcmp(err, "A imagem e invalida ou nao cabe no SD.") == 0);
+        assert(strcmp(err, "The image is invalid or does not fit on the card.") == 0);
         disk.size = 0x600000;
         free(img);
         free(dev);
@@ -170,16 +170,16 @@ int main(void)
         disk.size = 0x600000;
         assert(mh_sd_quick_health(&disk, NULL, NULL, &hl));
         assert(hl.ok && hl.read_errors == 0 && hl.mismatches == 0 && hl.bytes == 2 * 4 * 0x100000 - 2 * 0 + 0 - 0 ? true : true);
-        assert(strcmp(hl.text, "Leitura repetida aprovada em quatro regioes do SD.") == 0);
+        assert(strcmp(hl.text, "Repeated reads passed in four regions of the card.") == 0);
         assert(mh_sd_quick_health(&disk, NULL, NULL, NULL));
         g_v2_identity_ok = 0;
-        assert(!mh_sd_quick_health(&disk, NULL, NULL, &hl) && strcmp(hl.text, "O cartao mudou ou nao esta mais conectado.") == 0);
+        assert(!mh_sd_quick_health(&disk, NULL, NULL, &hl) && strcmp(hl.text, "The card changed or is no longer connected.") == 0);
         g_v2_identity_ok = 1;
         {
             MhProgress p;
             mh_progress_init(&p, NULL, NULL);
             mh_progress_request_cancel(&p);
-            assert(!mh_sd_quick_health(&disk, NULL, &p, &hl) && strcmp(hl.text, "Teste cancelado.") == 0);
+            assert(!mh_sd_quick_health(&disk, NULL, &p, &hl) && strcmp(hl.text, "Test cancelled.") == 0);
         }
     }
 
@@ -195,7 +195,7 @@ int main(void)
         assert(mh_v2_verify_committed_headers(&disk, NULL, a, err, sizeof err));
         a[0x20] ^= 1;
         assert(!mh_v2_verify_committed_headers(&disk, NULL, a, err, sizeof err));
-        assert(strstr(err, "Os headers V2 mudaram") == err);
+        assert(strstr(err, "The V2 headers changed") == err);
     }
 
     /* ---- recode */
@@ -228,14 +228,14 @@ int main(void)
         free(out);
         /* same destination again, same stem */
         assert(!mh_manager_recode_copy(d, P("copy.cue"), NULL, err, sizeof err));
-        assert(strcmp(err, "O destino ja existe ou nao pode ser criado. Escolha um novo nome.") == 0);
+        assert(strcmp(err, "The destination already exists or cannot be created. Choose a new name.") == 0);
         assert(!mh_manager_recode_copy(d, P("src.cue"), NULL, err, sizeof err));
-        assert(strcmp(err, "Escolha outro nome de CUE; a origem deve ser preservada.") == 0);
+        assert(strcmp(err, "Choose a different CUE name; the source must be preserved.") == 0);
         /* source changed since the verification */
         digest[0] ^= 1;
         memcpy(d->verify_sha1, digest, 20);
         assert(!mh_manager_recode_copy(d, P("c2.cue"), NULL, err, sizeof err));
-        assert(strcmp(err, "A origem mudou desde a verificacao. Verifique o disco novamente antes de criar a copia.") == 0);
+        assert(strcmp(err, "The source changed since it was verified. Verify the Disc again before creating the copy.") == 0);
         assert(access(P("c2.cue"), F_OK) != 0 && access(P("c2_BIN_EDC_ECC"), F_OK) != 0);
         /* nothing to fix: copy the fixed output as the source */
         mh_sha1(bin, 20 * 2352, digest);
@@ -245,12 +245,12 @@ int main(void)
             mh_progress_init(&p, NULL, NULL);
             mh_progress_request_cancel(&p);
             assert(!mh_manager_recode_copy(d, P("c3.cue"), &p, err, sizeof err));
-            assert(strcmp(err, "Copia cancelada; arquivos parciais removidos e origem preservada.") == 0);
+            assert(strcmp(err, "Copy cancelled; partial files removed and source preserved.") == 0);
             assert(access(P("c3.cue"), F_OK) != 0 && access(P("c3_BIN_EDC_ECC"), F_OK) != 0);
         }
         d->verified = 0;
         assert(!mh_manager_recode_copy(d, P("c4.cue"), NULL, err, sizeof err));
-        assert(strstr(err, "Forneca um CUE/BIN verificado") == err);
+        assert(strstr(err, "Provide a verified CUE/BIN") == err);
         free(d);
         free(bin);
     }

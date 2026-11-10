@@ -19,16 +19,16 @@ static const char *source_clash(const MhProject *p, const char *path)
         const MhCase *c = &p->cases[ci];
         if (!c->in_use) continue;
         if (c->art_path[0] && mh_path_equal_full(path, c->art_path))
-            return "A imagem substituiria uma arte de origem.";
+            return "The image would overwrite a source art file.";
         for (j = 0; j < c->disc_count; j++) {
             const MhDisc *d = c->discs[j];
             if (!d) continue;
             if (mh_path_equal_full(path, d->cue_path) || mh_path_equal_full(path, d->sbi_path) ||
                 mh_path_equal_full(path, d->cd_art_path))
-                return "A imagem substituiria um arquivo de origem.";
+                return "The image would overwrite a source file.";
             for (k = 0; k < d->nfiles; k++)
                 if (d->files[k].path[0] && mh_path_equal_full(path, d->files[k].path))
-                    return "A imagem substituiria um BIN de origem.";
+                    return "The image would overwrite a source BIN file.";
         }
     }
     return NULL;
@@ -45,7 +45,7 @@ bool mh_v2_write_image_direct(const MhV2Writer *w, MhProject *p, const char *pat
     bool have_size;
     bool ok;
 
-    if (!p || !path || !path[0]) return fail(res, "Caminho da imagem V2 invalido.");
+    if (!p || !path || !path[0]) return fail(res, "Invalid V2 image path.");
     if ((clash = source_clash(p, path)) != NULL) return fail(res, clash);
     if (!mh_v2_preflight_serials(p, res)) return false;
 
@@ -67,7 +67,7 @@ bool mh_v2_write_image_direct(const MhV2Writer *w, MhProject *p, const char *pat
         }
     }
     if (!mh_io_open(&io, path, existing ? MH_IO_RDWR : MH_IO_CREATE, true, NULL))
-        return fail(res, "Nao foi possivel abrir/criar a imagem V2.");
+        return fail(res, "Could not open or create the V2 image.");
 
     have_size = mh_io_size(&io, &cur);
     est = mh_v2_estimate_project_bytes_for_target(p, -1, path);
@@ -81,7 +81,7 @@ bool mh_v2_write_image_direct(const MhV2Writer *w, MhProject *p, const char *pat
     if (!have_size || target > cur) {
         if (ftruncate(io.fd, (off_t)target) != 0) {
             mh_io_close(&io);
-            return fail(res, "Nao foi possivel reservar o tamanho da imagem V2.");
+            return fail(res, "Could not reserve the size of the V2 image.");
         }
     }
     ok = mh_v2_write_handle_direct(w, p, &io, -1, path, target, res);

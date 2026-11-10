@@ -104,9 +104,10 @@ static bool stream_raw_source(const MhV2Writer *w, MhIo *dst, MhDisc *d, uint8_t
         remaining -= chunk;
         src_off += bytes;
         out_off += bytes;
+        if (analyze) mh_v2_set_phase(w ? w->prog : NULL, MH_V2_PHASE_VERIFYING_SOURCES, 0, 0);
         if (w && w->prog &&
-            !report(w, *done, total, analyze ? "Identificando trackset antes de gravar"
-                                             : "Mantendo disco RAW existente"))
+            !report(w, *done, total, analyze ? "Identifying trackset before writing"
+                                             : "Keeping existing RAW Disc"))
             goto out;
         mh_progress_yield();
     }
@@ -178,9 +179,10 @@ static bool stream_cue_source(const MhV2Writer *w, MhIo *dst, MhDisc *d, uint8_t
             *done += wbytes;
             cont = true;
             if (w && w->prog) {
+                if (analyze) mh_v2_set_phase(w->prog, MH_V2_PHASE_VERIFYING_SOURCES, 0, 0);
                 mh_path_basename(f->path, base, sizeof base);
                 mh_wbuf_init(&text);
-                mh_wbuf_puts(&text, analyze ? "Verificando: " : "Gravando: ");
+                mh_wbuf_puts(&text, analyze ? "Verifying: " : "Writing: ");
                 mh_wbuf_puts(&text, base);
                 cont = report(w, *done, total, mh_wbuf_cstr(&text));
                 mh_wbuf_free(&text);
@@ -261,7 +263,7 @@ bool mh_v2_stream_disc(const MhV2Writer *w, MhIo *dst, MhDisc *d, uint8_t rec[MH
                 mh_cheat_profile_build_for_disc(cdb, d->serial, &prof, err, sizeof err)) {
                 d->cheats = prof;
                 mh_str_cat(d->notes, MH_DISC_NOTES_MAX,
-                           "\r\nCatalogo completo de cheats associado depois da confirmacao exata do trackset.");
+                           "\r\nFull cheat catalog linked after the exact trackset was confirmed.");
             }
         }
     }

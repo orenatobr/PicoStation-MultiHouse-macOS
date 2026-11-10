@@ -21,7 +21,7 @@ void mh_v2_result_fail_code(MhV2Result *res, const char *msg, int code)
     res->ok = 0;
     res->code = code;
     if (code != 0)
-        mh_err_set(res->msg, sizeof res->msg, "%s (erro Win32 %u)", msg, (unsigned)code);
+        mh_err_set(res->msg, sizeof res->msg, "%s (error %u)", msg, (unsigned)code);
     else
         mh_str_copy(res->msg, sizeof res->msg, msg);
 }

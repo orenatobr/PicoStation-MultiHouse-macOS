@@ -19,6 +19,9 @@ void mh_progress_init(MhProgress *p, void (*cb)(void *, uint64_t, uint64_t, cons
     p->cb = cb;
     p->user = user;
     atomic_init(&p->cancel, 0);
+    atomic_init(&p->phase, 0);
+    atomic_init(&p->step, 0);
+    atomic_init(&p->steps, 0);
 }
 
 void mh_progress_request_cancel(MhProgress *p)
@@ -88,7 +91,7 @@ void mh_err_fail(MhErr *e, int code, const char *fmt, ...)
 void mh_err_fail_code(MhErr *e, const char *msg, int code)
 {
     if (code != 0)
-        mh_err_fail(e, code, "%s (erro Win32 %u)", msg ? msg : "", (unsigned)code);
+        mh_err_fail(e, code, "%s (error %u)", msg ? msg : "", (unsigned)code);
     else
         mh_err_fail(e, 0, "%s", msg ? msg : "");
 }

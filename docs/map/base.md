@@ -1,5 +1,7 @@
 # base module (wave 0)
 
+> Note: the user-visible texts quoted here were translated to EN-US after the port. The Portuguese originals below are kept as the reverse-engineering record; docs/i18n/base-disc-art-menu-platform.md lists the strings deliberately left untranslated.
+
 Headers: `core/include/mh/base.h` (umbrella) including `common.h`, `str.h`, `path.h`, `hash.h`,
 `cdsector.h`, `io.h`. Sources: `core/src/base/*.c`. Tests: `core/tests/test_base*.c`
 (`make test-base`, ASan/UBSan). All addresses are virtual addresses in `mh64.exe`.

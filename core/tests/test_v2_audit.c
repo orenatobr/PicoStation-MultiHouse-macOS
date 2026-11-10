@@ -78,7 +78,7 @@ static MhProject *load_copy(const uint8_t *img, uint64_t size, MhV2Result *r)
     return p;
 }
 
-#define MSG_ONE "V2 recuperado por um dos headers. Salve/aplique para reparar o par principal/backup."
+#define MSG_ONE "V2 recovered from one of the headers. Save or apply to repair the main/backup pair."
 
 static void expect_fail(uint8_t *c, const char *msg)
 {
@@ -121,7 +121,7 @@ static void test_header_selection(void)
     memcpy(c, g_img, g_size);
     mh_v2_wr32(B + 0x1ca, 0x1234);
     hdr_crc(B);
-    expect_fail(c, "Headers V2 divergentes com a mesma geracao; selecao automatica recusada.");
+    expect_fail(c, "The V2 headers differ but have the same generation; automatic selection refused.");
 
     /* both valid and different: the newer generation wins, with a signed wrap */
     {
@@ -178,34 +178,34 @@ static void test_header_selection(void)
     hdr_crc(A);
     mh_v2_wr32(B + 0x50, mh_v2_rd32(B + 0x50) ^ 1);
     hdr_crc(B);
-    expect_fail(c, "Nenhum header V2 valido corresponde as tabelas gravadas.");
+    expect_fail(c, "No valid V2 header matches the tables on the card.");
 
     /* only B valid and stale */
     memcpy(c, g_img, g_size);
     A[0x20] ^= 1;
     mh_v2_wr32(B + 0x54, mh_v2_rd32(B + 0x54) ^ 1);
     hdr_crc(B);
-    expect_fail(c, "Nenhum header V2 valido corresponde as tabelas gravadas.");
+    expect_fail(c, "No valid V2 header matches the tables on the card.");
 
     /* a slot whose padding is not zero is an unreadable header */
     memcpy(c, g_img, g_size);
     c[0x930] = 1;
-    expect_fail(c, "Nao foi possivel ler os headers V2.");
+    expect_fail(c, "Could not read the V2 headers.");
     memcpy(c, g_img, g_size);
     c[0xa00 + 0x9ff] = 1;
-    expect_fail(c, "Nao foi possivel ler os headers V2.");
+    expect_fail(c, "Could not read the V2 headers.");
 
     /* header counts that disagree with the tables */
     memcpy(c, g_img, g_size);
     c[8] = 3;
     hdr_crc(A);
     memcpy(B, A, 0xa00);
-    expect_fail(c, "As contagens do header V2 nao conferem com as tabelas.");
+    expect_fail(c, "The V2 header counts do not match the tables.");
     memcpy(c, g_img, g_size);
     c[10] = 4;
     hdr_crc(A);
     memcpy(B, A, 0xa00);
-    expect_fail(c, "As contagens do header V2 nao conferem com as tabelas.");
+    expect_fail(c, "The V2 header counts do not match the tables.");
     free(c);
 }
 
@@ -217,26 +217,26 @@ static void test_load_records(void)
 
     memcpy(c, g_img, g_size);
     c[MH_V2_MENU_OFF + 0x931] = 1;
-    expect_fail(c, "Padding do menu V2 invalido.");
+    expect_fail(c, "Invalid V2 menu padding.");
 
     memcpy(c, g_img, g_size);
     mh_v2_wr16(crec(c, 0) + 0x38, 7);
     case_rec_fix(c, 0);
     fix_header(c);
-    expect_fail(c, "ID da arte de uma Case e invalido.");
+    expect_fail(c, "A Case has an invalid art ID.");
 
     memcpy(c, g_img, g_size);
     mh_v2_wr16(drec(c, 0) + 0x62, 2);
     disc_rec_fix(c, 0);
     fix_header(c);
-    expect_fail(c, "ID da arte de um Disco e invalido.");
+    expect_fail(c, "A Disc has an invalid art ID.");
 
     /* a disc referenced by two cases */
     memcpy(c, g_img, g_size);
     crec(c, 1)[0x3a] = 0;
     case_rec_fix(c, 1);
     fix_header(c);
-    expect_fail(c, "Existe um registro de Disco invalido no cartao.");
+    expect_fail(c, "The card has an invalid Disc record.");
 
     /* sectors beyond the end of the file */
     memcpy(c, g_img, g_size);
@@ -247,7 +247,7 @@ static void test_load_records(void)
         save(g_path, c, g_size - 512 * 100); /* the last package ends 91 blocks before the end */
         mh_project_init(q);
         CHECK(!mh_v2_load_image(g_path, cache, &g_env, q, &r));
-        CHECK(strcmp(r.msg, "Existe um registro de Disco invalido no cartao.") == 0);
+        CHECK(strcmp(r.msg, "The card has an invalid Disc record.") == 0);
         free(q);
     }
 
@@ -263,7 +263,7 @@ static void test_load_records(void)
         mh_project_init(p);
         CHECK(mh_v2_load_io(&io, MH_V2_SRC_CARD, 3, g_size, NULL, cache, &g_env, p, &r));
         mh_io_close(&io);
-        CHECK(strcmp(r.msg, "Cartao PSXRAW V2 carregado para edicao.") == 0);
+        CHECK(strcmp(r.msg, "PSXRAW V2 card loaded for editing.") == 0);
         CHECK(p->card_loaded == 1 && p->image_loaded == 0 && p->device == 3 && p->dirty == 0);
         CHECK(p->cases[0].discs[0]->kind == MH_DISC_KIND_V2_DEVICE && p->cases[0].discs[0]->v2_drive == 3);
         CHECK(p->cases[0].discs[0]->source_path[0] == 0);
@@ -279,13 +279,12 @@ static void test_load_records(void)
     fix_header(c);
     p = load_copy(c, g_size, &r);
     CHECK(p != NULL);
-    CHECK(strcmp(r.msg, "PSXRAW V2 reconhecido pelas tabelas fixas. 1 disco(s) possuem Track Table multifaixa "
-                        "danificada; os jogos foram listados e preservados, mas APLICAR permanece bloqueado ate "
-                        "informar os CUEs originais.") == 0);
+    CHECK(strcmp(r.msg, "PSXRAW V2 recognized from the fixed tables. 1 Disc(s) have a damaged multi-track Track Table; the games were listed and "
+                        "preserved, but Apply Changes stays blocked until you provide the original CUEs.") == 0);
     {
         const MhDisc *d = p->cases[0].discs[1];
         CHECK(d->status == MH_DISC_STATUS_FIXABLE && d->ntracks == 2 && d->flags == (MH_DF_FROM_V2 | MH_DF_TRACKSET_CHECKED | MH_DF_SERIAL));
-        CHECK(strstr(d->notes, "possui varias faixas") != NULL && p->dirty == 1);
+        CHECK(strstr(d->notes, "has several tracks") != NULL && p->dirty == 1);
     }
     mh_project_clear(p);
     free(p);
@@ -295,8 +294,8 @@ static void test_load_records(void)
     c[(BASE[0] + 5) * 512 + 20] ^= 0xff;
     p = load_copy(c, g_size, &r);
     CHECK(p != NULL);
-    CHECK(strcmp(r.msg, "V2 carregado com catalogo de cheats anterior ou invalido. A atualizacao sera informada por "
-                        "disco.") == 0);
+    CHECK(strcmp(r.msg, "V2 loaded with an old or invalid cheat catalog. The update will be reported per "
+                        "Disc.") == 0);
     CHECK(p->cases[0].discs[0]->cheats == NULL && p->cases[0].discs[0]->cheat_regenerated == 1 &&
           p->cases[0].discs[0]->cheat_note[0] != 0 && p->dirty == 1);
     mh_project_clear(p);
@@ -347,7 +346,7 @@ static void test_load_records(void)
             if (pass == 0) {
                 CHECK(d->verified == 1 && d->verify_issues == 0x40 && d->verify_accepted == 2);
                 CHECK(d->verify_crc32 == d->crc32 && memcmp(d->verify_sha1, d->sha1, 20) == 0);
-                CHECK(strstr(d->verify_text, "Alguns setores estao inconsistentes") == d->verify_text);
+                CHECK(strstr(d->verify_text, "Some sectors are inconsistent") == d->verify_text);
             } else {
                 CHECK(d->verified == 0 && d->verify_issues == 0);
             }
@@ -407,8 +406,8 @@ static void test_resume_target(void)
     memset(&r, 0, sizeof r);
     r.ok = 1;
     CHECK(!mh_v2_confirm_resume_target(p, &io, 3, NULL, bytes, &r));
-    CHECK(r.ok == 0 && strcmp(r.msg, "O destino nao corresponde ao ponto de retomada. Reconecte o mesmo SD usado "
-                                     "nesta sessao.") == 0);
+    CHECK(r.ok == 0 && strcmp(r.msg, "The target does not match the resume point. Reconnect the same card used "
+                                     "in this session.") == 0);
     CHECK(mh_v2_confirm_resume_target(p, &io, 4, NULL, bytes, &r));
     d->v2_marker[0] ^= 1;
     d->flags = 0; /* not flagged to keep: never checked */
@@ -464,7 +463,7 @@ static void test_sd_write_cancel(void)
     g_pp = &prog;
     mh_progress_init(&prog, cancel_after_first, NULL);
     CHECK(!mh_sd_write_image(&disk, NULL, image, &prog, err, sizeof err));
-    CHECK(strcmp(err, "Gravacao cancelada. Os headers permaneceram invalidos.") == 0 && g_progress_calls == 1);
+    CHECK(strcmp(err, "Write cancelled. The headers stayed invalid.") == 0 && g_progress_calls == 1);
     fd = open(dev, O_RDONLY);
     CHECK(fd >= 0 && read(fd, back, g_size + 0x100000) == (ssize_t)(g_size + 0x100000));
     close(fd);

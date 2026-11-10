@@ -27,9 +27,9 @@ extern "C" {
 
 /* ================================================================================= limits */
 
-#define MH_DISC_MAX_FILES 99     /* BIN files per CUE ("Mais de 99 arquivos BIN no CUE.") */
+#define MH_DISC_MAX_FILES 99     /* BIN files per CUE ("More than 99 BIN files in the CUE.") */
 #define MH_DISC_MAX_TRACKS 99
-#define MH_DISC_MAX_SECTORS 450000 /* "limite seguro de 450.000 setores de CD" */
+#define MH_DISC_MAX_SECTORS 450000 /* "safe limit of 450,000 CD sectors" */
 #define MH_SECTOR_SIZE 2352        /* raw CD sector in a BIN */
 #define MH_DISC_NAME_MAX 0x21      /* MhDisc.name capacity (32 characters + NUL) */
 #define MH_DISC_TITLE_MAX 0x60     /* MhDisc.title capacity */
@@ -40,7 +40,7 @@ extern "C" {
 #define MH_CASE_TITLE_MAX 0x21
 #define MH_PROJECT_MAX_CASES 256   /* case slots */
 #define MH_PROJECT_MAX_DISCS 256   /* discs in the whole project ("A V2 aceita no maximo 256 discos") */
-#define MH_NEW_CASE_TITLE "NOVO JOGO"
+#define MH_NEW_CASE_TITLE "NEW GAME"
 
 /* ============================================================================ disc model */
 
@@ -56,9 +56,9 @@ enum {
 enum {
     MH_DISC_STATUS_EMPTY = 0,
     MH_DISC_STATUS_OK = 1,       /* "OK" */
-    MH_DISC_STATUS_NOTE = 2,     /* "OBSERVACAO" */
-    MH_DISC_STATUS_FIXABLE = 3,  /* "CORRIGIVEL" (missing BIN: the user can locate it) */
-    MH_DISC_STATUS_ERROR = 4     /* "ERRO" */
+    MH_DISC_STATUS_NOTE = 2,     /* "Review" */
+    MH_DISC_STATUS_FIXABLE = 3,  /* "Fixable" (missing BIN: the user can locate it) */
+    MH_DISC_STATUS_ERROR = 4     /* "Error" */
 };
 
 /* MhDisc.flags (orig +8). */
@@ -141,19 +141,19 @@ typedef struct MhPsSerial {
 _Static_assert(sizeof(MhPsSerial) == 0x504, "MhPsSerial must stay 0x504 bytes (orig layout)");
 
 enum { /* MhPsSerial.status (psserial_status_text) */
-    MH_PSS_NOT_FOUND = 0,   /* "NAO_LOCALIZADO" */
-    MH_PSS_STRONG = 1,      /* "FORTE_INTERNO" */
-    MH_PSS_PROBABLE = 2,    /* "PROVAVEL" */
-    MH_PSS_AMBIGUOUS = 3,   /* "AMBIGUO" */
-    MH_PSS_IO_ERROR = 4,    /* "ERRO_IO" */
-    MH_PSS_BAD_IMAGE = 5,   /* "IMAGEM_INVALIDA" */
-    MH_PSS_TRACKSET = 6     /* "CONFIRMADO_HASH_TRACKSET" */
+    MH_PSS_NOT_FOUND = 0,   /* "NOT_FOUND" */
+    MH_PSS_STRONG = 1,      /* "STRONG_INTERNAL" */
+    MH_PSS_PROBABLE = 2,    /* "PROBABLE" */
+    MH_PSS_AMBIGUOUS = 3,   /* "AMBIGUOUS" */
+    MH_PSS_IO_ERROR = 4,    /* "IO_ERROR" */
+    MH_PSS_BAD_IMAGE = 5,   /* "INVALID_IMAGE" */
+    MH_PSS_TRACKSET = 6     /* "TRACKSET_HASH_CONFIRMED" */
 };
 enum { /* MhPsSerial.source (psserial_source_text) */
-    MH_PSSRC_NONE = 0,        /* "NENHUMA" */
+    MH_PSSRC_NONE = 0,        /* "NONE" */
     MH_PSSRC_SYSTEM_CNF = 1,  /* "SYSTEM_CNF" */
-    MH_PSSRC_EXE_NAME = 2,    /* "NOME_EXECUTAVEL" */
-    MH_PSSRC_EXE_CONTENT = 3, /* "CONTEUDO_EXECUTAVEL" */
+    MH_PSSRC_EXE_NAME = 2,    /* "EXECUTABLE_NAME" */
+    MH_PSSRC_EXE_CONTENT = 3, /* "EXECUTABLE_CONTENT" */
     MH_PSSRC_TRACKSET = 4     /* "HASH_TRACKSET" */
 };
 
@@ -228,7 +228,7 @@ typedef struct MhCase {
 typedef struct MhProject {
     uint32_t dirty;             /* +0     pending changes ("APLICAR ALTERACOES") */
     uint32_t card_loaded;       /* +4     a V2 card is loaded (editing in place) */
-    uint32_t image_loaded;      /* +8     a V2 image file is loaded ("Imagem V2 carregada") */
+    uint32_t image_loaded;      /* +8     a V2 image file is loaded ("V2 image loaded") */
     uint32_t reserved_c;        /* +0xc   initialised to 1, never read in the code seen */
     uint16_t case_count;        /* +0x10  filled by mh_project_recount */
     uint16_t disc_count;        /* +0x12 */
@@ -269,13 +269,13 @@ void mh_psserial_init(MhPsSerial *r); /* zero, needs_hash = 1 */
 
 /* orig: extractSerialDetailed. Walks the ISO 9660 file system of the first BIN (2352, mode 1
  * or mode 2 form 1) or of a plain 2048 byte ISO and fills *r (see MhPsSerial). Returns r->status.
- * Order of evidence: SYSTEM.CNF BOOT/BOOT2 target (FORTE_INTERNO from its file name, PROVAVEL
- * from the executable content), PSX.EXE content, other PS-X EXE files (PROVAVEL/AMBIGUO). */
+ * Order of evidence: SYSTEM.CNF BOOT/BOOT2 target (STRONG_INTERNAL from its file name, PROBABLE
+ * from the executable content), PSX.EXE content, other PS-X EXE files (PROBABLE/AMBIGUO). */
 uint32_t mh_psserial_extract(MhPsSerial *r, const char *path);
 /* orig: extractSerialRaw. Same for a V2 raw slot: `sectors` sectors of 2352 bytes stored in
  * 2560 byte slots starting at 512-byte block lba512 of path (device or image file). */
 uint32_t mh_psserial_extract_raw(MhPsSerial *r, const char *path, uint64_t lba512, uint32_t sectors);
-/* orig: extractSerial. True and serial (16 bytes) when status is FORTE_INTERNO or PROVAVEL. */
+/* orig: extractSerial. True and serial (16 bytes) when status is STRONG_INTERNAL or PROBABLE. */
 bool mh_psserial_extract_serial(char serial[16], const char *path);
 /* orig: cue_scan_serial_file. out receives the serial found in the BIN at bin_path. */
 bool mh_cue_scan_serial_file(const char *bin_path, char *out, size_t n);
@@ -307,7 +307,7 @@ bool mh_cue_write_corrected(const MhDisc *d, const char *dst);
 void mh_disc_free(MhDisc *d);                 /* orig: disc_free (accepts NULL) */
 void mh_disc_refresh_status(MhDisc *d);       /* orig: disc_refresh_status */
 /* orig: disc_scan_serial. Runs the serial recovery on the first BIN; sets serial and
- * MH_DF_SERIAL only for FORTE_INTERNO. Adds the "ISO declara N setores..." note when the BIN
+ * MH_DF_SERIAL only for STRONG_INTERNAL. Adds the "ISO declares N sectors..." note when the BIN
  * is shorter than the declared volume. Returns true when a strong serial was found. */
 bool mh_disc_scan_serial(MhDisc *d);
 /* orig: disc_progress.part.0. Reports `text` + d->name through prog. */
@@ -327,14 +327,14 @@ typedef enum {
 
 /* orig: recover_disc_serial_internal.isra.0, without the window code. Re-reads the disc source
  * (kind 1: first BIN; kinds 4 and 5: the raw slot at v2_raw_lba512 of source_path or, for
- * kind 4, device_path) and keeps the serial only when the recovery is FORTE_INTERNO.
+ * kind 4, device_path) and keeps the serial only when the recovery is STRONG_INTERNAL.
  * device_path is the raw device node of a kind 4 disc (the original built the PhysicalDriveN
  * path from v2_drive); it may be NULL for the others. On success the project (may be NULL) is
  * marked dirty and recounted; the caller still has to call the cheat module's
  * prepare-hardware function when d->cheats is set and refresh its lists.
  * msg gets the text the original showed: the failure text (a message box), or the success
- * text of silent == false ("Serial interno recuperado: ..."), or for silent == true the
- * status line "Serial interno comprovado recuperado. Aplique as alteracoes ao SD.". In silent
+ * text of silent == false ("Internal serial recovered: ..."), or for silent == true the
+ * status line "Proven internal serial recovered. Apply the changes to the card.". In silent
  * mode the original showed nothing for the failures: msg is then empty. */
 MhRecoverStatus mh_disc_recover_serial(MhDisc *d, const char *device_path, MhProject *p, bool silent,
                                        char *msg, size_t msgn);
@@ -431,7 +431,7 @@ void mh_project_init(MhProject *p);               /* orig: project_init */
 void mh_project_clear(MhProject *p);              /* orig: project_clear (frees every disc) */
 void mh_project_recount(MhProject *p);            /* orig: project_recount */
 /* orig: project_add_case. First free slot at or after `from` (wrapping), titled
- * "NOVO JOGO"; NULL when all 256 are used. Marks the project dirty. */
+ * "NEW GAME"; NULL when all 256 are used. Marks the project dirty. */
 MhCase *mh_project_add_case(MhProject *p, uint8_t from);
 bool mh_project_remove_case(MhProject *p, uint8_t slot);   /* orig: project_remove_case */
 bool mh_project_move_case(MhProject *p, uint8_t a, uint8_t b); /* orig: project_move_case (swap) */
@@ -491,7 +491,7 @@ typedef enum {
     MH_ADD_OK = 0,
     MH_ADD_NOT_CUE,        /* does not end with ".cue": silently ignored */
     MH_ADD_DUPLICATE,      /* already in the project: silently ignored */
-    MH_ADD_PARSE_FAILED,   /* "Nao foi possivel analisar um CUE." */
+    MH_ADD_PARSE_FAILED,   /* "Could not parse a CUE." */
     MH_ADD_REJECTED,       /* admit hook said no (the hook reports why) */
     MH_ADD_LIMIT,          /* error text in err */
     MH_ADD_NO_ROOM         /* could not create a case */

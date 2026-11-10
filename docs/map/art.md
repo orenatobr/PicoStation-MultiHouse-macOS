@@ -1,5 +1,7 @@
 # Module `art`: menu artwork (.art)
 
+> Note: the user-visible texts quoted here were translated to EN-US after the port. The Portuguese originals below are kept as the reverse-engineering record; docs/i18n/base-disc-art-menu-platform.md lists the strings deliberately left untranslated.
+
 Header `core/include/mh/art.h`, code `core/src/art/{art.c,art_case.c}`, ImageIO loader
 `platform/mac/mh_image_mac.{h,m}`, tests `core/tests/test_art.c` (core, fixtures) and
 `core/tests/test_art_image.c` (ImageIO plus PNG previews, linked with `core/tests/art.ldflags`).

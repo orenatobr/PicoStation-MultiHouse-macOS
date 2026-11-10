@@ -28,14 +28,14 @@ static void test_empty_cue(void)
     CHECK(!mh_cue_read_text(p, &t) && t == NULL);
     d = mh_cue_parse(p);
     CHECK(d->status == MH_DISC_STATUS_ERROR && d->flags == 0);
-    CHECK_STR(d->notes, "Nao foi possivel abrir ou decodificar o CUE.");
+    CHECK_STR(d->notes, "Could not open or decode the CUE.");
     mh_disc_free(d);
     CHECK(mh_cue_count_files(p) == 0);
     CHECK(!mh_cue_rewrite_files(p, q, NULL, 0));
     /* a file with only line breaks is not empty */
     put_text("nl.cue", "\r\n");
     d = parse_tmp_cue("nl.cue");
-    CHECK_STR(d->notes, "CUE sem FILE/TRACK validos.");
+    CHECK_STR(d->notes, "CUE has no valid FILE/TRACK.");
     mh_disc_free(d);
 }
 
@@ -78,7 +78,7 @@ static void test_cue_size_cap(void)
     tmp_path("huge.cue", p);
     CHECK(!mh_cue_read_text(p, &t) && t == NULL);
     d = mh_cue_parse(p);
-    CHECK_STR(d->notes, "Nao foi possivel abrir ou decodificar o CUE.");
+    CHECK_STR(d->notes, "Could not open or decode the CUE.");
     mh_disc_free(d);
     unlink(p);
 }
@@ -118,7 +118,7 @@ static void test_scan_budget(void)
     CHECK(truncate(p, (off_t)(big + 100) * 2352) == 0);
     (void)mh_psserial_extract(&r, p);
     CHECK(r.status == MH_PSS_IO_ERROR);
-    CHECK_STR(r.message, "Falha durante a leitura de executavel PS-X EXE.");
+    CHECK_STR(r.message, "Failed while reading a PS-X EXE executable.");
     /* one such file alone is still scanned completely */
     pos = 0;
     memset(e, 0, 2048);

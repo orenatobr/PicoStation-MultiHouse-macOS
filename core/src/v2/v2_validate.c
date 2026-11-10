@@ -67,12 +67,12 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
     if (res) memset(res, 0, sizeof *res);
     if (!mh_io_open(&io, path, MH_IO_READ, false, NULL)) {
         if (!res) return false;
-        mh_v2_result_fail(res, "Imagem V2 ausente ou pequena demais.");
+        mh_v2_result_fail(res, "V2 image is missing or too small.");
         return false;
     }
     if (!mh_io_size(&io, &fsize) || fsize < MH_V2_MIN_IMAGE) {
         mh_io_close(&io);
-        if (res) mh_v2_result_fail(res, "Imagem V2 ausente ou pequena demais.");
+        if (res) mh_v2_result_fail(res, "V2 image is missing or too small.");
         return false;
     }
     /* both header slots, 0x930 bytes each */
@@ -81,7 +81,7 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
         return false;
     }
     if (memcmp(ha, hb, sizeof ha) != 0 || !mh_v2_header_valid(ha))
-        return fail(&io, res, "Header V2 invalido ou divergente do backup.");
+        return fail(&io, res, "V2 header is invalid or differs from its backup.");
     mh_v2_header_decode(ha, &hd);
 
     cases = malloc(MH_V2_CASE_TABLE);
@@ -107,7 +107,7 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
             !mh_io_crc_region(&io, MH_V2_ART_OFF, MH_V2_ART_REGION, &crc_art) || crc_art != hd.crc_art) {
             free(cases);
             free(discs);
-            return fail(&io, res, "CRC das tabelas/arts V2 nao confere.");
+            return fail(&io, res, "CRC of the V2 tables and art does not match.");
         }
     }
 
@@ -121,33 +121,33 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
         if (memcmp(r, MH_V2_CASE_MAGIC, 4) != 0 || r[6] != i || (uint8_t)(r[5] - 1) > 4 ||
             mh_crc_record(r, MH_V2_CASE_SIZE) != mh_v2_rd32(r + 0x4c)) {
             free(cases); free(discs);
-            return fail(&io, res, "Registro de Case V2 invalido.");
+            return fail(&io, res, "Invalid V2 Case record.");
         }
         art = mh_v2_rd16(r + 0x38);
         if (art != 0xffff && art != i) {
             free(cases); free(discs);
-            return fail(&io, res, "ID de arte da Case invalido.");
+            return fail(&io, res, "Invalid Case art ID.");
         }
         for (j = 0; j < 5; j++) {
             uint8_t id = r[0x3a + j];
             if (j < r[5]) {
                 if (used[id]) {
                     free(cases); free(discs);
-                    return fail(&io, res, "Referencia de disco duplicada/invalida em uma Case.");
+                    return fail(&io, res, "A Case has a duplicate or invalid Disc reference.");
                 }
                 used[id] = 1;
                 case_of[id] = (uint8_t)i;
                 slot_of[id] = (uint8_t)j;
             } else if (id != 0) {
                 free(cases); free(discs);
-                return fail(&io, res, "Case possui lixo apos o ultimo disco.");
+                return fail(&io, res, "A Case has stray data after its last Disc.");
             }
         }
         ncases++;
     }
     if (hd.case_count != ncases) {
         free(cases); free(discs);
-        return fail(&io, res, "case_count nao confere.");
+        return fail(&io, res, "case_count does not match.");
     }
 
     for (i = 0; i < 256; i++) {
@@ -175,29 +175,29 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
         uint8_t dsha[20];
 
         if (r[4] == 0) {
-            if (used[i]) DFAIL("Case referencia DiscRecord vazio.");
+            if (used[i]) DFAIL("A Case references an empty DiscRecord.");
             continue;
         }
-        if (!used[i]) DFAIL("DiscRecord V2 invalido.");
+        if (!used[i]) DFAIL("Invalid V2 DiscRecord.");
         sectors = mh_v2_rd32(r + 0x5c);
         base = mh_v2_rd64(r + 0x3c);
         if (memcmp(r, MH_V2_DISC_MAGIC, 4) != 0 || r[5] != i || r[6] != case_of[i] || r[7] != slot_of[i] ||
             (uint8_t)(r[0x60] - 1) > 0x62 || sectors == 0 || mh_v2_rd64(r + 0x54) != (uint64_t)sectors * 5 ||
             (base & 0xff) != 0 || base != mh_v2_rd64(r + 0x44))
-            DFAIL("DiscRecord V2 invalido.");
+            DFAIL("Invalid V2 DiscRecord.");
         if (!mh_disc_layout_valid(r) || mh_v2_rd64(r + 0x4c) != base + 0x100 ||
             mh_crc_record(r, MH_V2_DISC_SIZE) != mh_v2_rd32(r + 0xfc))
-            DFAIL("DiscRecord V2 invalido.");
+            DFAIL("Invalid V2 DiscRecord.");
 
         /* track map + the zero padding behind it */
         if (!mh_io_read(&io, mh_v2_rd64(r + 0x44) << 9, trk, sizeof trk) ||
             !mh_io_read(&io, (mh_v2_rd64(r + 0x44) << 9) + sizeof trk, pad, sizeof pad) ||
             !mh_track_sector_valid(trk, sectors))
-            DFAIL("Track Table V2 invalida.");
+            DFAIL("Invalid V2 Track Table.");
         {
             unsigned k;
             for (k = (unsigned)(base & 0xff); k < sizeof pad; k++)
-                if (pad[k]) DFAIL("Padding da Track Table nao esta zerado.");
+                if (pad[k]) DFAIL("Track Table padding is not zeroed.");
         }
 
         /* cheat blob */
@@ -208,12 +208,12 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
             if (!cb || !mh_io_read(&io, mh_v2_rd64(r + 0x64) << 9, cb, cheat_size) ||
                 !mh_cheat_blob_validate(cb, cheat_size, e, sizeof e) || mh_cheat_blob_scope(cb, cheat_size) != 2) {
                 free(cb);
-                DFAIL("Bloco de cheats V2 invalido.");
+                DFAIL("Invalid V2 cheats block.");
             }
             free(cb);
         }
         aid = mh_v2_rd16(r + 0x62);
-        if (aid != 0xffff && aid != i) DFAIL("disc_art_id invalido.");
+        if (aid != 0xffff && aid != i) DFAIL("Invalid disc_art_id.");
 
         /* RAW data */
         c = mh_crc32_begin();
@@ -230,18 +230,18 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
                     c = mh_crc32_update(c, sl, MH_V2_SECTOR);
                     mh_sha1_update(&sha, sl, MH_V2_SECTOR);
                     for (k = MH_V2_SECTOR; k < MH_V2_SLOT; k++)
-                        if (sl[k]) DFAIL("Padding dos dados RAW nao esta zerado.");
+                        if (sl[k]) DFAIL("RAW data padding is not zeroed.");
                 }
                 raw_done += (uint64_t)n * MH_V2_SLOT;
                 remaining -= n;
                 off += (uint64_t)n * MH_V2_SLOT;
-                if (!mh_progress_report(prog, raw_done, total_raw, "Validando dados RAW V2")) DFAIL("Validacao cancelada.");
+                if (!mh_progress_report(prog, raw_done, total_raw, "Validating V2 RAW data")) DFAIL("Validation cancelled.");
                 mh_progress_yield();
             }
         }
         dcrc = mh_crc32_end(c);
         mh_sha1_final(&sha, dsha);
-        if (mh_v2_rd32(r + 0x7c) != dcrc || memcmp(dsha, r + 0x80, 20) != 0) DFAIL("Hash de um disco V2 nao confere.");
+        if (mh_v2_rd32(r + 0x7c) != dcrc || memcmp(dsha, r + 0x80, 20) != 0) DFAIL("Hash of a V2 Disc does not match.");
         ndiscs++;
     }
     free(raw);
@@ -249,7 +249,7 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
     free(cases);
     free(discs);
     cases = discs = NULL;
-    if (hd.disc_count != ndiscs) return fail(&io, res, "disc_count nao confere.");
+    if (hd.disc_count != ndiscs) return fail(&io, res, "disc_count does not match.");
 
     /* menu */
     c = mh_crc32_begin();
@@ -271,24 +271,24 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
             c = mh_crc32_update(c, slot, MH_V2_SECTOR);
             mh_sha1_update(&sha, slot, MH_V2_SECTOR);
             for (b = MH_V2_SECTOR; b < MH_V2_SLOT; b++)
-                if (slot[b]) return fail(&io, res, "Padding do menu V2 nao esta zerado.");
+                if (slot[b]) return fail(&io, res, "V2 menu padding is not zeroed.");
         }
         mcrc = mh_crc32_end(c);
         mh_sha1_final(&sha, msha);
-        if (mcrc != hd.crc_menu || memcmp(msha, hd.menu_sha1, 20) != 0) return fail(&io, res, "Menu V2 nao confere.");
+        if (mcrc != hd.crc_menu || memcmp(msha, hd.menu_sha1, 20) != 0) return fail(&io, res, "V2 menu does not match.");
 
         /* global config + music */
         {
             MhV2Config cf;
             bool cfg_ok = mh_io_read(&io, hd.cfg_lba << 9, cfg, sizeof cfg) &&
                           mh_io_read(&io, (hd.cfg_lba << 9) + sizeof cfg, cfgpad, sizeof cfgpad) && mh_v2_cfg_valid(cfg);
-            if (!cfg_ok) return fail(&io, res, "Configuracao global do menu V2 invalida.");
+            if (!cfg_ok) return fail(&io, res, "Invalid V2 menu global configuration.");
             mh_v2_cfg_decode(cfg, &cf);
             if (cf.music_size != 0) {
                 uint32_t mc = 0;
                 if (cf.music_size > MH_V2_MUSIC_MAX || cf.music_lba == 0 ||
                     !mh_io_crc_region(&io, cf.music_lba << 9, cf.music_size, &mc) || mc != cf.music_crc)
-                    return fail(&io, res, "Musica global do menu V2 invalida.");
+                    return fail(&io, res, "Invalid V2 menu global music.");
             }
         }
     }
@@ -301,7 +301,7 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
         uint8_t sha[20];
         ok = hash_file(path, &size, &crc, sha);
         if (!ok) {
-            mh_v2_result_fail(res, "Falha ao calcular hash final da imagem V2.");
+            mh_v2_result_fail(res, "Could not compute the final hash of the V2 image.");
             return false;
         }
         if (res) {
@@ -312,7 +312,7 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
             res->crc32 = crc;
             memcpy(res->sha1, sha, 20);
             mh_str_copy(res->msg, sizeof res->msg,
-                        "PSXRAW V2 valido: headers, Cases, discos, tracks, menu, cheats e hashes conferidos.");
+                        "Valid PSXRAW V2: headers, Cases, Discs, tracks, menu, cheats and hashes checked.");
         }
         return true;
     }

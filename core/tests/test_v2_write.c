@@ -52,12 +52,21 @@ static uint64_t fixed_stamp(void *u)
 static int g_count_gravando, g_count_ja, g_cancel_when_text_count;
 static const char *g_cancel_text;
 static int g_text_hits;
+static int g_phase_seen[8], g_phase_last, g_phase_backwards, g_step_max, g_steps_seen;
 static void on_progress(void *u, uint64_t done, uint64_t total, const char *text)
 {
+    int ph = atomic_load(&g_prog.phase);
     (void)u; (void)done; (void)total;
+    if (ph >= 0 && ph < 8) g_phase_seen[ph]++;
+    if (ph < g_phase_last) g_phase_backwards++;
+    g_phase_last = ph;
+    if (ph == MH_V2_PHASE_WRITING_DISCS && atomic_load(&g_prog.step) > g_step_max) {
+        g_step_max = atomic_load(&g_prog.step);
+        g_steps_seen = atomic_load(&g_prog.steps);
+    }
     if (!text) return;
-    if (strncmp(text, "Gravando: ", 10) == 0) g_count_gravando++;
-    if (strncmp(text, "Ja gravado: ", 12) == 0) g_count_ja++;
+    if (strncmp(text, "Writing: ", 9) == 0) g_count_gravando++;
+    if (strncmp(text, "Already written: ", 17) == 0) g_count_ja++;
     if (g_cancel_text && strncmp(text, g_cancel_text, strlen(g_cancel_text)) == 0) {
         if (++g_text_hits >= g_cancel_when_text_count) mh_progress_request_cancel(&g_prog);
     }
@@ -95,6 +104,8 @@ static void reset_progress(void)
     g_cancel_text = NULL;
     g_cancel_when_text_count = 1;
     g_text_hits = 0;
+    memset(g_phase_seen, 0, sizeof g_phase_seen);
+    g_phase_last = g_phase_backwards = g_step_max = g_steps_seen = 0;
 }
 
 static bool yes(void *ctx, const char *text) { (void)ctx; (void)text; return true; }
@@ -477,10 +488,15 @@ static void test_fixture_single_disc(void)
     reset_progress();
     CHECK(mh_v2_write_image_direct(&g_w, p, img, &res));
     CHECK(res.ok == 1 && res.cases == 1 && res.discs == 1);
-    CHECK_STR(res.msg, "PSXRAW V2 concluido. Novos discos gravados e confirmados; discos existentes preservados.");
+    CHECK_STR(res.msg, "PSXRAW V2 finished. New Discs written and confirmed; existing Discs preserved.");
     sz = file_size(img);
     CHECK(sz == est && res.size == est);
     CHECK(g_count_gravando >= 1);
+    /* machine readable phases: in order, one disc of one, ends in DONE */
+    CHECK(g_phase_backwards == 0 && g_phase_last == MH_V2_PHASE_DONE);
+    CHECK(g_phase_seen[MH_V2_PHASE_PREPARING] && g_phase_seen[MH_V2_PHASE_WRITING_DISCS] &&
+          g_phase_seen[MH_V2_PHASE_UPDATING_TABLES] && g_phase_seen[MH_V2_PHASE_COMMITTING_HEADER]);
+    CHECK(g_step_max == 1 && g_steps_seen == 1);
     CHECK(d->flags & MH_DF_KEEP_PACKAGE);
     check_image(img, p, 1);
 
@@ -586,7 +602,7 @@ static void test_fixture_multi_bin(void)
     {
         char msg[256];
         CHECK(mh_v2_verify_disc_source(&g_w, q->cases[0].discs[0], msg, sizeof msg));
-        CHECK_STR(msg, "Disco RAW verificado com sucesso.");
+        CHECK_STR(msg, "RAW Disc verified successfully.");
     }
     mh_project_clear(p);
     mh_project_clear(q);
@@ -859,12 +875,12 @@ static void test_cancel_and_resume(void)
         const char *msg_prefix;
         int disc_a_kept, disc_b_kept;
     } cases[] = {
-        {"Concluido: ", "Gravacao cancelada. Discos concluidos serao aproveitados ao retomar nesta sessao.", 1, 0},
-        {"Gravando: cr_b (Track 1)", "Gravacao interrompida. O disco atual ficou pendente; os concluidos podem ser retomados.", 1, 0},
-        {"Sincronizando tabelas, menu e artes", "Falha persistente ao sincronizar a zona fixa V2 no bloco SD LBA ", 1, 1},
-        {"Verificando tabelas e artes", "A verificacao da zona fixa V2 divergiu.", 1, 1},
-        {"Finalizando biblioteca do SD", "Finalizacao cancelada. Reaplique nesta sessao para concluir.", 1, 1},
-        {"Atualizando tabelas e artes do V2", "", 1, 1},
+        {"Done: ", "Write cancelled. Finished Discs will be reused when you resume in this session.", 1, 0},
+        {"Writing: cr_b (Track 1)", "Write interrupted. The current Disc is pending; finished Discs can be resumed.", 1, 0},
+        {"Syncing tables, menu and art", "Persistent failure syncing the V2 fixed zone at card LBA ", 1, 1},
+        {"Verifying tables and art", "Verification of the V2 fixed zone found a mismatch.", 1, 1},
+        {"Finalizing the card library", "Finalization cancelled. Apply again in this session to finish.", 1, 1},
+        {"Updating V2 tables and art", "", 1, 1},
     };
 
     build_ab(f, "cr");
@@ -909,9 +925,9 @@ static void test_cancel_and_resume(void)
         CHECK(mh_v2_write_image_direct(&g_w, p, img, &res) && res.ok);
         before = slurp_all(img, &n1);
         reset_progress();
-        g_cancel_text = "Iniciando gravacao dos discos pendentes";
+        g_cancel_text = "Starting to write the pending Discs";
         CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-        CHECK_STR(res.msg, "Operacao cancelada antes de gravar.");
+        CHECK_STR(res.msg, "Operation cancelled before writing.");
         after = slurp_all(img, &n2);
         CHECK(n1 == n2 && memcmp(before, after, (size_t)n1) == 0);
         CHECK(mh_v2_validate_image(img, NULL, &vres) && vres.ok);
@@ -930,7 +946,7 @@ static void test_cancel_and_resume(void)
         build_ab(p, "cr");
         unlink(img);
         reset_progress();
-        g_cancel_text = "Concluido: ";
+        g_cancel_text = "Done: ";
         CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
         /* the Disc table is not written yet: take the marker position from the project */
         CHECK(p->cases[0].discs[0]->flags & MH_DF_KEEP_PACKAGE);
@@ -948,7 +964,7 @@ static void test_cancel_and_resume(void)
         (void)dr;
         reset_progress();
         CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-        CHECK_STR(res.msg, "O destino nao corresponde ao ponto de retomada. Reconecte o mesmo SD ou restaure a imagem usada nesta sessao.");
+        CHECK_STR(res.msg, "The target does not match the resume point. Reconnect the same card or restore the image used in this session.");
         CHECK(header_a_is_wip(img)); /* refused before the card was touched again: still WIP from run 1 */
     }
     mh_project_clear(p);
@@ -978,9 +994,9 @@ static void test_failures(void)
     unlink(img);
     reset_progress();
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK(rd_fail_text(&res, "Gravacao interrompida. O disco atual ficou pendente; os concluidos podem ser retomados."));
-    CHECK(strstr(res.msg, "\r\nDisco 1: ") != NULL);
-    CHECK(strstr(res.msg, "Leitura da origem. Erro Windows: 30") != NULL && res.code == MH_IOERR_SHORT_READ);
+    CHECK(rd_fail_text(&res, "Write interrupted. The current Disc is pending; finished Discs can be resumed."));
+    CHECK(strstr(res.msg, "\r\nDisc 1: ") != NULL);
+    CHECK(strstr(res.msg, "Source read. Error code: 30") != NULL && res.code == MH_IOERR_SHORT_READ);
     CHECK(header_a_is_wip(img));
     mh_project_clear(p);
     free(p);
@@ -999,7 +1015,7 @@ static void test_failures(void)
     unlink(img);
     reset_progress();
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "Gravacao interrompida. O disco atual ficou pendente; os concluidos podem ser retomados.");
+    CHECK_STR(res.msg, "Write interrupted. The current Disc is pending; finished Discs can be resumed.");
     CHECK(res.code == 0);
     mh_project_clear(p);
     free(p);
@@ -1013,29 +1029,29 @@ static void test_failures(void)
     unlink(img);
     reset_progress();
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
+    CHECK_STR(res.msg, "Could not build this Disc's Track Table.");
     d->tracks[1].number = 2;
     d->tracks[0].kind = 1;
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
+    CHECK_STR(res.msg, "Could not build this Disc's Track Table.");
     d->tracks[0].kind = 2;
     d->tracks[0].mode = 3;
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
+    CHECK_STR(res.msg, "Could not build this Disc's Track Table.");
     d->tracks[0].mode = 1;
     d->tracks[0].start = 5; /* the first track must start the disc */
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
+    CHECK_STR(res.msg, "Could not build this Disc's Track Table.");
     d->tracks[0].start = 0;
     d->total_sectors -= 451; /* the second track would begin beyond the disc */
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
+    CHECK_STR(res.msg, "Could not build this Disc's Track Table.");
     d->total_sectors += 451;
     /* the last track is not checked against the end of the disc by the original, but the firmware
      * (FUN_10022084: index1 < end) and the loader refuse such a map, so the port refuses it too */
     d->tracks[1].start = d->total_sectors + 5;
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
+    CHECK_STR(res.msg, "Could not build this Disc's Track Table.");
     mh_project_clear(p);
     free(p);
 
@@ -1047,27 +1063,27 @@ static void test_failures(void)
     CHECK(d->verify_issues != 0 && d->verify_accepted == d->verify_issues);
     d->verify_accepted = 0;
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK(rd_fail_text(&res, "Gravacao nao iniciada. Case: "));
-    CHECK(strstr(res.msg, "\r\nDisco 1: ") != NULL);
-    CHECK(strstr(res.msg, "As observacoes deste disco ainda nao foram aceitas na inclusao ou verificacao manual.") != NULL);
-    CHECK(strstr(res.msg, "\r\nArquivo: obs.bin") != NULL);
+    CHECK(rd_fail_text(&res, "Write not started. Case: "));
+    CHECK(strstr(res.msg, "\r\nDisc 1: ") != NULL);
+    CHECK(strstr(res.msg, "The review notes for this Disc were not accepted when adding it or in manual verification.") != NULL);
+    CHECK(strstr(res.msg, "\r\nFile: obs.bin") != NULL);
     d->verify_issues |= 0x20;
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK(strstr(res.msg, "Padding RAW invalido; restaure a partir do CUE/BIN para manter o formato RAW.") != NULL);
+    CHECK(strstr(res.msg, "Invalid RAW padding; restore it from the CUE/BIN to keep the RAW format.") != NULL);
     d->verify_issues = 0;
     d->verified = 0;
     d->verified_aux = 0;
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK(strstr(res.msg, "Este CUE/BIN ainda nao foi preparado ao ser adicionado.") != NULL);
+    CHECK(strstr(res.msg, "This CUE/BIN was not prepared when it was added.") != NULL);
     d->verified_aux = 1; /* "verification disabled" admission is enough */
     CHECK(mh_v2_prepare_write(p, &res));
     p->cases[0].discs[0] = NULL;
     CHECK(!mh_v2_prepare_write(p, &res));
-    CHECK(strstr(res.msg, "Disco ausente.") != NULL && strstr(res.msg, "Disco 1: \r\nDisco ausente.") != NULL);
+    CHECK(strstr(res.msg, "Disc is missing.") != NULL && strstr(res.msg, "Disc 1: \r\nDisc is missing.") != NULL);
     p->cases[0].discs[0] = d;
     p->cases[0].disc_count = 6;
     CHECK(!mh_v2_prepare_write(p, &res));
-    CHECK(strstr(res.msg, "Quantidade de discos invalida.") != NULL);
+    CHECK(strstr(res.msg, "Invalid number of Discs.") != NULL);
     p->cases[0].disc_count = 1;
     mh_project_clear(p);
     free(p);
@@ -1082,16 +1098,16 @@ static void test_failures(void)
     mh_str_copy(p->cases[0].discs[0]->cd_art_path, MH_PATH_MAX, tpath("clash_disc.art"));
     d = p->cases[0].discs[0];
     CHECK(!mh_v2_write_image_direct(&g_w, p, "", &res));
-    CHECK_STR(res.msg, "Caminho da imagem V2 invalido.");
+    CHECK_STR(res.msg, "Invalid V2 image path.");
     CHECK(!mh_v2_write_image_direct(&g_w, p, NULL, &res));
     CHECK(!mh_v2_write_image_direct(&g_w, p, d->files[1].path, &res));
-    CHECK_STR(res.msg, "A imagem substituiria um BIN de origem.");
+    CHECK_STR(res.msg, "The image would overwrite a source BIN file.");
     CHECK(!mh_v2_write_image_direct(&g_w, p, d->cue_path, &res));
-    CHECK_STR(res.msg, "A imagem substituiria um arquivo de origem.");
+    CHECK_STR(res.msg, "The image would overwrite a source file.");
     CHECK(!mh_v2_write_image_direct(&g_w, p, d->cd_art_path, &res));
-    CHECK_STR(res.msg, "A imagem substituiria um arquivo de origem.");
+    CHECK_STR(res.msg, "The image would overwrite a source file.");
     CHECK(!mh_v2_write_image_direct(&g_w, p, p->cases[0].art_path, &res));
-    CHECK_STR(res.msg, "A imagem substituiria uma arte de origem.");
+    CHECK_STR(res.msg, "The image would overwrite a source art file.");
     {   /* the source files are untouched */
         MhDisc *chk = mh_cue_parse(d->cue_path);
         CHECK(chk && chk->nfiles == 2 && (chk->flags & MH_DF_STRUCT_OK));
@@ -1105,12 +1121,12 @@ static void test_failures(void)
         mh_str_copy(p->cases[0].art_path, MH_PATH_MAX, old);
         reset_progress();
         CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-        CHECK_STR(res.msg, "Case Art invalida.");
+        CHECK_STR(res.msg, "Invalid Case art.");
         mh_str_copy(p->cases[0].art_path, MH_PATH_MAX, tpath("clash_case.art"));
         write_file(tpath("baddisc.art"), small, sizeof small);
         mh_str_copy(d->cd_art_path, MH_PATH_MAX, tpath("baddisc.art"));
         CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-        CHECK_STR(res.msg, "Disc Art invalida.");
+        CHECK_STR(res.msg, "Invalid Disc art.");
         mh_str_copy(d->cd_art_path, MH_PATH_MAX, "");
         mh_str_copy(p->cases[0].art_path, MH_PATH_MAX, "");
     }
@@ -1120,15 +1136,15 @@ static void test_failures(void)
         p->has_menu_defaults = 1;
         memset(p->menu_defaults, 0x11, 64);
         CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-        CHECK_STR(res.msg, "O arquivo menu\\menu.bin e invalido ou excede a area reservada.");
+        CHECK_STR(res.msg, "The built-in menu is invalid or exceeds the reserved area.");
         p->has_menu_defaults = 0;
         w2.music_size = 0;
         CHECK(!mh_v2_write_image_direct(&w2, p, img, &res));
-        CHECK_STR(res.msg, "Musica Umbrella incorporada invalida.");
+        CHECK_STR(res.msg, "The built-in Umbrella music is invalid.");
         w2 = g_w;
         w2.music_size = MH_V2_MUSIC_MAX + 1;
         CHECK(!mh_v2_write_image_direct(&w2, p, img, &res));
-        CHECK_STR(res.msg, "Musica Umbrella incorporada invalida.");
+        CHECK_STR(res.msg, "The built-in Umbrella music is invalid.");
         w2 = g_w;
         w2.env = NULL;
         CHECK(!mh_v2_write_image_direct(&w2, p, img, &res));
@@ -1179,7 +1195,7 @@ static void test_card_standin(void)
     /* another card (or the same one with a different size) does not match the resume point */
     reset_progress();
     CHECK(!mh_v2_write_handle_direct(&g_w, p, &bd->io, 7, NULL, bd->size + 512, &res));
-    CHECK_STR(res.msg, "O destino nao corresponde ao ponto de retomada. Reconecte o mesmo SD ou restaure a imagem usada nesta sessao.");
+    CHECK_STR(res.msg, "The target does not match the resume point. Reconnect the same card or restore the image used in this session.");
     /* a different disk number: the discs are written again from the BINs */
     reset_progress();
     CHECK(mh_v2_write_handle_direct(&g_w, p, &bd->io, 9, NULL, bd->size, &res) && res.ok);
@@ -1254,7 +1270,7 @@ static void test_loaded_disc_analysis(void)
     CHECK(mh_v2_load_image(img, cache, &g_env, q, &vres));
     d = q->cases[0].discs[0];
     CHECK(d->kind == MH_DISC_KIND_V2_IMAGE && d->total_sectors == 900 + 150);
-    CHECK(mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg) && strcmp(msg, "Disco RAW verificado com sucesso.") == 0);
+    CHECK(mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg) && strcmp(msg, "RAW Disc verified successfully.") == 0);
     CHECK(mh_v2_check_disc_source(&g_w, d));
     CHECK(d->verified == 1 && (d->verify_issues & 0x10) == 0 && (d->verify_issues & 0x20) == 0);
     CHECK(d->crc32 == d->verify_crc32 && memcmp(d->sha1, d->verify_sha1, 20) == 0);
@@ -1267,24 +1283,24 @@ static void test_loaded_disc_analysis(void)
     poke(img, raw + 10 * 0xa00 + 100, 0xa5);
     CHECK(mh_v2_check_disc_source(&g_w, d));
     CHECK(d->verify_issues & 0x10);
-    CHECK(strstr(d->verify_text, "Os dados no cartao nao conferem com o registro do disco.\r\n") != NULL);
+    CHECK(strstr(d->verify_text, "The data on the card does not match the Disc record.\r\n") != NULL);
     CHECK(!mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg));
-    CHECK_STR(msg, "CRC32/SHA-1 do disco divergem dos valores gravados no V2.");
+    CHECK_STR(msg, "The Disc CRC32/SHA-1 differs from the values stored in the V2 library.");
     /* a byte in the zero padding of a slot */
     poke(img, raw + 20 * 0xa00 + 0x940, 1);
     CHECK(!mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg));
-    CHECK_STR(msg, "O padding RAW de um setor nao esta zerado.");
+    CHECK_STR(msg, "The RAW padding of a sector is not zeroed.");
     CHECK(!mh_v2_check_disc_source(&g_w, d) || (d->verify_issues & 0x20));
     /* writing the damaged disc to another image is refused by the padding test of the stream */
     {
         MhV2Result r2;
         CHECK(!mh_v2_write_image_direct(&g_w, q, tpath("ana2.img"), &r2));
-        CHECK(rd_fail_text(&r2, "Gravacao nao iniciada. Case: ") || rd_fail_text(&r2, "Gravacao interrompida."));
+        CHECK(rd_fail_text(&r2, "Write not started. Case: ") || rd_fail_text(&r2, "Write interrupted."));
     }
     /* a disc without RAW source cannot be verified */
     d->v2_raw_blocks = 0;
     CHECK(!mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg));
-    CHECK_STR(msg, "Este disco nao possui uma origem RAW V2 verificavel.");
+    CHECK_STR(msg, "This Disc has no verifiable V2 RAW source.");
     mh_project_clear(p);
     mh_project_clear(q);
     free(p);
@@ -1320,7 +1336,7 @@ static void test_max_discs(void)
     CHECK(n == 256);
     reset_progress();
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
-    CHECK_STR(res.msg, "A V2 aceita no maximo 256 discos.");
+    CHECK_STR(res.msg, "V2 supports at most 256 Discs.");
     CHECK(file_size(img) <= 0x500000 || 1);
     /* the first 256 discs are accepted by the estimate (sparse files only) */
     p->cases[256 / 5].disc_count = 1; /* drop the 257th */
@@ -1342,7 +1358,7 @@ static void test_empty_project_and_small_target(void)
     /* a target smaller than the fixed zone */
     CHECK(mh_io_open(&io, img, MH_IO_RDWR, true, NULL));
     CHECK(!mh_v2_write_handle_direct(&g_w, p, &io, -1, img, 0x4fffff, &res));
-    CHECK_STR(res.msg, "Os jogos nao cabem no destino selecionado.");
+    CHECK_STR(res.msg, "The games do not fit on the selected target.");
     mh_io_close(&io);
     CHECK(mh_v2_validate_image(img, NULL, &vres) && vres.ok); /* refused before the target was touched */
     mh_project_clear(p);
@@ -1359,7 +1375,7 @@ static void test_texts(void)
     uint64_t est;
 
     CHECK(!mh_v2_all_ready(p, &obs, msg, sizeof msg) && !obs);
-    CHECK_STR(msg, "Adicione ao menos um jogo antes de gravar.");
+    CHECK_STR(msg, "Add at least one game before writing.");
     make_synth("txt", 600, 100, false, 15, cue);
     project_add(p, cue, 256);
     d = p->cases[0].discs[0];
@@ -1373,7 +1389,7 @@ static void test_texts(void)
     {
         char want[1024];
         snprintf(want, sizeof want,
-                 "Gravacao nao iniciada. Case: %s\r\nDisco 1\r\nNota um\r\nNota dois\r\n\r\nUltima verificacao: Texto da verificacao\r\nCUE: txt.cue",
+                 "Write not started. Case: %s\r\nDisc 1\r\nNota um\r\nNota dois\r\n\r\nLast verification: Texto da verificacao\r\nCUE: txt.cue",
                  p->cases[0].title);
         CHECK_STR(msg, want);
     }
@@ -1384,38 +1400,38 @@ static void test_texts(void)
     CHECK(!mh_v2_all_ready(p, &obs, msg, sizeof msg));
     {
         char want[256];
-        snprintf(want, sizeof want, "Gravacao nao iniciada. Case: %s\r\nDisco 1", p->cases[0].title);
+        snprintf(want, sizeof want, "Write not started. Case: %s\r\nDisc 1", p->cases[0].title);
         CHECK_STR(msg, want);
     }
     p->cases[0].discs[0] = d;
     d->status = MH_DISC_STATUS_OK;
 
     r = mh_v2_write_precheck(p, false, true, true, 3, 1ull << 40, &est);
-    CHECK(r && strncmp(r, "GRAVACAO BLOQUEADA: o banco incorporado", 39) == 0);
+    CHECK(r && strncmp(r, "WRITE BLOCKED: the built-in", 27) == 0);
     r = mh_v2_write_precheck(p, true, false, true, 3, 1ull << 40, &est);
-    CHECK_STR(r, "GRAVACAO BLOQUEADA: o banco externo auditado de cheats precisa permanecer em database\\cheats ao lado do Manager.");
-    CHECK_STR(mh_v2_write_precheck(p, true, true, false, 3, 1ull << 40, &est), "Selecione um cartao SD.");
+    CHECK_STR(r, "WRITE BLOCKED: the audited external cheat database must stay in the database/cheats folder next to the app.");
+    CHECK_STR(mh_v2_write_precheck(p, true, true, false, 3, 1ull << 40, &est), "Select an SD card.");
     p->card_loaded = 1;
     p->device = 4;
     CHECK_STR(mh_v2_write_precheck(p, true, true, true, 3, 1ull << 40, &est),
-              "Este projeto foi carregado de outro cartao. Selecione o mesmo PhysicalDrive para aplicar as alteracoes.");
+              "This project was loaded from another card. Select the same disk to apply the changes.");
     p->card_loaded = 0;
-    CHECK_STR(mh_v2_write_precheck(p, true, true, true, 3, 0x500000, &est), "Os jogos nao cabem no cartao selecionado.");
+    CHECK_STR(mh_v2_write_precheck(p, true, true, true, 3, 0x500000, &est), "The games do not fit on the selected card.");
     CHECK(mh_v2_write_precheck(p, true, true, true, 3, 1ull << 40, &est) == NULL && est > 0x500000);
 
-    mh_v2_write_confirm_text(p, "disk3", "Modelo X", "", 123456789, msg, sizeof msg);
+    mh_v2_write_confirm_text(p, "disk3", "Model X", "", 123456789, msg, sizeof msg);
     CHECK_STR(msg,
-              "O cartao inteiro sera preparado diretamente como PSXRAW V2.\r\n\r\ndisk3\r\nModelo: Modelo X\r\nSerial: nao informado\r\nCases: 1  |  Discos: 1\r\nEspaco RAW final aproximado: 117.7 MB\r\nDiscos novos preparados na inclusao; discos ja gravados serao preservados.\r\n\r\nATENCAO: escolher o PhysicalDrive errado pode apagar outro dispositivo.");
+              "The whole card will be prepared directly as PSXRAW V2.\r\n\r\ndisk3\r\nModel: Model X\r\nSerial: not provided\r\nCases: 1  |  Discs: 1\r\nApproximate final RAW size: 117.7 MB\r\nNew Discs were prepared when added; Discs already written will be preserved.\r\n\r\nWARNING: choosing the wrong disk can erase another device.");
     p->card_loaded = 1;
     mh_v2_write_confirm_text(p, "disk3", "M", "S1", 1024, msg, sizeof msg);
-    CHECK(strncmp(msg, "As alteracoes serao aplicadas diretamente no cartao PSXRAW V2. Os dados RAW dos jogos preservados permanecerao nos mesmos LBAs.\r\n\r\ndisk3\r\n", strlen("As alteracoes serao aplicadas diretamente no cartao PSXRAW V2. Os dados RAW dos jogos preservados permanecerao nos mesmos LBAs.\r\n\r\ndisk3\r\n")) == 0);
+    CHECK(strncmp(msg, "The changes will be applied directly to the PSXRAW V2 card. The RAW data of preserved games will stay at the same LBAs.\r\n\r\ndisk3\r\n", strlen("The changes will be applied directly to the PSXRAW V2 card. The RAW data of preserved games will stay at the same LBAs.\r\n\r\ndisk3\r\n")) == 0);
     CHECK(strstr(msg, "Serial: S1") != NULL);
     mh_v2_write_done_text(2, 3, 0x500000, msg, sizeof msg);
-    CHECK_STR(msg, "Operacao concluida diretamente no SD.\r\n\r\nCases: 2\r\nDiscos: 3\r\nTamanho RAW utilizado: 5.0 MB\r\n\r\nO cartao e PSXRAW e nao possui arquivos visiveis no Windows. Nao formate o cartao.");
-    mh_v2_write_failure_text("Falha X", false, msg, sizeof msg);
-    CHECK_STR(msg, "Falha X\r\n\r\nMantenha o Manager aberto. Reconecte o mesmo destino e reaplique: os discos azuis ja concluidos serao aproveitados. A biblioteca precisa ser finalizada antes do uso no console.");
-    mh_v2_write_failure_text("Falha X", true, msg, sizeof msg);
-    CHECK_STR(msg, "Cancelado. Mantenha o Manager aberto e reaplique para retomar os discos pendentes.");
+    CHECK_STR(msg, "Operation completed directly on the card.\r\n\r\nCases: 2\r\nDiscs: 3\r\nRAW size used: 5.0 MB\r\n\r\nThe card is PSXRAW and has no files visible in Finder. Do not format the card.");
+    mh_v2_write_failure_text("Failure X", false, msg, sizeof msg);
+    CHECK_STR(msg, "Failure X\r\n\r\nKeep the app open. Reconnect the same target and apply again: Discs already finished (shown in blue) will be reused. The library must be finalized before you use the card in the console.");
+    mh_v2_write_failure_text("Failure X", true, msg, sizeof msg);
+    CHECK_STR(msg, "Cancelled. Keep the app open and apply again to resume the pending Discs.");
     mh_project_clear(p);
     free(p);
 }
@@ -1434,12 +1450,12 @@ static void test_admission(void)
     /* cheap admission */
     CHECK(mh_v2_manager_admit(&g_w, d, false, NULL, NULL));
     CHECK(d->verified == 0 && d->verified_aux == 1 && d->status == MH_DISC_STATUS_NOTE);
-    CHECK_STR(d->verify_text, "Verificacao completa desativada. A gravacao ainda confirmara os dados no SD.");
+    CHECK_STR(d->verify_text, "Full verification is turned off. The write will still confirm the data on the card.");
     /* full admission: declined observations reject the disc */
     CHECK(!mh_v2_manager_admit(&g_w, d, true, NULL, NULL));
     CHECK(d->verified == 1 && d->verify_issues != 0 && d->verify_accepted == 0);
-    CHECK(strstr(d->verify_text, "Nao foi possivel confirmar o ID do jogo.\r\n") != NULL);
-    CHECK(strstr(d->verify_text, "O disco difere da versao conhecida; pode ser uma modificacao.\r\n") != NULL);
+    CHECK(strstr(d->verify_text, "Could not confirm the game ID.\r\n") != NULL);
+    CHECK(strstr(d->verify_text, "The Disc differs from the known version; it may be a modification.\r\n") != NULL);
     CHECK(mh_v2_manager_admit(&g_w, d, true, yes, NULL));
     CHECK(d->verify_accepted == d->verify_issues && d->status == MH_DISC_STATUS_NOTE);
     CHECK(d->verify_crc32 != 0);
@@ -1454,14 +1470,14 @@ static void test_admission(void)
     /* a BIN that changed size is noticed by the cheap admission */
     truncate_file(bin, (off_t)file_size(bin) - 2352);
     CHECK(!mh_v2_admit_disc_without_full_check(d));
-    CHECK_STR(d->verify_text, "Um BIN esta ausente ou mudou de tamanho.");
+    CHECK_STR(d->verify_text, "A BIN file is missing or changed size.");
     unlink(bin);
     CHECK(!mh_v2_admit_disc_without_full_check(d));
     d->status = MH_DISC_STATUS_ERROR;
     CHECK(!mh_v2_admit_disc_without_full_check(d));
-    CHECK_STR(d->verify_text, "CUE/BIN incompleto ou invalido.");
+    CHECK_STR(d->verify_text, "Incomplete or invalid CUE/BIN.");
     CHECK(!mh_v2_check_disc_source(&g_w, d));
-    CHECK_STR(d->verify_text, "Estrutura incompleta: forneca o CUE e todos os BINs legiveis.");
+    CHECK_STR(d->verify_text, "Incomplete structure: provide the CUE and all readable BIN files.");
     mh_v2_verification_issue_text(d);
     mh_disc_free(d);
     (void)msg;

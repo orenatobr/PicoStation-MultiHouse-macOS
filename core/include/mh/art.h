@@ -97,15 +97,14 @@ uint8_t *mh_art_make_case600(const uint8_t *tpl, size_t tpl_size, const uint8_t 
                              uint32_t w, uint32_t h);
 
 /* Whole pipeline from an in-memory source image to a .art image. False on failure with the
- * original Portuguese message in err ("Falha ao montar a imagem na case padrao.", ...). */
+ * original Portuguese message in err ("Failed to compose the image on the default Case.", ...). */
 bool mh_art_build(const MhArt *a, MhArtKind kind, const uint8_t *bgra, uint32_t w, uint32_t h,
                   uint8_t out[MH_ART_FILE_SIZE], char *err, size_t err_n);
 
 /* orig: generate (and art_generate_plain/case/disc). Loads src with the loader, builds the
  * art and writes it to dst. Returns false and fills err with the original text on failure
- * ("Nao foi possivel carregar PNG, JPG, BMP, GIF ou TIFF pelo GDI+.", "Memoria
- * insuficiente.", "Falha ao montar a imagem na case padrao.", "Falha ao montar o disco
- * padrao.", "Falha ao escrever o arquivo ART."). err may be NULL. */
+ * ("Could not load the image. Supported formats: PNG, JPG, BMP, GIF and TIFF.", "Not enough
+ * memory.", "Failed to compose the image on the default Case.", "Failed to compose the image on the default disc.", "Failed to write the ART file."). err may be NULL. */
 bool mh_art_generate(const MhArt *a, MhArtKind kind, const char *src, const char *dst,
                      char *err, size_t err_n);
 static inline bool mh_art_generate_case(const MhArt *a, const char *s, const char *d, char *e,
@@ -124,7 +123,7 @@ void mh_art_custom_name(bool is_case, const char *serial, unsigned case_no, char
 /* orig: make_custom_art, after the file picker. src is the picked file, dst the target path.
  * A .art source (case-insensitive extension) must be exactly 10240 bytes and is copied
  * (mh_copy_file_safe); anything else goes through mh_art_generate_disc/case. Failure texts:
- * "O arquivo ART precisa ter exatamente 10.240 bytes." or the generate error. */
+ * "The ART file must be exactly 10,240 bytes." or the generate error. */
 bool mh_art_import(const MhArt *a, bool is_case, const char *src, const char *dst, char *err,
                    size_t err_n);
 

@@ -7,8 +7,8 @@
 #include "mh/menu.h"
 
 const char *const MH_MENU_THEMES[3] = {"PS One (Slim)", "PlayStation (Fat)", "Umbrella"};
-const char *const MH_MENU_LANGUAGES[3] = {"Portugues", "English", "Espanol"};
-const char *const MH_MENU_VISUALS[2] = {"Lista", "Carrossel"};
+const char *const MH_MENU_LANGUAGES[3] = {"Portuguese", "English", "Spanish"};
+const char *const MH_MENU_VISUALS[2] = {"List", "Carousel"};
 
 static const char kMagic[16] = {'P', 'S', 'T', '_', 'D', 'E', 'F', 'A', 'U', 'L', 'T', 'S', '_', 'V', '1', '!'};
 

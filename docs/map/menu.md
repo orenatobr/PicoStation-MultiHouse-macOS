@@ -1,5 +1,7 @@
 # Module `menu`: the PicoStation boot menu image and its defaults
 
+> Note: the user-visible texts quoted here were translated to EN-US after the port. The Portuguese originals below are kept as the reverse-engineering record; docs/i18n/base-disc-art-menu-platform.md lists the strings deliberately left untranslated.
+
 Header `core/include/mh/menu.h`, code `core/src/menu/{menu_iso.c,menu_defaults.c}`, tests `core/tests/test_menu.c`.
 Buffers in, buffers out: no project struct is touched; the disc module owns `g` (the 0x40 byte record
 copy at 0x140e7e5f0 and its "present" flag at 0x140e7e630).

@@ -122,23 +122,23 @@ static void test_parse_v5(void)
     expect_lines("  # c\n; c2\n\n  " V5 "\t7003C1FA F7FF   \n\n3005E9CC 0001\n\n", "7003C1FA F7FF/3005E9CC 0001");
     expect_lines(V5 "9003C1FA F7FF\n31000000 0001\n70000000 0000\n80000000 0001", "9003C1FA F7FF/31000000 0001/70000000 0000/80000000 0001");
 
-    expect_error(NULL, "Informe os codigos GameShark.");
-    expect_error("", "A primeira linha deve informar MHDialect.");
-    expect_error("   \n# only a comment\n", "A primeira linha deve informar MHDialect.");
-    expect_error("8005E9CC 03E8\n", "A primeira linha deve ser MHDialect=V5ORIG_BANK_V01 ou MHDialect=GAMESHARK_CLASSIC_V1.");
-    expect_error("MHDialect=FOO\n", "MHDialect aceitos: V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.");
-    expect_error("MHDialect=V5ORIG_BANK_V01 \nMHDialect=V5ORIG_BANK_V01\n", "Informe MHDialect apenas uma vez, antes dos codigos.");
-    expect_error(V5 CL "8005E9CC 03E8", "Informe MHDialect apenas uma vez, antes dos codigos.");
-    expect_error(V5 "8005E9CC 03E8\nMHDialect=V5ORIG_BANK_V01\n", "Informe MHDialect apenas uma vez, antes dos codigos.");
-    expect_error(V5 "8005E9CC 03E\n", "Linha de cheat invalida. Use XXXXXXXX XXXX.");
-    expect_error(V5 "hello\n", "Linha de cheat invalida. Use XXXXXXXX XXXX.");
-    expect_error(V5 "// c\n", "Linha de cheat invalida. Use XXXXXXXX XXXX.");
+    expect_error(NULL, "Enter the GameShark codes.");
+    expect_error("", "The first line must set MHDialect.");
+    expect_error("   \n# only a comment\n", "The first line must set MHDialect.");
+    expect_error("8005E9CC 03E8\n", "The first line must be MHDialect=V5ORIG_BANK_V01 or MHDialect=GAMESHARK_CLASSIC_V1.");
+    expect_error("MHDialect=FOO\n", "Accepted MHDialect values: V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.");
+    expect_error("MHDialect=V5ORIG_BANK_V01 \nMHDialect=V5ORIG_BANK_V01\n", "Enter MHDialect only once, before the codes.");
+    expect_error(V5 CL "8005E9CC 03E8", "Enter MHDialect only once, before the codes.");
+    expect_error(V5 "8005E9CC 03E8\nMHDialect=V5ORIG_BANK_V01\n", "Enter MHDialect only once, before the codes.");
+    expect_error(V5 "8005E9CC 03E\n", "Invalid cheat line. Use XXXXXXXX XXXX.");
+    expect_error(V5 "hello\n", "Invalid cheat line. Use XXXXXXXX XXXX.");
+    expect_error(V5 "// c\n", "Invalid cheat line. Use XXXXXXXX XXXX.");
     /* no program at all, or lines outside 30/31/70/80/90 */
-    expect_error(V5, "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.");
-    expect_error(V5 "D00A1234 0001\n800A1238 0002", "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.");
-    expect_error(V5 "50000204 0001\n300A1000 0010", "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.");
-    expect_error(V5 "7003C1FA F7FF", "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado."); /* prefix at the end */
-    expect_error(V5 "20000000 0001", "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.");
+    expect_error(V5, "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.");
+    expect_error(V5 "D00A1234 0001\n800A1238 0002", "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.");
+    expect_error(V5 "50000204 0001\n300A1000 0010", "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.");
+    expect_error(V5 "7003C1FA F7FF", "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime."); /* prefix at the end */
+    expect_error(V5 "20000000 0001", "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.");
 
     /* 255 lines are accepted, the 256th is not */
     {
@@ -152,12 +152,12 @@ static void test_parse_v5(void)
         CHECK(lines[254 * 6 + 3] == 0xFE && lines[254 * 6 + 5] == 0xFE);
         free(lines);
         mh_wbuf_puts(&w, "30FFFFFF 0000\n");
-        expect_error(mh_wbuf_cstr(&w), "Linha de cheat invalida. Use XXXXXXXX XXXX.");
+        expect_error(mh_wbuf_cstr(&w), "Invalid cheat line. Use XXXXXXXX XXXX.");
         mh_wbuf_free(&w);
     }
     /* a dialect line of 64 or more characters is just a (bad) code line */
-    expect_error(V5 "MHDialect=V5ORIG_BANK_V01                                            \n", "Informe MHDialect apenas uma vez, antes dos codigos."); /* trailing blanks are trimmed first */
-    expect_error(V5 "MHDialect=V5ORIG_BANK_V01                                      x\n", "Linha de cheat invalida. Use XXXXXXXX XXXX.");
+    expect_error(V5 "MHDialect=V5ORIG_BANK_V01                                            \n", "Enter MHDialect only once, before the codes."); /* trailing blanks are trimmed first */
+    expect_error(V5 "MHDialect=V5ORIG_BANK_V01                                      x\n", "Invalid cheat line. Use XXXXXXXX XXXX.");
 }
 
 static void test_parse_classic(void)
@@ -180,39 +180,39 @@ static void test_parse_classic(void)
     expect_lines(CL "D10A0000 0001\n50000104 0001\n300A1000 0010\n800A2000 0003",
                  "900A0000 0001/300A1000 0010/800A2000 0003");
 
-    expect_error(CL, "Nenhuma linha GameShark classica foi informada.");
-    expect_error(CL "300A1234 0063\nMHDialect=V5ORIG_BANK_V01\n", "Informe MHDialect apenas uma vez, antes dos codigos.");
-    expect_error(CL "30001234 0001", "Escrita 30/80 usa endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "30200000 0001", "Escrita 30/80 usa endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "800A1235 0001", "Escrita 30/80 usa endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "801FFFFF 0001", "Escrita 30/80 usa endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "31000000 0001", "Opcode classico 0x31 nao tem conversao exata comprovada para o GameShark V5 original. Use apenas 30, 80, D0, D1 e 50+30/80.");
-    expect_error(CL "C00A1234 0001", "Opcode classico 0xC0 nao tem conversao exata comprovada para o GameShark V5 original. Use apenas 30, 80, D0, D1 e 50+30/80.");
-    expect_error(CL "E00A1234 0001", "Opcode classico 0xE0 nao tem conversao exata comprovada para o GameShark V5 original. Use apenas 30, 80, D0, D1 e 50+30/80.");
-    expect_error(CL "D00A1235 0001\n800A1238 0002", "Condicao D0/D1 usa endereco invalido ou desalinhado para o V5.");
-    expect_error(CL "D0000000 0001\n300A1238 0002", "Condicao D0/D1 usa endereco invalido ou desalinhado para o V5.");
-    expect_error(CL "D01FFFFF 0001\n300A1238 0002", "Condicao D0/D1 usa endereco invalido ou desalinhado para o V5.");
-    expect_error(CL "D00A1234 0001", "Condicao D0/D1 sem acao seguinte.");
-    expect_error(CL "D00A1234 0001\nD00A1238 0002\n300A1238 0002", "Cadeias de duas ou mais condicoes classicas nao possuem conversao exata para o V5 original.");
-    expect_error(CL "D00A1234 0001\nD10A1238 0002\n300A1238 0002", "Cadeias de duas ou mais condicoes classicas nao possuem conversao exata para o V5 original.");
-    expect_error(CL "D00A1234 0001\nE30A1238 0002\n300A1238 0002", "Cadeias de duas ou mais condicoes classicas nao possuem conversao exata para o V5 original.");
-    expect_error(CL "D00A1234 0001\nE00A1238 0002\n300A1238 0002", "Cadeias de duas ou mais condicoes classicas nao possuem conversao exata para o V5 original.");
-    expect_error(CL "D00A1234 0001\n310A1238 0002", "D0/D1 classico precisa controlar uma escrita 30/80 ou um slide 50 + 30/80.");
-    expect_error(CL "D00A1234 0001\n800A1239 0002", "A escrita controlada por D0/D1 usa endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "D00A1234 0001\n30000000 0002", "A escrita controlada por D0/D1 usa endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
+    expect_error(CL, "No classic GameShark lines were entered.");
+    expect_error(CL "300A1234 0063\nMHDialect=V5ORIG_BANK_V01\n", "Enter MHDialect only once, before the codes.");
+    expect_error(CL "30001234 0001", "A 30/80 write uses an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "30200000 0001", "A 30/80 write uses an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "800A1235 0001", "A 30/80 write uses an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "801FFFFF 0001", "A 30/80 write uses an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "31000000 0001", "Classic opcode 0x31 has no proven exact conversion to the original GameShark V5. Use only 30, 80, D0, D1 and 50+30/80.");
+    expect_error(CL "C00A1234 0001", "Classic opcode 0xC0 has no proven exact conversion to the original GameShark V5. Use only 30, 80, D0, D1 and 50+30/80.");
+    expect_error(CL "E00A1234 0001", "Classic opcode 0xE0 has no proven exact conversion to the original GameShark V5. Use only 30, 80, D0, D1 and 50+30/80.");
+    expect_error(CL "D00A1235 0001\n800A1238 0002", "The D0/D1 condition uses an invalid or misaligned address for V5.");
+    expect_error(CL "D0000000 0001\n300A1238 0002", "The D0/D1 condition uses an invalid or misaligned address for V5.");
+    expect_error(CL "D01FFFFF 0001\n300A1238 0002", "The D0/D1 condition uses an invalid or misaligned address for V5.");
+    expect_error(CL "D00A1234 0001", "The D0/D1 condition has no following action.");
+    expect_error(CL "D00A1234 0001\nD00A1238 0002\n300A1238 0002", "Chains of two or more classic conditions have no exact conversion to the original V5.");
+    expect_error(CL "D00A1234 0001\nD10A1238 0002\n300A1238 0002", "Chains of two or more classic conditions have no exact conversion to the original V5.");
+    expect_error(CL "D00A1234 0001\nE30A1238 0002\n300A1238 0002", "Chains of two or more classic conditions have no exact conversion to the original V5.");
+    expect_error(CL "D00A1234 0001\nE00A1238 0002\n300A1238 0002", "Chains of two or more classic conditions have no exact conversion to the original V5.");
+    expect_error(CL "D00A1234 0001\n310A1238 0002", "A classic D0/D1 must control a 30/80 write or a 50 + 30/80 slide.");
+    expect_error(CL "D00A1234 0001\n800A1239 0002", "The write controlled by a D0/D1 uses an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "D00A1234 0001\n30000000 0002", "The write controlled by a D0/D1 uses an address outside the safe V5 RAM, or a misaligned WRITE16.");
     /* 50 slides */
-    expect_error(CL "50000204 0001", "Codigo 50 incompleto: falta a linha seguidora 30/80.");
-    expect_error(CL "50010204 0001\n300A1000 0010", "Formato 50 classico invalido. Use 5000NNSS VVVV.");
-    expect_error(CL "50000004 0001\n300A1000 0010", "Codigo 50 com contagem zero nao e importado.");
-    expect_error(CL "50000204 0001\n310A1000 0010", "GAMESHARK_CLASSIC_V1: o seguidor do 50 precisa ser 30 ou 80.");
-    expect_error(CL "50000204 0001\n30001000 0010", "Codigo 50 gera endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "50000210 0001\n301FFFF0 0010", "Codigo 50 gera endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "50000203 0001\n800A1000 0010", "Codigo 50 gera endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "50000201 0001\n800A1001 0010", "Codigo 50 gera endereco fora da RAM segura do V5 ou WRITE16 desalinhado.");
-    expect_error(CL "D00A1000 0001\n50000204 0001\n300A1000 0010", "Condicao D0/D1 + slide 50 altera o proprio endereco testado; essa sequencia nao possui conversao exata para o V5.");
-    expect_error(CL "D00A1000 0001\n50000204 0001\n300A1001 0010", "Condicao D0/D1 + slide 50 altera o proprio endereco testado; essa sequencia nao possui conversao exata para o V5.");
-    expect_error(CL "D00A1000 0001\n50000204 0001\n800A1000 0010", "Condicao D0/D1 + slide 50 altera o proprio endereco testado; essa sequencia nao possui conversao exata para o V5.");
-    expect_error(CL "D00A1004 0001\n50000204 0001\n300A1000 0010", "Condicao D0/D1 + slide 50 altera o proprio endereco testado; essa sequencia nao possui conversao exata para o V5."); /* second step lands on it */
+    expect_error(CL "50000204 0001", "Code 50 is incomplete: the following 30/80 line is missing.");
+    expect_error(CL "50010204 0001\n300A1000 0010", "Invalid classic 50 format. Use 5000NNSS VVVV.");
+    expect_error(CL "50000004 0001\n300A1000 0010", "Code 50 with a zero count is not imported.");
+    expect_error(CL "50000204 0001\n310A1000 0010", "GAMESHARK_CLASSIC_V1: the line after a 50 must be 30 or 80.");
+    expect_error(CL "50000204 0001\n30001000 0010", "Code 50 produces an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "50000210 0001\n301FFFF0 0010", "Code 50 produces an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "50000203 0001\n800A1000 0010", "Code 50 produces an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "50000201 0001\n800A1001 0010", "Code 50 produces an address outside the safe V5 RAM, or a misaligned WRITE16.");
+    expect_error(CL "D00A1000 0001\n50000204 0001\n300A1000 0010", "A D0/D1 condition plus a 50 slide changes the address it tests; this sequence has no exact V5 conversion.");
+    expect_error(CL "D00A1000 0001\n50000204 0001\n300A1001 0010", "A D0/D1 condition plus a 50 slide changes the address it tests; this sequence has no exact V5 conversion.");
+    expect_error(CL "D00A1000 0001\n50000204 0001\n800A1000 0010", "A D0/D1 condition plus a 50 slide changes the address it tests; this sequence has no exact V5 conversion.");
+    expect_error(CL "D00A1004 0001\n50000204 0001\n300A1000 0010", "A D0/D1 condition plus a 50 slide changes the address it tests; this sequence has no exact V5 conversion."); /* second step lands on it */
     /* write8 below, write16 two below, or beyond the tested pair: no overlap */
     expect_lines(CL "D00A1000 0001\n50000204 0001\n300A0FFF 0010", "700A1000 0001/300A0FFF 0010/700A1000 0001/300A1003 0011");
     expect_lines(CL "D00A1000 0001\n50000204 0001\n800A0FFE 0010", "700A1000 0001/800A0FFE 0010/700A1000 0001/800A1002 0011");
@@ -234,7 +234,7 @@ static void test_parse_classic(void)
         mh_wbuf_puts(&w, CL);
         for (int i = 0; i < 253; i++) mh_wbuf_printf(&w, "300A%04X 0001\n", i * 2);
         mh_wbuf_puts(&w, "50000302 0001\n300B0000 0010\n");
-        expect_error(mh_wbuf_cstr(&w), "A conversao do GameShark classico excede 255 linhas V5.");
+        expect_error(mh_wbuf_cstr(&w), "The classic GameShark conversion exceeds 255 V5 lines.");
         mh_wbuf_free(&w);
     }
     {
@@ -250,7 +250,7 @@ static void test_parse_classic(void)
         mh_wbuf_free(&w);
         mh_wbuf_init(&w);
         mh_wbuf_puts(&w, CL "300C0000 0001\nD00B0000 0001\n50008004 0001\n300A1000 0010\n");
-        expect_error(mh_wbuf_cstr(&w), "A conversao do GameShark classico excede 255 linhas V5.");
+        expect_error(mh_wbuf_cstr(&w), "The classic GameShark conversion exceeds 255 V5 lines.");
         mh_wbuf_free(&w);
         /* 127 condition pairs and a write: 255 lines from 255 source lines */
         mh_wbuf_init(&w);
@@ -261,7 +261,7 @@ static void test_parse_classic(void)
         free(lines);
         /* one more source line is one too many */
         mh_wbuf_puts(&w, "300C0002 0001\n");
-        expect_error(mh_wbuf_cstr(&w), "Linha de cheat invalida. Use XXXXXXXX XXXX.");
+        expect_error(mh_wbuf_cstr(&w), "Invalid cheat line. Use XXXXXXXX XXXX.");
         mh_wbuf_free(&w);
     }
 }
@@ -366,15 +366,15 @@ static void test_import(void)
     mh_cheat_profile_free(p);
     p = mh_cheat_profile_new();
     CHECK(!imp(p, "c.txt", "MHDialect=V5ORIG_BANK_V01", &n));
-    CHECK_STR(err, "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.");
+    CHECK_STR(err, "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.");
     CHECK(n == 0 && p->count == 0);
     CHECK(!imp(p, "c.txt", NULL, &n));
-    CHECK_STR(err, "O arquivo deve comecar com MHDialect=V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.");
+    CHECK_STR(err, "The file must start with MHDialect=V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.");
     CHECK(!imp(p, "c.txt", "MHDialect=OTHER", &n));
-    CHECK_STR(err, "Selecione GameShark classico ou V5/Xploder para importar.");
+    CHECK_STR(err, "Select classic GameShark or V5/Xploder to import.");
     put_s("d.txt", CL "[X]\n300A0000 0001\n");
     CHECK(!imp(p, "d.txt", "MHDialect=V5ORIG_BANK_V01", &n));
-    CHECK_STR(err, "A versao indicada no arquivo difere da escolhida na importacao.");
+    CHECK_STR(err, "The version in the file differs from the one chosen for the import.");
     CHECK(imp(p, "d.txt", "mhdialect=gameshark_classic_v1", &n) && n == 1 && p->entries[0].flags == 0x45);
     mh_cheat_profile_free(p);
 
@@ -400,39 +400,39 @@ static void test_import(void)
     mh_cheat_profile_free(p);
 
     /* errors */
-    imp_err(V5 "#activation=ON\n[X]\n8005E9CC 03E8\n", NULL, "Metadados do DuckStation nao sao importados. Use [NOME] e codigos literais de hardware.");
-    imp_err(V5 "[X]\n#type=cheat\n", NULL, "Metadados do DuckStation nao sao importados. Use [NOME] e codigos literais de hardware.");
-    imp_err(V5 "#GROUP=a\n", NULL, "Metadados do DuckStation nao sao importados. Use [NOME] e codigos literais de hardware.");
-    imp_err("", NULL, "Nao foi possivel ler o TXT/CHT.");
-    imp_err("# only a comment\n", NULL, "O arquivo nao informa MHDialect.");
-    imp_err("8005E9CC 03E8\n", NULL, "O arquivo deve comecar com MHDialect=V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.");
-    imp_err("[X]\n8005E9CC 03E8\n", NULL, "O arquivo deve comecar com MHDialect=V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.");
-    imp_err("MHDialect=NOPE\n", NULL, "MHDialect aceitos: V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.");
-    imp_err(V5 V5, NULL, "MHDialect deve aparecer uma unica vez, antes do primeiro cheat.");
-    imp_err(V5 "[X]\n" V5, NULL, "MHDialect deve aparecer uma unica vez, antes do primeiro cheat.");
-    imp_err(V5 "[X]\n8005E9CC 03E8\n" V5, NULL, "MHDialect deve aparecer uma unica vez, antes do primeiro cheat.");
-    imp_err(V5, "MHDialect=V5ORIG_BANK_V01", "Nenhum cheat foi importado.");
-    imp_err(V5, NULL, "Nenhum cheat foi importado.");
-    imp_err(V5 "[X]\n[Y]\n", NULL, "Nenhum cheat foi importado."); /* names without codes */
-    imp_err(V5 "[X\n8005E9CC 03E8\n", NULL, "Cabecalho [NOME] incompleto.");
-    imp_err(V5 "[]\n8005E9CC 03E8\n", NULL, "Cabecalho [NOME] incompleto.");
-    imp_err(V5 "[   ]\n8005E9CC 03E8\n", NULL, "Nome de cheat vazio.");
-    imp_err(V5 "[!!!]\n8005E9CC 03E8\n", NULL, "Um bloco de codigos nao possui nome."); /* normalises to nothing */
-    imp_err(V5 "[X]\nfoo bar\n", NULL, "Instrucao ou parametro nao reconhecido. Use [NOME] e linhas XXXXXXXX YYYY.");
-    imp_err(V5 "[X]\nsome=value\n", NULL, "Existe metadata nao suportada no arquivo. Nenhum cheat foi importado parcialmente.");
-    imp_err(V5 "Name=Value\n8005E9CC 03E8\n", NULL, "Existe metadata nao suportada no arquivo. Nenhum cheat foi importado parcialmente.");
-    imp_err(V5 "Some Name\n8005E9CC 03E8\n80E9CC001 0000\n", NULL, "Instrucao ou parametro nao reconhecido. Use [NOME] e linhas XXXXXXXX YYYY.");
-    imp_err(V5 "[X]\n8005E9CC 03E8\n8005E9D0 03E\n", NULL, "Instrucao ou parametro nao reconhecido. Use [NOME] e linhas XXXXXXXX YYYY.");
-    imp_err(V5 "[X]\n8005E9CC 03E8 8005E9D0 03E8\n", NULL, "Instrucao ou parametro nao reconhecido. Use [NOME] e linhas XXXXXXXX YYYY.");
-    imp_err(V5 "[X]\nD00A1234 0001\n", NULL, "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.");
-    imp_err(V5 "[X]\n8005E9CC 03E8\n[X2]\n7003C1FA F7FF\n", NULL, "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.");
+    imp_err(V5 "#activation=ON\n[X]\n8005E9CC 03E8\n", NULL, "DuckStation metadata is not imported. Use [NAME] and literal hardware codes.");
+    imp_err(V5 "[X]\n#type=cheat\n", NULL, "DuckStation metadata is not imported. Use [NAME] and literal hardware codes.");
+    imp_err(V5 "#GROUP=a\n", NULL, "DuckStation metadata is not imported. Use [NAME] and literal hardware codes.");
+    imp_err("", NULL, "Could not read the TXT/CHT file.");
+    imp_err("# only a comment\n", NULL, "The file does not set MHDialect.");
+    imp_err("8005E9CC 03E8\n", NULL, "The file must start with MHDialect=V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.");
+    imp_err("[X]\n8005E9CC 03E8\n", NULL, "The file must start with MHDialect=V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.");
+    imp_err("MHDialect=NOPE\n", NULL, "Accepted MHDialect values: V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.");
+    imp_err(V5 V5, NULL, "MHDialect must appear only once, before the first cheat.");
+    imp_err(V5 "[X]\n" V5, NULL, "MHDialect must appear only once, before the first cheat.");
+    imp_err(V5 "[X]\n8005E9CC 03E8\n" V5, NULL, "MHDialect must appear only once, before the first cheat.");
+    imp_err(V5, "MHDialect=V5ORIG_BANK_V01", "No cheats were imported.");
+    imp_err(V5, NULL, "No cheats were imported.");
+    imp_err(V5 "[X]\n[Y]\n", NULL, "No cheats were imported."); /* names without codes */
+    imp_err(V5 "[X\n8005E9CC 03E8\n", NULL, "Incomplete [NAME] header.");
+    imp_err(V5 "[]\n8005E9CC 03E8\n", NULL, "Incomplete [NAME] header.");
+    imp_err(V5 "[   ]\n8005E9CC 03E8\n", NULL, "Empty cheat name.");
+    imp_err(V5 "[!!!]\n8005E9CC 03E8\n", NULL, "A code block has no name."); /* normalises to nothing */
+    imp_err(V5 "[X]\nfoo bar\n", NULL, "Unrecognized instruction or parameter. Use [NAME] and XXXXXXXX YYYY lines.");
+    imp_err(V5 "[X]\nsome=value\n", NULL, "The file has unsupported metadata. No cheat was partially imported.");
+    imp_err(V5 "Name=Value\n8005E9CC 03E8\n", NULL, "The file has unsupported metadata. No cheat was partially imported.");
+    imp_err(V5 "Some Name\n8005E9CC 03E8\n80E9CC001 0000\n", NULL, "Unrecognized instruction or parameter. Use [NAME] and XXXXXXXX YYYY lines.");
+    imp_err(V5 "[X]\n8005E9CC 03E8\n8005E9D0 03E\n", NULL, "Unrecognized instruction or parameter. Use [NAME] and XXXXXXXX YYYY lines.");
+    imp_err(V5 "[X]\n8005E9CC 03E8 8005E9D0 03E8\n", NULL, "Unrecognized instruction or parameter. Use [NAME] and XXXXXXXX YYYY lines.");
+    imp_err(V5 "[X]\nD00A1234 0001\n", NULL, "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.");
+    imp_err(V5 "[X]\n8005E9CC 03E8\n[X2]\n7003C1FA F7FF\n", NULL, "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.");
 
     /* file level problems */
     {
         char longline[700];
         memset(longline, 'x', 600);
         longline[600] = 0;
-        imp_err(V5 "# long\n", NULL, "Nenhum cheat foi importado.");
+        imp_err(V5 "# long\n", NULL, "No cheats were imported.");
         {
             MhWbuf w;
             mh_wbuf_init(&w);
@@ -448,27 +448,27 @@ static void test_import(void)
             mh_wbuf_puts(&w, V5 "#");
             for (int i = 0; i < 511; i++) mh_wbuf_putc(&w, 'c');
             mh_wbuf_puts(&w, "\n[X]\n8005E9CC 03E8\n"); /* 512: refused */
-            imp_err(mh_wbuf_cstr(&w), NULL, "A importacao foi cancelada: existe uma linha maior que 511 caracteres.");
+            imp_err(mh_wbuf_cstr(&w), NULL, "Import canceled: a line is longer than 511 characters.");
             mh_wbuf_free(&w);
         }
     }
     p = mh_cheat_profile_new();
     CHECK(!imp(p, "does-not-exist.txt", NULL, &n));
-    CHECK_STR(err, "Nao foi possivel ler o TXT/CHT.");
+    CHECK_STR(err, "Could not read the TXT/CHT file.");
     put("nul.txt", V5 "[X]\n8005E9CC 03E8\n\0", strlen(V5 "[X]\n8005E9CC 03E8\n") + 1);
     CHECK(!imp(p, "nul.txt", NULL, &n));
-    CHECK_STR(err, "Nao foi possivel ler o TXT/CHT.");
+    CHECK_STR(err, "Could not read the TXT/CHT file.");
     put("bad8.txt", V5 "[\xff]\n", strlen(V5 "[X]\n"));
     CHECK(!imp(p, "bad8.txt", NULL, &n));
-    CHECK_STR(err, "Nao foi possivel ler o TXT/CHT.");
+    CHECK_STR(err, "Could not read the TXT/CHT file.");
     put("bom.txt", "\xef\xbb\xbf", 3);
     CHECK(!imp(p, "bom.txt", NULL, &n));
-    CHECK_STR(err, "Nao foi possivel ler o TXT/CHT.");
+    CHECK_STR(err, "Could not read the TXT/CHT file.");
     put("odd16.txt", "\xff\xfeM\0H\0x", 7);
     CHECK(!imp(p, "odd16.txt", NULL, &n));
-    CHECK_STR(err, "Nao foi possivel ler o TXT/CHT.");
+    CHECK_STR(err, "Could not read the TXT/CHT file.");
     CHECK(!mh_cheat_profile_import_text(NULL, path_of("a.txt"), &n, err, sizeof err));
-    CHECK_STR(err, "Nao foi possivel ler o TXT/CHT.");
+    CHECK_STR(err, "Could not read the TXT/CHT file.");
     CHECK(mh_cheat_profile_import_text(p, path_of("a.txt"), &n, err, sizeof err) && n == 2);
     mh_cheat_profile_free(p);
 
@@ -476,7 +476,7 @@ static void test_import(void)
     p = mh_cheat_profile_new();
     for (int i = 0; i < 98; i++) CHECK(mh_cheat_profile_add_custom(p, "N", one, 1, 0));
     CHECK(!imp(p, "a.txt", NULL, &n));
-    CHECK_STR(err, "A importacao excede os limites do perfil ou cria conflito entre codigos C0.");
+    CHECK_STR(err, "The import exceeds the profile limits or creates a conflict between C0 codes.");
     CHECK(p->count == 98 && n == 0);
     mh_cheat_profile_free(p);
 }
@@ -515,7 +515,7 @@ static void test_export(void)
     CHECK(mh_read_entire_file(path_of("empty.cht"), &raw, &rn) && rn == 2 + 27 * 2);
     free(raw);
     CHECK(!mh_cheat_profile_export_text(p, "/nonexistent-dir/x.cht", err, sizeof err));
-    CHECK_STR(err, "Nao foi possivel exportar o perfil.");
+    CHECK_STR(err, "Could not export the profile.");
     mh_cheat_profile_free(p);
     mh_cheat_profile_free(q);
 }

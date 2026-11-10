@@ -82,7 +82,7 @@ int main(void) {
         preview_art(dst, nm);
     }
     assert(!mh_art_generate(&a, MH_ART_PLAIN, "/nonexistent/none.png", dst, err, sizeof err));
-    assert(!strcmp(err, "Nao foi possivel carregar PNG, JPG, BMP, GIF ou TIFF pelo GDI+."));
+    assert(!strcmp(err, "Could not load the image. Supported formats: PNG, JPG, BMP, GIF and TIFF."));
 
     /* the full 600x600 case render, and the template itself */
     uint8_t *c = mh_art_make_case600(a.case_template, a.case_template_size, img, 256, 256);

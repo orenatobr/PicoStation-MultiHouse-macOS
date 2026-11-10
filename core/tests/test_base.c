@@ -53,11 +53,11 @@ static void test_common(void)
     mh_err_set(buf, 3, "\xC3\xA9\xC3\xA9"); /* two 2-byte chars into 3 bytes: only one fits */
     CHECK_STR(buf, "\xC3\xA9");
     mh_err_set(NULL, 0, "x"); /* must not crash */
-    mh_err_fail_code(&e, "Falha", 5);
+    mh_err_fail_code(&e, "Failed", 5);
     CHECK(e.ok == 0 && e.code == 5);
-    CHECK_STR(e.msg, "Falha (erro Win32 5)");
-    mh_err_fail_code(&e, "Falha", 0);
-    CHECK_STR(e.msg, "Falha");
+    CHECK_STR(e.msg, "Failed (error 5)");
+    mh_err_fail_code(&e, "Failed", 0);
+    CHECK_STR(e.msg, "Failed");
     mh_err_clear(&e);
     CHECK(e.ok == 1 && e.msg[0] == 0);
 
@@ -562,7 +562,7 @@ static void test_collect(void)
         CHECK(!mh_import_collect(c, p) && c->failed);
         {
             char want[1300];
-            snprintf(want, sizeof want, "Nao foi possivel acessar:\r\n%s", p);
+            snprintf(want, sizeof want, "Could not access:\r\n%s", p);
             CHECK_STR(c->error, want);
         }
         CHECK(!mh_import_collect(c, root)); /* once failed, everything is refused */
@@ -595,7 +595,7 @@ static void test_collect(void)
         }
         snprintf(p, sizeof p, "%s/many", root);
         CHECK(!mh_import_collect(c, p) && c->failed && c->count == 256);
-        CHECK(strncmp(c->error, "O lote excede 256 CUEs. Divida a importacao em lotes menores.\r\n", 63) == 0);
+        CHECK(strncmp(c->error, "The batch exceeds 256 CUEs. Split the import into smaller batches.\r\n", 68) == 0);
         mh_collect_free(c);
     }
     {   /* depth: 33 nested folders (limit is 32 levels below the dropped folder) */
@@ -610,7 +610,7 @@ static void test_collect(void)
         }
         snprintf(p, sizeof p, "%s/deep", root);
         CHECK(!mh_import_collect(c, p));
-        CHECK(strncmp(c->error, "Limite de subpastas excedido:\r\n", 31) == 0);
+        CHECK(strncmp(c->error, "Subfolder limit exceeded:\r\n", 27) == 0);
         mh_collect_free(c);
     }
     {   /* a folder exactly 32 levels deep is accepted */

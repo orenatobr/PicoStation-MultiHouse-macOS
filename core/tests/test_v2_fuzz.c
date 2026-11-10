@@ -303,7 +303,7 @@ int main(void)
         if (lok) {
             unsigned ci, k;
             nload++;
-            if (strstr(lr.msg, "recuperada pelas tabelas fixas")) nrec++;
+            if (strstr(lr.msg, "recovered from the fixed tables")) nrec++;
             mh_v2_hydrate_project(proj, &env);
             for (ci = 0; ci < MH_PROJECT_MAX_CASES; ci++) {
                 const MhCase *cs = &proj->cases[ci];

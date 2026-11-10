@@ -96,7 +96,7 @@ bool mh_clear_backup_gpt_tail(MhIo *io, uint64_t dev_size, uint64_t used, char *
     uint8_t blk[512], zero[512];
     if (lim >= sz) return true;
     if (!mh_v2_read_retry(io, sz - 512, blk, sizeof blk)) {
-        mh_str_copy(err, errn, "Nao foi possivel verificar o ultimo setor do SD.");
+        mh_str_copy(err, errn, "Could not check the last sector of the card.");
         return false;
     }
     if (memcmp(blk, MH_V2_GPT_SIG, 8) != 0) return true;
@@ -107,13 +107,13 @@ bool mh_clear_backup_gpt_tail(MhIo *io, uint64_t dev_size, uint64_t used, char *
     for (off = start; off < sz; off += 512) {
         unsigned i;
         if (!mh_v2_read_retry(io, off, blk, sizeof blk)) {
-            mh_str_copy(err, errn, "Falha ao ler a area do GPT de backup.");
+            mh_str_copy(err, errn, "Could not read the backup GPT area.");
             return false;
         }
         for (i = 0; i < 512; i++)
             if (blk[i]) {
                 if (!mh_sd_write_block_verified(io, off, zero)) {
-                    mh_str_copy(err, errn, "Falha ao remover um setor do GPT de backup com readback de 512 bytes.");
+                    mh_str_copy(err, errn, "Could not remove a backup GPT sector with a 512-byte read-back.");
                     return false;
                 }
                 break;
@@ -132,7 +132,7 @@ bool mh_v2_compare_region(MhIo *a, MhIo *b, uint64_t off, uint64_t len, MhProgre
     if (!b1 || !b2) {
         free(b1);
         free(b2);
-        mh_str_copy(err, errn, "Memoria insuficiente para verificar.");
+        mh_str_copy(err, errn, "Not enough memory to verify.");
         return false;
     }
     while (done < len) {
@@ -140,20 +140,21 @@ bool mh_v2_compare_region(MhIo *a, MhIo *b, uint64_t off, uint64_t len, MhProgre
         if (!mh_v2_read_retry(a, off + done, b1, n) || !mh_v2_read_retry(b, off + done, b2, n)) {
             free(b1);
             free(b2);
-            mh_str_copy(err, errn, "Leitura curta persistente no readback apos 8 tentativas no mesmo offset.");
+            mh_str_copy(err, errn, "Persistent short read during read-back after 8 attempts at the same offset.");
             return false;
         }
         if (memcmp(b1, b2, n) != 0) {
             free(b1);
             free(b2);
-            mh_str_copy(err, errn, "O readback do SD divergiu da imagem.");
+            mh_str_copy(err, errn, "The card read-back differs from the image.");
             return false;
         }
         done += n;
-        if (!mh_progress_report(prog, done + done_base, total, "Comparando SD byte a byte")) {
+        mh_v2_set_phase(prog, MH_V2_PHASE_VERIFYING_CARD, 0, 0);
+        if (!mh_progress_report(prog, done + done_base, total, "Comparing the card byte by byte")) {
             free(b1);
             free(b2);
-            mh_str_copy(err, errn, "Verificacao cancelada.");
+            mh_str_copy(err, errn, "Verification cancelled.");
             return false;
         }
         mh_progress_yield();
@@ -175,7 +176,7 @@ bool mh_v2_verify_committed_headers(const MhDiskInfo *disk, const MhDiskOpts *op
     e2[0] = 0;
     dev = mh_blockdev_open_read(disk, opts, e2, sizeof e2);
     if (!dev) {
-        mh_str_copy(err, errn, "Os headers foram gravados, mas o SD nao pode ser reaberto para a verificacao final.");
+        mh_str_copy(err, errn, "The headers were written, but the card could not be reopened for the final verification.");
         return false;
     }
     ok = mh_v2_read_retry(&dev->io, 0, a, sizeof a) && mh_v2_read_retry(&dev->io, 0xa00, b, sizeof b);
@@ -184,8 +185,8 @@ bool mh_v2_verify_committed_headers(const MhDiskInfo *disk, const MhDiskOpts *op
         memcmp(a, expected, sizeof a) == 0)
         return true;
     mh_str_copy(err, errn,
-                "Os headers V2 mudaram depois de fechar e reabrir o SD. A operacao nao foi considerada segura; troque "
-                "o leitor USB.");
+                "The V2 headers changed after closing and reopening the card. The operation was not considered safe; replace "
+                "the USB reader.");
     return false;
 }
 
@@ -201,22 +202,22 @@ bool mh_sd_verify_image(const MhDiskInfo *disk, const MhDiskOpts *opts, const ch
     bool ok;
     if (err && errn) err[0] = 0;
     if (!mh_disk_identity_matches(disk, opts, &fresh)) {
-        mh_str_copy(err, errn, "O SD selecionado mudou ou nao e seguro.");
+        mh_str_copy(err, errn, "The selected card changed or is not safe.");
         return false;
     }
     if (!mh_io_open(&f, image, MH_IO_READ, false, NULL)) {
-        mh_str_copy(err, errn, "Imagem invalida ou maior que o SD.");
+        mh_str_copy(err, errn, "The image is invalid or larger than the card.");
         return false;
     }
     if (!mh_io_size(&f, &size) || fresh.size < size) {
-        mh_str_copy(err, errn, "Imagem invalida ou maior que o SD.");
+        mh_str_copy(err, errn, "The image is invalid or larger than the card.");
         mh_io_close(&f);
         return false;
     }
     e2[0] = 0;
     dev = mh_blockdev_open_read(disk, opts, e2, sizeof e2);
     if (!dev) {
-        mh_str_copy(err, errn, "Nao foi possivel abrir o SD para verificacao.");
+        mh_str_copy(err, errn, "Could not open the card for verification.");
         mh_io_close(&f);
         return false;
     }
@@ -241,28 +242,28 @@ bool mh_sd_write_image(const MhDiskInfo *disk, const MhDiskOpts *opts, const cha
 
     if (err && errn) err[0] = 0;
     if (!mh_disk_identity_matches(disk, opts, &fresh)) {
-        mh_str_copy(err, errn, "O SD mudou, foi removido ou falhou na verificacao de identidade.");
+        mh_str_copy(err, errn, "The card changed, was removed, or failed the identity check.");
         return false;
     }
     if (!mh_io_open(&f, image, MH_IO_READ, false, NULL)) {
-        mh_str_copy(err, errn, "A imagem e invalida ou nao cabe no SD.");
+        mh_str_copy(err, errn, "The image is invalid or does not fit on the card.");
         return false;
     }
     if (!mh_io_size(&f, &size) || size < 0x1400 || fresh.size < size) {
-        mh_str_copy(err, errn, "A imagem e invalida ou nao cabe no SD.");
+        mh_str_copy(err, errn, "The image is invalid or does not fit on the card.");
         mh_io_close(&f);
         return false;
     }
     if (!mh_v2_read_retry(&f, 0, first, sizeof first) || !mh_sd_v2_header_raw_valid(first) ||
         !mh_sd_v2_header_raw_valid(first + 0xa00) || memcmp(first, first + 0xa00, 0xa00) != 0) {
-        mh_str_copy(err, errn, "A imagem nao possui o par de headers V2 valido e identico.");
+        mh_str_copy(err, errn, "The image does not have a valid, identical pair of V2 headers.");
         mh_io_close(&f);
         return false;
     }
     e2[0] = 0;
     dev = mh_blockdev_open_write(disk, opts, e2, sizeof e2);
     if (!dev) {
-        mh_str_copy(err, errn, e2[0] ? e2 : "Execute como administrador e feche programas usando o SD.");
+        mh_str_copy(err, errn, e2[0] ? e2 : "Could not open the card for writing. Eject its volumes in Finder and close any app using it, then try again.");
         mh_io_close(&f);
         return false;
     }
@@ -274,53 +275,54 @@ bool mh_sd_write_image(const MhDiskInfo *disk, const MhDiskOpts *opts, const cha
 
     if (!mh_sd_invalidate_v2_header(&dev->io, 0)) {
         mh_str_copy(err, errn,
-                    "O leitor USB nao confirmou a invalidacao setorial do header A. Nenhum dado da imagem foi escrito.");
+                    "The USB reader did not confirm the sector-level invalidation of header A. No image data was written.");
         goto cleanup;
     }
     if (!mh_sd_invalidate_v2_header(&dev->io, 0xa00)) {
-        m = "A invalidacao do header B falhou e nao havia header anterior recuperavel. Troque o leitor USB.";
+        m = "Invalidating header B failed and there was no recoverable previous header. Replace the USB reader.";
         if (have_prev) {
             mh_sd_publish_v2_header(&dev->io, 0, prev);
-            m = "A invalidacao do header B falhou; o header A anterior foi restaurado. Troque o leitor USB.";
+            m = "Invalidating header B failed; the previous header A was restored. Replace the USB reader.";
         }
         mh_str_copy(err, errn, m);
         goto cleanup;
     }
     buf = malloc(0x40000);
     if (!buf) {
-        mh_str_copy(err, errn, "Memoria insuficiente.");
+        mh_str_copy(err, errn, "Not enough memory.");
         goto cleanup;
     }
     for (pos = 0x1400; pos < size;) {
         size_t n = size - pos > 0x40000 ? 0x40000 : (size_t)(size - pos);
         if (!mh_v2_read_retry(&f, pos, buf, n) || !mh_v2_write_retry(&dev->io, pos, buf, n)) {
-            mh_str_copy(err, errn, "Falha persistente durante a gravacao apos 8 tentativas no mesmo offset.");
+            mh_str_copy(err, errn, "Persistent failure while writing after 8 attempts at the same offset.");
             goto cleanup;
         }
         pos += n;
-        if (!mh_progress_report(prog, pos, size, "Gravando PSXRAW V2 no SD")) {
-            mh_str_copy(err, errn, "Gravacao cancelada. Os headers permaneceram invalidos.");
+        mh_v2_set_phase(prog, MH_V2_PHASE_WRITING_DISCS, 0, 0);
+        if (!mh_progress_report(prog, pos, size, "Writing PSXRAW V2 to the card")) {
+            mh_str_copy(err, errn, "Write cancelled. The headers stayed invalid.");
             goto cleanup;
         }
         mh_progress_yield();
     }
     if (!mh_v2_flush(&dev->io)) {
-        mh_str_copy(err, errn, "Falha ao confirmar os dados no SD.");
+        mh_str_copy(err, errn, "Could not confirm the data on the card.");
         goto cleanup;
     }
     if (!mh_v2_compare_region(&f, &dev->io, 0x1400, size - 0x1400, prog, 0x1400, size, err, errn)) goto cleanup;
     if (!mh_clear_backup_gpt_tail(&dev->io, fresh.size, size, err, errn)) goto cleanup;
     if (!mh_sd_publish_v2_header(&dev->io, 0xa00, first + 0xa00)) {
         mh_str_copy(err, errn,
-                    "O corpo foi relido, mas a publicacao setorial do header B falhou. O SD permaneceu sem commit.");
+                    "The body was read back, but the sector-level publication of header B failed. The card stayed uncommitted.");
         goto cleanup;
     }
     if (!mh_sd_publish_v2_header(&dev->io, 0, first)) {
         mh_str_copy(err, errn,
-                    "O header B esta valido, mas o header A falhou. O SD permanece recuperavel pelo backup B.");
+                    "Header B is valid, but header A failed. The card can still be recovered from backup B.");
         goto cleanup;
     }
-    mh_str_copy(err, errn, "SD gravado, relido e confirmado com headers B e A publicados setor a setor.");
+    mh_str_copy(err, errn, "Card written, read back and confirmed, with headers B and A published sector by sector.");
     ok = true;
 cleanup:
     free(buf);
@@ -344,13 +346,13 @@ bool mh_sd_quick_health(const MhDiskInfo *disk, const MhDiskOpts *opts, MhProgre
 
     if (out) memset(out, 0, sizeof *out);
     if (!mh_disk_identity_matches(disk, opts, &fresh)) {
-        if (out) mh_str_copy(out->text, sizeof out->text, "O cartao mudou ou nao esta mais conectado.");
+        if (out) mh_str_copy(out->text, sizeof out->text, "The card changed or is no longer connected.");
         return false;
     }
     e2[0] = 0;
     dev = mh_blockdev_open_read(disk, opts, e2, sizeof e2);
     if (!dev) {
-        if (out) mh_str_copy(out->text, sizeof out->text, "Nao foi possivel abrir o SD para leitura.");
+        if (out) mh_str_copy(out->text, sizeof out->text, "Could not open the card for reading.");
         return false;
     }
     b1 = malloc(0x100000);
@@ -393,11 +395,12 @@ bool mh_sd_quick_health(const MhDiskInfo *disk, const MhDiskOpts *opts, MhProgre
         }
         total += len * 2;
         if (memcmp(b1, b2, (size_t)len) != 0 && out) out->mismatches++;
-        if (!mh_progress_report(prog, r + 1, 4, "Teste de leitura do SD")) {
+        mh_v2_set_phase(prog, MH_V2_PHASE_VERIFYING_CARD, 0, 0);
+        if (!mh_progress_report(prog, r + 1, 4, "Card read test")) {
             free(b1);
             free(b2);
             mh_blockdev_close(dev);
-            if (out) mh_str_copy(out->text, sizeof out->text, "Teste cancelado.");
+            if (out) mh_str_copy(out->text, sizeof out->text, "Test cancelled.");
             return false;
         }
         mh_progress_yield();
@@ -415,11 +418,11 @@ bool mh_sd_quick_health(const MhDiskInfo *disk, const MhDiskOpts *opts, MhProgre
     }
     if (out->read_errors == 0 && out->mismatches == 0 && total != 0) {
         out->ok = 1;
-        mh_str_copy(out->text, sizeof out->text, "Leitura repetida aprovada em quatro regioes do SD.");
+        mh_str_copy(out->text, sizeof out->text, "Repeated reads passed in four regions of the card.");
     } else {
         out->ok = 0;
         mh_str_copy(out->text, sizeof out->text,
-                    "O teste encontrou erro persistente de leitura ou divergencia entre releituras.");
+                    "The test found a persistent read error or a mismatch between repeated reads.");
     }
     return out->ok != 0;
 }
@@ -462,7 +465,7 @@ bool mh_v2_confirm_resume_target(const MhProject *p, MhIo *io, int32_t disk_numb
                 if (res) {
                     res->ok = 0;
                     mh_str_copy(res->msg, sizeof res->msg,
-                                "O destino nao corresponde ao ponto de retomada. Reconecte o mesmo SD usado nesta sessao.");
+                                "The target does not match the resume point. Reconnect the same card used in this session.");
                 }
                 return false;
             }
@@ -488,18 +491,18 @@ bool mh_sd_write_project_direct(const MhDiskInfo *disk, const MhDiskOpts *opts, 
     if (res) memset(res, 0, sizeof *res);
     memset(&local, 0, sizeof local);
     if (!disk || !project || !mh_disk_identity_matches(disk, opts, &fresh)) {
-        mh_str_copy(err, errn, "O SD mudou, foi removido ou falhou na verificacao de identidade.");
+        mh_str_copy(err, errn, "The card changed, was removed, or failed the identity check.");
         return false;
     }
     need = mh_v2_estimate_project_bytes_for_target(project, (int32_t)disk->number, NULL);
     if (need == 0 || fresh.size < need) {
-        mh_str_copy(err, errn, "Os jogos nao cabem no cartao selecionado ou os extents RAW sao invalidos.");
+        mh_str_copy(err, errn, "The games do not fit on the selected card, or the RAW extents are invalid.");
         return false;
     }
     e2[0] = 0;
     dev = mh_blockdev_open_write(disk, opts, e2, sizeof e2);
     if (!dev) {
-        mh_str_copy(err, errn, e2[0] ? e2 : "Execute como administrador e feche programas usando o SD.");
+        mh_str_copy(err, errn, e2[0] ? e2 : "Could not open the card for writing. Eject its volumes in Finder and close any app using it, then try again.");
         return false;
     }
     if (!mh_v2_prepare_write(project, &local) ||
@@ -509,15 +512,15 @@ bool mh_sd_write_project_direct(const MhDiskInfo *disk, const MhDiskOpts *opts, 
     }
     if (!mh_clear_backup_gpt_tail(&dev->io, fresh.size, need, err, errn)) goto cleanup;
     if (!mh_v2_write_handle_direct(w, project, &dev->io, (int32_t)disk->number, NULL, fresh.size, &local)) {
-        mh_str_copy(err, errn, local.msg[0] ? local.msg : "Falha na gravacao direta do V2.");
+        mh_str_copy(err, errn, local.msg[0] ? local.msg : "Direct V2 write failed.");
         goto cleanup;
     }
     if (!mh_v2_read_retry(&dev->io, 0, hdr, sizeof hdr) || !mh_sd_v2_header_raw_valid(hdr)) {
-        mh_str_copy(err, errn, "O header A nao estava valido imediatamente antes de fechar o SD.");
+        mh_str_copy(err, errn, "Header A was not valid just before closing the card.");
         goto cleanup;
     }
-    m = verify_full ? "SD atualizado diretamente e verificado integralmente."
-                    : "SD atualizado em modo rapido; metadados e headers foram confirmados.";
+    m = verify_full ? "Card updated directly and fully verified."
+                    : "Card updated in quick mode; metadata and headers were confirmed.";
     mh_str_copy(err, errn, m);
     if (res) *res = local;
     mh_v2_flush(&dev->io);
@@ -526,7 +529,12 @@ cleanup:
     if (committed) mh_blockdev_refresh_properties(dev);
     mh_blockdev_close(dev);
     if (!committed) return false;
+    if (w) mh_v2_set_phase(w->prog, MH_V2_PHASE_VERIFYING_CARD, 0, 0);
     ok = mh_v2_verify_committed_headers(disk, opts, hdr, err, errn);
     if (!ok && res) res->ok = 0;
+    if (ok && w && w->prog) {
+        mh_v2_set_phase(w->prog, MH_V2_PHASE_DONE, 0, 0);
+        mh_progress_report(w->prog, 1, 1, "Done");
+    }
     return ok;
 }

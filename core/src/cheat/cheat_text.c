@@ -192,7 +192,7 @@ static inline uint32_t addr24(const uint8_t *l) { return ((uint32_t)l[1] << 16) 
 static inline int ram_ok(uint32_t a) { return a - 0x10000u < 0x1f0000u; }
 static inline int bad_write16(uint8_t op, uint32_t a) { return op == 0x80 && ((a & 1) || a == 0x1fffff); }
 
-#define E_255 "A conversao do GameShark classico excede 255 linhas V5."
+#define E_255 "The classic GameShark conversion exceeds 255 V5 lines."
 
 /* orig: classic_expand_slide.constprop.0 @0x140010910. `cond` is the D0/D1 line already turned
  * into the V5 prefix (op 70/90) when has_cond. Returns the error text or NULL; *consumed is the
@@ -206,16 +206,16 @@ static const char *expand_slide(const uint8_t *src, unsigned n, unsigned idx, ui
     uint8_t fop;
     uint32_t cur, cur24;
     uint64_t next;
-    if (!(idx + 1 < n)) return "Codigo 50 incompleto: falta a linha seguidora 30/80.";
+    if (!(idx + 1 < n)) return "Code 50 is incomplete: the following 30/80 line is missing.";
     l50 = src + (size_t)idx * 6;
     fol = src + (size_t)(idx + 1) * 6;
-    if (l50[0] != 0x50 || l50[1] != 0) return "Formato 50 classico invalido. Use 5000NNSS VVVV.";
+    if (l50[0] != 0x50 || l50[1] != 0) return "Invalid classic 50 format. Use 5000NNSS VVVV.";
     count = l50[2];
     step = l50[3];
     inc = (uint16_t)((l50[4] << 8) | l50[5]);
-    if (count == 0) return "Codigo 50 com contagem zero nao e importado.";
+    if (count == 0) return "Code 50 with a zero count is not imported.";
     fop = fol[0];
-    if (fop != 0x80 && fop != 0x30) return "GAMESHARK_CLASSIC_V1: o seguidor do 50 precisa ser 30 ou 80.";
+    if (fop != 0x80 && fop != 0x30) return "GAMESHARK_CLASSIC_V1: the line after a 50 must be 30 or 80.";
     cur = cur24 = addr24(fol);
     val = (uint16_t)((fol[4] << 8) | fol[5]);
     next = cur;
@@ -227,8 +227,8 @@ static const char *expand_slide(const uint8_t *src, unsigned n, unsigned idx, ui
             if (has_cond) {
                 uint32_t a = ((uint32_t)cond[1] << 16) | ((uint32_t)cond[2] << 8) | cond[3];
                 if (a <= (uint32_t)(fop == 0x80) + cur && cur <= a + 1)
-                    return "Condicao D0/D1 + slide 50 altera o proprio endereco testado; essa sequencia nao "
-                           "possui conversao exata para o V5.";
+                    return "A D0/D1 condition plus a 50 slide changes the address it tests; this sequence has no "
+                           "exact V5 conversion.";
                 if (*out_n > 0xfe) return E_255;
                 memcpy(dst + (size_t)*out_n * 6, cond, 6);
                 (*out_n)++;
@@ -247,13 +247,13 @@ static const char *expand_slide(const uint8_t *src, unsigned n, unsigned idx, ui
                 *consumed = 2;
                 return NULL;
             }
-            if (next > 0xffffff) return "Codigo 50 ultrapassa o espaco de endereco do PS1.";
+            if (next > 0xffffff) return "Code 50 goes past the PS1 address space.";
             cur = (uint32_t)next;
             cur24 = cur & 0xffffff;
             val = (uint16_t)(val + inc);
         } while (ram_ok(cur24));
     }
-    return "Codigo 50 gera endereco fora da RAM segura do V5 ou WRITE16 desalinhado.";
+    return "Code 50 produces an address outside the safe V5 RAM, or a misaligned WRITE16.";
 }
 
 /* Converts classic GameShark lines (30, 80, D0, D1, 50) to V5 lines. dst holds 255 lines. */
@@ -269,7 +269,7 @@ static const char *classic_to_v5(const uint8_t *src, unsigned n, uint8_t *dst, u
         uint32_t a = addr24(l);
         if (op == 0x30 || op == 0x80) {
             if (!ram_ok(a) || bad_write16(op, a))
-                return "Escrita 30/80 usa endereco fora da RAM segura do V5 ou WRITE16 desalinhado.";
+                return "A 30/80 write uses an address outside the safe V5 RAM, or a misaligned WRITE16.";
             if (*out_n > 0xfe) return E_255;
             memcpy(dst + (size_t)*out_n * 6, l, 6);
             (*out_n)++;
@@ -280,24 +280,24 @@ static const char *classic_to_v5(const uint8_t *src, unsigned n, uint8_t *dst, u
             idx += consumed;
         } else if (op != 0xd0 && op != 0xd1) {
             snprintf(msgbuf, msgn,
-                     "Opcode classico 0x%02X nao tem conversao exata comprovada para o GameShark V5 original. "
-                     "Use apenas 30, 80, D0, D1 e 50+30/80.",
+                     "Classic opcode 0x%02X has no proven exact conversion to the original GameShark V5. Use "
+                     "only 30, 80, D0, D1 and 50+30/80.",
                      op);
             return msgbuf;
         } else {
             const uint8_t *nl;
             uint8_t nop, prefix = op == 0xd0 ? 0x70 : 0x90;
-            if (a - 0x10000u > 0x1efffe || (a & 1)) return "Condicao D0/D1 usa endereco invalido ou desalinhado para o V5.";
-            if (idx + 1 >= n) return "Condicao D0/D1 sem acao seguinte.";
+            if (a - 0x10000u > 0x1efffe || (a & 1)) return "The D0/D1 condition uses an invalid or misaligned address for V5.";
+            if (idx + 1 >= n) return "The D0/D1 condition has no following action.";
             nl = src + (size_t)(idx + 1) * 6;
             nop = nl[0];
             if (nop == 0xd0 || nop == 0xd1 || (nop >= 0xe0 && nop <= 0xe3))
-                return "Cadeias de duas ou mais condicoes classicas nao possuem conversao exata para o V5 original.";
+                return "Chains of two or more classic conditions have no exact conversion to the original V5.";
             if (nop == 0x30 || nop == 0x80) {
                 uint32_t na = addr24(nl);
                 if (!ram_ok(na) || bad_write16(nop, na))
-                    return "A escrita controlada por D0/D1 usa endereco fora da RAM segura do V5 ou WRITE16 "
-                           "desalinhado.";
+                    return "The write controlled by a D0/D1 uses an address outside the safe V5 RAM, or a misaligned "
+                           "WRITE16.";
                 if (*out_n >= 0xff || *out_n + 1 == 0xff) return E_255;
                 dst[(size_t)*out_n * 6] = prefix;
                 memcpy(dst + (size_t)*out_n * 6 + 1, l + 1, 5);
@@ -305,7 +305,7 @@ static const char *classic_to_v5(const uint8_t *src, unsigned n, uint8_t *dst, u
                 *out_n += 2;
                 idx += 2;
             } else if (nop != 0x50) {
-                return "D0/D1 classico precisa controlar uma escrita 30/80 ou um slide 50 + 30/80.";
+                return "A classic D0/D1 must control a 30/80 write or a 50 + 30/80 slide.";
             } else {
                 uint8_t cond[6];
                 memcpy(cond, l, 6);
@@ -317,7 +317,7 @@ static const char *classic_to_v5(const uint8_t *src, unsigned n, uint8_t *dst, u
         }
     }
     if (*out_n == 0 || *out_n > 0xff || !ch_lines_structure_ok(dst, *out_n))
-        return "A conversao classica nao produziu um programa V5 valido.";
+        return "The classic conversion did not produce a valid V5 program.";
     return NULL;
 }
 
@@ -336,12 +336,12 @@ static int parse_codes_w(const chw *text, uint8_t **out, uint16_t *nout, char *e
     if (nout) *nout = 0;
     if (err && errn) err[0] = 0;
     if (!text) {
-        set_err(err, errn, "Informe os codigos GameShark.");
+        set_err(err, errn, "Enter the GameShark codes.");
         return 0;
     }
     lines = mh_alloc(0x5fa);
     if (!lines) {
-        set_err(err, errn, "Memoria insuficiente.");
+        set_err(err, errn, "Not enough memory.");
         return 0;
     }
     while (text[pos]) {
@@ -361,12 +361,12 @@ static int parse_codes_w(const chw *text, uint8_t **out, uint16_t *nout, char *e
             if (weq_i(buf, DIALECT_V5)) d = 1;
             else if (weq_i(buf, DIALECT_CLASSIC)) d = 2;
             else if (wstarts_i(buf, "MHDialect=")) {
-                msg = "MHDialect aceitos: V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.";
+                msg = "Accepted MHDialect values: V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.";
                 goto fail;
             }
             if (d) {
                 if (dialect) {
-                    msg = "Informe MHDialect apenas uma vez, antes dos codigos.";
+                    msg = "Enter MHDialect only once, before the codes.";
                     goto fail;
                 }
                 dialect = d;
@@ -374,22 +374,22 @@ static int parse_codes_w(const chw *text, uint8_t **out, uint16_t *nout, char *e
             }
         }
         if (!dialect) {
-            msg = "A primeira linha deve ser MHDialect=V5ORIG_BANK_V01 ou MHDialect=GAMESHARK_CLASSIC_V1.";
+            msg = "The first line must be MHDialect=V5ORIG_BANK_V01 or MHDialect=GAMESHARK_CLASSIC_V1.";
             goto fail;
         }
         if (count > 0xfe || !parse_line_w(text + s, len, lines + (size_t)count * 6)) {
-            msg = "Linha de cheat invalida. Use XXXXXXXX XXXX.";
+            msg = "Invalid cheat line. Use XXXXXXXX XXXX.";
             goto fail;
         }
         count++;
     }
     if (!dialect) {
-        msg = "A primeira linha deve informar MHDialect.";
+        msg = "The first line must set MHDialect.";
         goto fail;
     }
     if (dialect == 1) {
         if (count == 0 || !ch_lines_structure_ok(lines, count)) {
-            msg = "V5ORIG_BANK_V01 aceita somente os tipos nativos 30/31/70/80/90 do runtime auditado.";
+            msg = "V5ORIG_BANK_V01 accepts only the native types 30/31/70/80/90 of the audited runtime.";
             goto fail;
         }
         *out = lines;
@@ -397,14 +397,14 @@ static int parse_codes_w(const chw *text, uint8_t **out, uint16_t *nout, char *e
         return 1;
     }
     if (count == 0) {
-        msg = "Nenhuma linha GameShark classica foi informada.";
+        msg = "No classic GameShark lines were entered.";
         goto fail;
     }
     {
         uint8_t *conv = mh_alloc(0x5fa);
         unsigned cn = 0;
         if (!conv) {
-            msg = "Memoria insuficiente para converter GameShark classico.";
+            msg = "Not enough memory to convert classic GameShark.";
             goto fail;
         }
         msg = classic_to_v5(lines, count, conv, &cn, msgbuf, sizeof msgbuf);
@@ -432,7 +432,7 @@ int mh_cheat_parse_codes(const char *text, uint8_t **lines, uint16_t *nlines, ch
         if (!w) {
             if (lines) *lines = NULL;
             if (nlines) *nlines = 0;
-            set_err(err, errn, "Memoria insuficiente.");
+            set_err(err, errn, "Not enough memory.");
             return 0;
         }
     }
@@ -499,7 +499,7 @@ int mh_cheat_profile_export_text(const MhCheatProfile *p, const char *path, char
         }
     }
     mh_wbuf_free(&b);
-    if (!ok) set_err(err, errn, "Nao foi possivel exportar o perfil.");
+    if (!ok) set_err(err, errn, "Could not export the profile.");
     return ok;
 }
 
@@ -526,7 +526,7 @@ static int import_flush(Importer *im, const chw *name, char *err, size_t errn)
     w_to_utf8(name, name8, sizeof name8);
     mh_normalize_title(name8, norm, MH_CHEAT_NAME_MAX);
     if (!norm[0]) {
-        set_err(err, errn, "Um bloco de codigos nao possui nome.");
+        set_err(err, errn, "A code block has no name.");
         return 0;
     }
     w_to_utf8(im->dialect, dialect8, sizeof dialect8);
@@ -551,7 +551,7 @@ static int import_flush(Importer *im, const chw *name, char *err, size_t errn)
     ok = mh_cheat_profile_add_entry(im->work, &e);
     mh_free(lines);
     if (!ok) {
-        set_err(err, errn, "A importacao excede os limites do perfil ou cria conflito entre codigos C0.");
+        set_err(err, errn, "The import exceeds the profile limits or creates a conflict between C0 codes.");
         return 0;
     }
     im->imported++;
@@ -668,11 +668,11 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
     if (imported) *imported = 0;
     if (err && errn) err[0] = 0;
     if (dialect_arg && !(mh_str_icmp(dialect_arg, DIALECT_V5) == 0 || mh_str_icmp(dialect_arg, DIALECT_CLASSIC) == 0)) {
-        set_err(err, errn, "Selecione GameShark classico ou V5/Xploder para importar.");
+        set_err(err, errn, "Select classic GameShark or V5/Xploder to import.");
         return 0;
     }
     if (!p || !path || !(text = read_text_file(path))) {
-        set_err(err, errn, "Nao foi possivel ler o TXT/CHT.");
+        set_err(err, errn, "Could not read the TXT/CHT file.");
         return 0;
     }
     memset(&im, 0, sizeof im);
@@ -680,7 +680,7 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
     im.work = mh_cheat_profile_clone(p);
     if (!im.work) {
         mh_free(text);
-        set_err(err, errn, "Memoria insuficiente para importar cheats.");
+        set_err(err, errn, "Not enough memory to import cheats.");
         return 0;
     }
     name[0] = 0;
@@ -699,7 +699,7 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
         while (text[e] && text[e] != '\n' && text[e] != '\r') e++;
         len = e - pos;
         if (len > 0x1ff) {
-            msg = "A importacao foi cancelada: existe uma linha maior que 511 caracteres.";
+            msg = "Import canceled: a line is longer than 511 characters.";
             goto fail;
         }
         memcpy(line, text + pos, len * sizeof(chw));
@@ -711,31 +711,31 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
         wtrim(line);
 
         if (wstarts_i(line, "#activation=") || wstarts_i(line, "#type=") || wstarts_i(line, "#group=")) {
-            msg = "Metadados do DuckStation nao sao importados. Use [NOME] e codigos literais de hardware.";
+            msg = "DuckStation metadata is not imported. Use [NAME] and literal hardware codes.";
             goto fail;
         }
         if (line[0] == 0 || line[0] == '#' || line[0] == ';' || (line[0] == '/' && line[1] == '/')) {
             if (more) continue;
             if (!dialect_set) {
-                msg = "O arquivo nao informa MHDialect.";
+                msg = "The file does not set MHDialect.";
                 goto fail;
             }
             goto final;
         }
         if (wstarts_i(line, "MHDialect=")) {
             if (hdr_seen || im.code.len != 0 || (!arg_pending && dialect_set)) {
-                msg = "MHDialect deve aparecer uma unica vez, antes do primeiro cheat.";
+                msg = "MHDialect must appear only once, before the first cheat.";
                 goto fail;
             }
             if (!weq_i(line, DIALECT_V5) && !weq_i(line, DIALECT_CLASSIC)) {
-                msg = "MHDialect aceitos: V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.";
+                msg = "Accepted MHDialect values: V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.";
                 goto fail;
             }
             if (arg_pending) {
                 char l8[0x200 * 4];
                 w_to_utf8(line, l8, sizeof l8);
                 if (mh_str_icmp(l8, dialect_arg) != 0) {
-                    msg = "A versao indicada no arquivo difere da escolhida na importacao.";
+                    msg = "The version in the file differs from the one chosen for the import.";
                     goto fail;
                 }
             }
@@ -749,13 +749,13 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
             goto final;
         }
         if (!dialect_set) {
-            msg = "O arquivo deve comecar com MHDialect=V5ORIG_BANK_V01 ou GAMESHARK_CLASSIC_V1.";
+            msg = "The file must start with MHDialect=V5ORIG_BANK_V01 or GAMESHARK_CLASSIC_V1.";
             goto fail;
         }
         if (line[0] == '[') {
             size_t l = wlen(line);
             if (l < 3 || line[l - 1] != ']') {
-                msg = "Cabecalho [NOME] incompleto.";
+                msg = "Incomplete [NAME] header.";
                 goto fail;
             }
             if (!import_flush(&im, name, err, errn)) goto fail_msg_set;
@@ -763,7 +763,7 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
             wcopy(name, 0x80, line + 1);
             wtrim(name);
             if (name[0] == 0) {
-                msg = "Nome de cheat vazio.";
+                msg = "Empty cheat name.";
                 goto fail;
             }
             hdr_seen = 1;
@@ -782,7 +782,7 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
                         mh_free(sw);
                     }
                     if (name[0] == 0) {
-                        msg = "Memoria insuficiente durante a importacao.";
+                        msg = "Not enough memory during the import.";
                         goto fail;
                     }
                 }
@@ -790,7 +790,7 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
                     char l8[0x200 * 4];
                     w_to_utf8(line, l8, sizeof l8);
                     if (!mh_wbuf_puts(&im.code, l8) || !mh_wbuf_puts(&im.code, "\r\n")) {
-                        msg = "Memoria insuficiente durante a importacao.";
+                        msg = "Not enough memory during the import.";
                         goto fail;
                     }
                 }
@@ -852,7 +852,7 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
                             wcopy(name, 0x80, namebuf);
                             w_to_utf8(codebuf, l8, sizeof l8);
                             if (!mh_wbuf_puts(&im.code, l8) || !mh_wbuf_puts(&im.code, "\r\n")) {
-                                msg = "Memoria insuficiente durante a importacao.";
+                                msg = "Not enough memory during the import.";
                                 goto fail;
                             }
                             hdr_seen = 0;
@@ -865,11 +865,11 @@ int mh_cheat_profile_import_text_dialect(MhCheatProfile *p, const char *path, co
                     for (size_t k = 0; line[k]; k++)
                         if (line[k] == '=') eq = 1;
                     if (line[0] != 0 && eq) {
-                        msg = "Existe metadata nao suportada no arquivo. Nenhum cheat foi importado parcialmente.";
+                        msg = "The file has unsupported metadata. No cheat was partially imported.";
                         goto fail;
                     }
                     if (hdr_seen || looks_like_code(line)) {
-                        msg = "Instrucao ou parametro nao reconhecido. Use [NOME] e linhas XXXXXXXX YYYY.";
+                        msg = "Unrecognized instruction or parameter. Use [NAME] and XXXXXXXX YYYY lines.";
                         goto fail;
                     }
                     if (line[0] != 0) {
@@ -897,7 +897,7 @@ final:
         ok = 1;
         goto done;
     }
-    msg = "Nenhum cheat foi importado.";
+    msg = "No cheats were imported.";
 fail:
     set_err(err, errn, msg);
 fail_msg_set:

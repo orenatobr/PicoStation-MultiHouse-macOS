@@ -1,5 +1,7 @@
 # Module `cheat`
 
+> Note: user-visible texts of this module were translated to EN-US after the port (the Portuguese quoted below is the original program). docs/i18n/cheat.md lists the exceptions.
+
 Header `core/include/mh/cheat.h`, sources `core/src/cheat/`, tests `core/tests/test_cheat*.c` (`make test-cheat`).
 Data formats: docs/EMBEDDED_DATA.md (CDXLZ1, MHGSF1, serial bindings, PSTCHT1).
 

@@ -227,7 +227,7 @@ static void test_audit_track_map(void)
     d.sbi_len = 4;
     sbi[1] = 'X';
     CHECK(!mh_v2_build_package_metadata(&d, rec, out, err, sizeof err));
-    CHECK_STR(err, "Nao foi possivel montar a Track Table deste disco.");
+    CHECK_STR(err, "Could not build this Disc's Track Table.");
     sbi[1] = 'B';
     d.sbi_data = NULL;
     d.sbi_len = 0;
@@ -500,9 +500,9 @@ static void test_audit_edit_inplace(void)
         CHECK(add_cue(r, cue, 256) == MH_ADD_OK);
         mh_project_recount(r);
         reset_progress();
-        g_cancel_text = "Gravando: ed_e.bin";
+        g_cancel_text = "Writing: ed_e.bin";
         CHECK(!mh_v2_write_image_direct(&g_w, r, snap, &res));
-        CHECK(rd_fail_text(&res, "Gravacao interrompida. O disco atual ficou pendente"));
+        CHECK(rd_fail_text(&res, "Write interrupted. The current Disc is pending"));
         mid = slurp_all(snap, &szm);
         CHECK(header_a_is_wip(snap));
         memset(&vres, 0, sizeof vres);
@@ -665,16 +665,16 @@ static void test_audit_alias_clash(void)
     CHECK(link(d->files[0].path, hard) == 0);
     reset_progress();
     CHECK(!mh_v2_write_image_direct(&g_w, p, lnk, &res));
-    CHECK_STR(res.msg, "A imagem substituiria um BIN de origem.");
+    CHECK_STR(res.msg, "The image would overwrite a source BIN file.");
     CHECK(!mh_v2_write_image_direct(&g_w, p, hard, &res));
-    CHECK_STR(res.msg, "A imagem substituiria um BIN de origem.");
+    CHECK_STR(res.msg, "The image would overwrite a source BIN file.");
     CHECK(file_size(d->files[0].path) == before);
     /* the cue through a path with a dot-dot and a doubled slash is the same file */
     {
         char alt[MH_PATH_MAX];
         snprintf(alt, sizeof alt, "%s//x/../alias.cue", g_tmp);
         CHECK(!mh_v2_write_image_direct(&g_w, p, alt, &res));
-        CHECK_STR(res.msg, "A imagem substituiria um arquivo de origem.");
+        CHECK_STR(res.msg, "The image would overwrite a source file.");
     }
     mh_project_clear(p);
     free(p);

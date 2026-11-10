@@ -35,19 +35,19 @@ bool mh_manager_recode_copy(const MhDisc *d, const char *dst_cue, MhProgress *pr
     if (!d || d->kind != 1 || !d->verified || (d->verify_issues & 0xc0) == 0 || (d->verify_issues & 8) != 0 ||
         d->nfiles == 0 || d->ntracks == 0) {
         mh_str_copy(err, errn,
-                    "Forneca um CUE/BIN verificado com estrutura valida. Recalculo nao recupera dados ausentes ou "
-                    "corrompidos.");
+                    "Provide a verified CUE/BIN with a valid structure. Recalculation cannot recover missing or "
+                    "corrupted data.");
         return false;
     }
     nfiles = d->nfiles;
     mh_sha1_init(&sha);
     if (!mh_path_full(dst_cue, full, sizeof full) || mh_path_equal_full(full, d->cue_path)) {
-        mh_str_copy(err, errn, "Escolha outro nome de CUE; a origem deve ser preservada.");
+        mh_str_copy(err, errn, "Choose a different CUE name; the source must be preserved.");
         return false;
     }
     fd = open(full, O_WRONLY | O_CREAT | O_EXCL, 0666);
     if (fd < 0) {
-        mh_str_copy(err, errn, "O destino ja existe ou nao pode ser criado. Escolha um novo nome.");
+        mh_str_copy(err, errn, "The destination already exists or cannot be created. Choose a new name.");
         return false;
     }
     close(fd);
@@ -56,7 +56,7 @@ bool mh_manager_recode_copy(const MhDisc *d, const char *dst_cue, MhProgress *pr
     mh_str_cat(stem, sizeof stem, "_BIN_EDC_ECC");
     mh_path_join(dir, stem, folder, sizeof folder);
     if (mkdir(folder, 0777) != 0) {
-        mh_str_copy(err, errn, "A pasta da copia ja existe ou nao pode ser criada. Escolha um novo nome.");
+        mh_str_copy(err, errn, "The copy folder already exists or cannot be created. Choose a new name.");
         unlink(full);
         return false;
     }
@@ -107,8 +107,8 @@ bool mh_manager_recode_copy(const MhDisc *d, const char *dst_cue, MhProgress *pr
             remaining -= n;
             off += n;
             done += bytes;
-            if (!mh_progress_report(prog, done, d->total_bytes, "Criando copia EDC/ECC; origem preservada")) {
-                mh_str_copy(err, errn, "Copia cancelada; arquivos parciais removidos e origem preservada.");
+            if (!mh_progress_report(prog, done, d->total_bytes, "Creating EDC/ECC copy; source preserved")) {
+                mh_str_copy(err, errn, "Copy cancelled; partial files removed and source preserved.");
                 mh_io_close(&src);
                 mh_io_close(&dst);
                 goto fail;
@@ -127,11 +127,11 @@ bool mh_manager_recode_copy(const MhDisc *d, const char *dst_cue, MhProgress *pr
     mh_sha1_final(&sha, digest);
     if (memcmp(digest, d->verify_sha1, 20) != 0) {
         mh_str_copy(err, errn,
-                    "A origem mudou desde a verificacao. Verifique o disco novamente antes de criar a copia.");
+                    "The source changed since it was verified. Verify the Disc again before creating the copy.");
         goto fail;
     }
     if (changed == 0) {
-        mh_str_copy(err, errn, "Nenhum codigo EDC/ECC precisou ser alterado.");
+        mh_str_copy(err, errn, "No EDC/ECC code needed to change.");
         goto fail;
     }
     if (!mh_cue_rewrite_files(d->cue_path, full, paths, nfiles)) goto fail;
@@ -139,7 +139,7 @@ bool mh_manager_recode_copy(const MhDisc *d, const char *dst_cue, MhProgress *pr
     goto out;
 fail:
     cleanup(full, folder, bins ? bins : (char(*)[MH_PATH_MAX])NULL, bins ? created : 0);
-    msg = "Nao foi possivel concluir a copia. Origem preservada; arquivos parciais removidos.";
+    msg = "Could not finish the copy. Source preserved; partial files removed.";
     if (err && errn && err[0] == 0) mh_str_copy(err, errn, msg);
 out:
     free(bins);

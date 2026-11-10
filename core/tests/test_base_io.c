@@ -183,15 +183,15 @@ static void test_io(void)
     /* short read: 300 bytes available after SZ-300; the second 256 KiB piece comes up short */
     CHECK(!mh_io_read(&io, SZ - 300, r, 1000));
     CHECK(io.err->set && io.err->code == MH_IOERR_SHORT_READ && io.err->offset == SZ - 300);
-    CHECK_STR(io.err->what, "Leitura do destino");
+    CHECK_STR(io.err->what, "Destination read");
     CHECK(io.err->requested == 1000 && io.err->transferred == 300);
     /* first error wins */
     CHECK(!mh_io_read(&io, SZ + 10, r, 10));
     CHECK(io.err->offset == SZ - 300 && io.err->transferred == 300);
     CHECK(mh_ioerr_append((mh_wbuf_init(&w), &w), io.err));
     CHECK_STR(mh_wbuf_cstr(&w),
-              "\r\nLeitura do destino. Erro Windows: 30\r\nOffset: 614100 bytes; LBA512: 1199\r\n"
-              "Solicitado: 1000; transferido confirmado: 300 bytes.");
+              "\r\nDestination read. Error code: 30\r\nOffset: 614100 bytes; LBA512: 1199\r\n"
+              "Requested: 1000; confirmed transferred: 300 bytes.");
     mh_wbuf_free(&w);
     mh_ioerr_clear(io.err);
     CHECK(!io.err->set);
@@ -211,24 +211,24 @@ static void test_io(void)
     CHECK(mh_io_open(&io2, P("img.bin"), MH_IO_READ, false, &shared));
     CHECK(io2.err == &shared);
     CHECK(!mh_io_read(&io2, SZ, r, 1));
-    CHECK_STR(shared.what, "Leitura da origem");
+    CHECK_STR(shared.what, "Source read");
     mh_ioerr_clear(&shared);
     CHECK(!mh_io_write(&io2, 0, a, 10));
-    CHECK_STR(shared.what, "Escrita no destino");
+    CHECK_STR(shared.what, "Destination write");
     CHECK(shared.code == EBADF && shared.offset == 0 && shared.requested == 10 && shared.transferred == 0);
     mh_ioerr_clear(&shared);
     CHECK(!mh_io_read(&io2, UINT64_C(1) << 63, r, 1));
-    CHECK_STR(shared.what, "Posicionamento de leitura");
+    CHECK_STR(shared.what, "Read seek");
     mh_ioerr_clear(&shared);
     CHECK(!mh_io_write(&io2, UINT64_C(1) << 63, a, 1));
-    CHECK_STR(shared.what, "Posicionamento de escrita");
+    CHECK_STR(shared.what, "Write seek");
     mh_io_close(&io2);
     mh_io_close(&io2);
     mh_ioerr_clear(&shared);
 
     /* verified single block */
     CHECK(!mh_io_write_block_verified(&io, 100, a));
-    CHECK_STR(io.err->what, "Alinhamento do controle");
+    CHECK_STR(io.err->what, "Verify alignment");
     CHECK(io.err->code == MH_IOERR_ALIGN && io.err->offset == 100 && io.err->requested == 512 && io.err->transferred == 0);
     mh_ioerr_clear(io.err);
     CHECK(mh_io_write_block_verified(&io, 4096, b) && !io.err->set);

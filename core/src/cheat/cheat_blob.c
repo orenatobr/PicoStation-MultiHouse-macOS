@@ -113,7 +113,7 @@ static int validate_v5(const uint8_t *b, uint32_t len)
     return enabled == ch_rd32(b + 0x14) && lines == ch_rd32(b + 0x18) && lines < 0x1ff;
 }
 
-#define E_REC "Registro de cheat PSTCHT1 invalido."
+#define E_REC "Invalid PSTCHT1 cheat record."
 
 /* orig: cheat_blob_validate @0x140005850 */
 int mh_cheat_blob_validate(const uint8_t *b, uint32_t len, char *err, size_t errn)
@@ -123,12 +123,12 @@ int mh_cheat_blob_validate(const uint8_t *b, uint32_t len, char *err, size_t err
     if (!b || len < 0x40) goto missing;
     if (ch_rd16(b + 8) == 6) {
         int ok = mh_cheat_disc_bank_valid(b, len);
-        if (!ok) set_err(err, errn, "Catalogo do disco invalido ou divergente do banco original.");
+        if (!ok) set_err(err, errn, "The disc catalog is invalid or differs from the original database.");
         return ok;
     }
     if (ch_rd16(b + 8) == 5) {
         if (validate_v5(b, len)) return 1;
-        set_err(err, errn, "Referencias do catalogo original invalidas.");
+        set_err(err, errn, "Invalid references to the original catalog.");
         return 0;
     }
     if (len > MH_CHEAT_BLOB_MAX) goto missing;
@@ -138,14 +138,14 @@ int mh_cheat_blob_validate(const uint8_t *b, uint32_t len, char *err, size_t err
           ch_rd32(b + 0x24) == n * 0x60 + 0x40 && ch_rd32(b + 0x28) == len && ch_rd32(b + 0x24) <= len &&
           ch_rd32(b + 0x14) <= n && ch_rd32(b + 0x18) < 0x1ff && (uint8_t)(b[0x38] - 1) < 2 &&
           ch_rd32(b + 0x3c) == blob_crc(b, len))) {
-        set_err(err, errn, "Cabecalho PSTCHT1 invalido.");
+        set_err(err, errn, "Invalid PSTCHT1 header.");
         return 0;
     }
     if (!(n != 0 && b[0x39] < 4 &&
           (b[0x39] == 0 ? (ch_rd32(b + 0x2c) == NONE32 && ch_rd32(b + 0x30) == NONE32 && ch_rd32(b + 0x34) == 0)
                         : (ch_rd32(b + 0x2c) != NONE32 && ch_rd32(b + 0x30) != NONE32 &&
                            ch_rd32(b + 0x34) == MH_CHEAT_DB_CRC)))) {
-        set_err(err, errn, "Proveniencia do header PSTCHT1 invalida.");
+        set_err(err, errn, "Invalid provenance in the PSTCHT1 header.");
         return 0;
     }
     code_run = ch_rd32(b + 0x24);
@@ -169,41 +169,41 @@ int mh_cheat_blob_validate(const uint8_t *b, uint32_t len, char *err, size_t err
         fl = r[0x4f];
         game = r[0x4e];
         if (((fl & 8) == 0) != ((fl >> 2) & 1)) {
-            set_err(err, errn, "Registro PSTCHT1 precisa ser exatamente AUDITED xor CUSTOM.");
+            set_err(err, errn, "A PSTCHT1 record must be exactly AUDITED xor CUSTOM.");
             return 0;
         }
         if (!(fl & 8)) {
             if (game != 0 || ch_rd32(r + 0x40) != NONE32 || ch_rd32(r + 0x44) != NONE32 || (fl & 0x10)) {
-                set_err(err, errn, "Registro CUSTOM possui proveniencia oficial invalida.");
+                set_err(err, errn, "A CUSTOM record has invalid official provenance.");
                 return 0;
             }
         } else {
             if ((uint8_t)(game - 1) > 2 || b[0x39] != game || ch_rd32(r + 0x40) != ch_rd32(b + 0x30) ||
                 ch_rd32(r + 0x44) == NONE32) {
-                set_err(err, errn, "Registro AUDITED diverge da proveniencia do header PSTCHT1.");
+                set_err(err, errn, "An AUDITED record differs from the PSTCHT1 header provenance.");
                 return 0;
             }
             audited++;
         }
         if ((fl & 2) && (fl & 9) != 9) {
-            set_err(err, errn, "Cheat obrigatorio precisa ser AUDITED e ENABLED no PSTCHT1.");
+            set_err(err, errn, "A mandatory cheat must be AUDITED and ENABLED in the PSTCHT1.");
             return 0;
         }
         if ((fl & 0xc) == 0xc) {
-            set_err(err, errn, "Registro PSTCHT1 marcado como auditado e personalizado ao mesmo tempo.");
+            set_err(err, errn, "A PSTCHT1 record is marked as both audited and custom.");
             return 0;
         }
         lines += nl;
         code_run += clen;
         if (lines > 0x1fe) {
-            set_err(err, errn, "PSTCHT1 excede 510 linhas de catalogo.");
+            set_err(err, errn, "PSTCHT1 exceeds 510 catalog lines.");
             return 0;
         }
         if (fl & 1) {
             enabled++;
             active += nl;
             if (!ch_v5_program(b + code_off, nl, NULL)) {
-                set_err(err, errn, "Falha ao calcular custo do programa PSTCHT1 ativo.");
+                set_err(err, errn, "Could not compute the cost of the active PSTCHT1 program.");
                 return 0;
             }
         }
@@ -212,13 +212,13 @@ int mh_cheat_blob_validate(const uint8_t *b, uint32_t len, char *err, size_t err
         (b[0x39] == 0 || audited != 0) && n != 0)
         return 1;
     set_err(err, errn,
-            "Contagens, efeito, proveniencia ou limite de 31 linhas ativas invalidos no PSTCHT1.");
+            "Invalid counts, effect, provenance or 31-active-line limit in the PSTCHT1.");
     return 0;
 bad_rec:
     set_err(err, errn, E_REC);
     return 0;
 missing:
-    set_err(err, errn, "Blob de cheats ausente, truncado ou maior que 10.240 bytes.");
+    set_err(err, errn, "The cheat blob is missing, truncated or larger than 10,240 bytes.");
     return 0;
 }
 
@@ -365,7 +365,7 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
     if (!src || src->count == 0) return 1;
     p = mh_cheat_profile_clone(src);
     if (!p) {
-        set_err(err, errn, "Memoria insuficiente para preparar cheats.");
+        set_err(err, errn, "Not enough memory to prepare cheats.");
         return 0;
     }
     for (i = 0; i < p->count; i++) {
@@ -377,7 +377,7 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
         int any_program = 0;
         uint32_t code_pos;
         if ((uint8_t)(scope - 1) >= 2) {
-            set_err(err, errn, "Escopo de cheats invalido.");
+            set_err(err, errn, "Invalid cheat scope.");
             goto done;
         }
         if (!ch_profile_validate(p, err, errn)) goto done;
@@ -388,19 +388,19 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
         }
         if (!any_program) {
             set_err(err, errn,
-                    "O catalogo nao contem nenhuma programa do banco original; condicionais e C0 isolados nao "
-                    "serao serializados.");
+                    "The catalog has no program from the original database; standalone conditionals and C0 "
+                    "codes will not be serialized.");
             goto done;
         }
         total = MH_CHEAT_BLOB_HEADER;
         for (i = 0; i < p->count; i++) total += 0x60 + (uint32_t)p->entries[i].nlines * 6;
         if (total - 1 > 0x27ff) {
-            set_err(err, errn, "O perfil editado excede a regiao de 10 KiB. Remova grupos antes de aplicar.");
+            set_err(err, errn, "The edited profile exceeds the 10 KiB region. Remove groups before applying.");
             goto done;
         }
         buf = mh_calloc(total);
         if (!buf) {
-            set_err(err, errn, "Memoria insuficiente para serializar cheats.");
+            set_err(err, errn, "Not enough memory to serialize cheats.");
             goto done;
         }
         memcpy(buf, "PSTCHT1", 7);
@@ -434,7 +434,7 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
             code_pos += (uint32_t)e->nlines * 6;
         }
         if (code_pos != total) {
-            set_err(err, errn, "Falha interna ao calcular o tamanho do PSTCHT1.");
+            set_err(err, errn, "Internal error while computing the PSTCHT1 size.");
             goto done;
         }
         ch_wr32(buf + 0x3c, blob_crc(buf, total));
@@ -444,7 +444,7 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
         total = MH_CHEAT_BLOB_HEADER;
         for (i = 0; i < p->count; i++) total += (uint32_t)strlen(p->entries[i].name) + 9 + (uint32_t)p->entries[i].nlines * 6;
         if (total >= 0x2801) {
-            set_err(err, errn, "Catalogo excede o espaco reservado de 10 KiB.");
+            set_err(err, errn, "The catalog exceeds the reserved 10 KiB.");
             goto done;
         }
         buf = mh_calloc(total);
@@ -475,7 +475,7 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
                 int cp = ch_compact_position(bank, p->title, e);
                 const ChBankGroup *g;
                 if (cp < 0) {
-                    set_err(err, errn, "Um grupo diverge do banco original incorporado. Nada foi gravado.");
+                    set_err(err, errn, "A group differs from the embedded original database. Nothing was written.");
                     goto done;
                 }
                 pos = (uint32_t)cp;
@@ -498,7 +498,7 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
         }
         ch_wr32(buf + 0x3c, blob_crc(buf, total));
         if (name_pos != total || !mh_cheat_disc_bank_valid(buf, total)) {
-            set_err(err, errn, "Catalogo original invalido ou divergente.");
+            set_err(err, errn, "The original catalog is invalid or differs.");
             goto done;
         }
     }

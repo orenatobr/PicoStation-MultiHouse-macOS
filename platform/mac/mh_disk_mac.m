@@ -365,7 +365,7 @@ int mh_disk_enumerate(MhDiskInfo *out, int max, const MhDiskOpts *opts, char *er
     uint32_t sys[32];
     int nsys = mh_disk_system_numbers(sys, 32);
     if (nsys <= 0) {
-        mh_err_set(err, errn, "Nao foi possivel identificar o disco do sistema com seguranca.");
+        mh_err_set(err, errn, "Could not safely identify the system disk.");
         return 0;
     }
     DASessionRef s = DASessionCreate(kCFAllocatorDefault);
@@ -512,14 +512,14 @@ static bool unmount_whole(const MhDiskInfo *info, WholeSet *done, char *err, siz
     done->n = 0;
     if (found == 0) return true; /* already unmounted (even better than the original) */
     if (found > 16) {
-        mh_err_set(err, errn, "O SD possui volumes demais para serem bloqueados com seguranca.");
+        mh_err_set(err, errn, "The card has too many volumes to lock safely.");
         return false;
     }
     WholeSet ws;
     whole_set(info, &ws);
     DASessionRef s = DASessionCreate(kCFAllocatorDefault);
     if (!s) {
-        mh_err_set(err, errn, "Nao foi possivel desmontar um volume do SD com seguranca.");
+        mh_err_set(err, errn, "Could not safely unmount a volume on the card.");
         return false;
     }
     dispatch_queue_t q = dispatch_queue_create("mh.disk.unmount", DISPATCH_QUEUE_SERIAL);
@@ -531,9 +531,9 @@ static bool unmount_whole(const MhDiskInfo *info, WholeSet *done, char *err, siz
     if (res == 0 && disk_mounts(info->bsd_name, names, 16) != 0) res = 2;
     if (res != 0) {
         if (res == 1)
-            mh_err_set(err, errn, "Um volume do SD esta em uso e nao pode ser bloqueado. Feche o Explorador e outros programas que usam o cartao.");
+            mh_err_set(err, errn, "A volume on the card is in use and cannot be locked. Close Finder windows and other apps that use the card.");
         else
-            mh_err_set(err, errn, "Nao foi possivel desmontar um volume do SD com seguranca.");
+            mh_err_set(err, errn, "Could not safely unmount a volume on the card.");
         remount(&ws, ws.n);
         return false;
     }
@@ -552,18 +552,18 @@ static bool dev_recheck(MhBlockDev *dev, char *err, size_t errn) {
     Impl *im = dev->impl;
     MhDiskInfo fresh;
     if (!im || !mh_disk_identity_matches(&im->known, &im->opts, &fresh)) {
-        mh_err_set(err, errn, "O SD mudou, foi removido ou falhou na verificacao de identidade.");
+        mh_err_set(err, errn, "The card changed, was removed or failed the identity check.");
         return false;
     }
     uint64_t sz = 0;
     uint32_t bs = 0;
     if (!mh_disk_fd_geometry(dev->io.fd, &sz, &bs) || sz != im->known.size || bs != im->known.block_size) {
-        mh_err_set(err, errn, "O SD mudou, foi removido ou falhou na verificacao de identidade.");
+        mh_err_set(err, errn, "The card changed, was removed or failed the identity check.");
         return false;
     }
     char names[16][32];
     if (dev->writable && disk_mounts(im->known.bsd_name, names, 16) != 0) {
-        mh_err_set(err, errn, "Um volume do SD foi montado durante a operacao; a gravacao foi cancelada por seguranca.");
+        mh_err_set(err, errn, "A volume on the card was mounted during the operation, so the write was cancelled for safety.");
         return false;
     }
     return true;
@@ -592,12 +592,12 @@ static MhBlockDev *open_dev(const MhDiskInfo *known, const MhDiskOpts *opts, boo
     uint32_t flags = opts ? opts->flags : 0;
     if (!known || !mh_disk_valid_bsd_name(known->bsd_name, &num) || num != known->number ||
         !mh_disk_eligible(known, flags, NULL)) {
-        mh_err_set(err, errn, "O SD selecionado mudou ou nao e seguro.");
+        mh_err_set(err, errn, "The selected card changed or is not safe.");
         return NULL;
     }
     MhDiskInfo fresh;
     if (!mh_disk_identity_matches(known, opts, &fresh)) {
-        mh_err_set(err, errn, "O SD mudou, foi removido ou falhou na verificacao de identidade.");
+        mh_err_set(err, errn, "The card changed, was removed or failed the identity check.");
         return NULL;
     }
     WholeSet unmounted = {.n = 0};
@@ -605,8 +605,8 @@ static MhBlockDev *open_dev(const MhDiskInfo *known, const MhDiskOpts *opts, boo
 
     int fd = mh_disk_open_raw(known->bsd_name, write, NULL);
     if (fd < 0) {
-        mh_err_set(err, errn, write ? "Execute como administrador e feche programas usando o SD."
-                                    : "Nao foi possivel abrir o SD para leitura.");
+        mh_err_set(err, errn, write ? "Could not open the card for writing. Allow disk access when prompted and close other apps that use the card."
+                                    : "Could not open the card for reading.");
         if (unmounted.n) remount(&unmounted, unmounted.n); /* the user cancelled the dialog, say */
         return NULL;
     }
@@ -617,7 +617,7 @@ static MhBlockDev *open_dev(const MhDiskInfo *known, const MhDiskOpts *opts, boo
         free(im);
         close(fd);
         if (unmounted.n) remount(&unmounted, unmounted.n);
-        mh_err_set(err, errn, "Memoria insuficiente.");
+        mh_err_set(err, errn, "Not enough memory.");
         return NULL;
     }
     im->known = *known;

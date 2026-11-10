@@ -24,14 +24,14 @@ void mh_v2_verification_issue_text(MhDisc *d)
     uint32_t v = d->verify_issues;
     mh_wbuf_init(&w);
     if (v & 0xc0)
-        mh_wbuf_puts(&w, "Alguns setores estao inconsistentes. Videos ou audio podem falhar. Ha uma opcao para criar uma copia com EDC/ECC recalculados.\r\n");
-    if (v & 1) mh_wbuf_puts(&w, "Nao foi possivel confirmar o ID do jogo.\r\n");
-    if (v & 2) mh_wbuf_puts(&w, "O disco difere da versao conhecida; pode ser uma modificacao.\r\n");
-    if (v & 4) mh_wbuf_puts(&w, "O tamanho informado pelo jogo excede o arquivo.\r\n");
-    if (v & 8) mh_wbuf_puts(&w, "O formato de alguns setores nao combina com o CUE.\r\n");
-    if (v & 0x10) mh_wbuf_puts(&w, "Os dados no cartao nao conferem com o registro do disco.\r\n");
-    if (v & 0x20) mh_wbuf_puts(&w, "Ha dados extras invalidos no cartao. Restaure este disco.\r\n");
-    if (v == 0) mh_wbuf_puts(&w, "Disco verificado: leitura e estrutura OK.");
+        mh_wbuf_puts(&w, "Some sectors are inconsistent. Videos or audio may fail. You can create a copy with recalculated EDC/ECC.\r\n");
+    if (v & 1) mh_wbuf_puts(&w, "Could not confirm the game ID.\r\n");
+    if (v & 2) mh_wbuf_puts(&w, "The Disc differs from the known version; it may be a modification.\r\n");
+    if (v & 4) mh_wbuf_puts(&w, "The size reported by the game exceeds the file.\r\n");
+    if (v & 8) mh_wbuf_puts(&w, "The format of some sectors does not match the CUE.\r\n");
+    if (v & 0x10) mh_wbuf_puts(&w, "The data on the card does not match the Disc record.\r\n");
+    if (v & 0x20) mh_wbuf_puts(&w, "The card has invalid extra data. Restore this Disc.\r\n");
+    if (v == 0) mh_wbuf_puts(&w, "Disc verified: read and structure OK.");
     mh_str_copy(d->verify_text, MH_V2W_MSG_MAX, w.data ? w.data : "");
     mh_wbuf_free(&w);
 }
@@ -45,7 +45,7 @@ static void raw_path(const MhDisc *d, char *out, size_t n)
 /* orig: v2_check_disc_source @0x140035290 */
 bool mh_v2_check_disc_source(const MhV2Writer *w, MhDisc *d)
 {
-    static const char incomplete[] = "Estrutura incompleta: forneca o CUE e todos os BINs legiveis.";
+    static const char incomplete[] = "Incomplete structure: provide the CUE and all readable BIN files.";
     char path[MH_PATH_MAX];
     uint8_t rec[MH_V2_DISC_SIZE];
     uint64_t done = 0;
@@ -90,14 +90,14 @@ bool mh_v2_check_disc_source(const MhV2Writer *w, MhDisc *d)
             int code = mh_v2w_win32_code(errno);
             MhWbuf t;
             mh_wbuf_init(&t);
-            mh_wbuf_puts(&t, "Falha ao abrir ");
+            mh_wbuf_puts(&t, "Could not open ");
             mh_wbuf_puts(&t, path);
-            mh_wbuf_puts(&t, " (Win32 ");
+            mh_wbuf_puts(&t, " (error ");
             mh_wbuf_u32(&t, (uint32_t)code);
             mh_wbuf_puts(&t, "). ");
-            mh_wbuf_puts(&t, code == 5 ? "Acesso negado: execute o Manager como administrador."
-                             : code == 0x20 ? "Origem em uso por outro processo."
-                                            : "Reconecte e recarregue a origem.");
+            mh_wbuf_puts(&t, code == 5 ? "Access denied. Allow the app to access this location in System Settings, Privacy & Security."
+                             : code == 0x20 ? "The source is in use by another process."
+                                            : "Reconnect the source and reload it.");
             mh_str_copy(d->verify_text, MH_V2W_MSG_MAX, t.data ? t.data : "");
             mh_wbuf_free(&t);
             return false;
@@ -118,7 +118,7 @@ bool mh_v2_check_disc_source(const MhV2Writer *w, MhDisc *d)
     if (!mh_v2_stream_disc(w, NULL, d, rec, &done, (uint64_t)d->total_sectors * MH_V2_SLOT,
                            MH_V2_STREAM_ANALYZE)) {
         mh_str_copy(d->verify_text, MH_V2W_MSG_MAX,
-                    "Leitura integral falhou ou foi cancelada. Nenhuma gravacao foi iniciada.");
+                    "The full read failed or was cancelled. Nothing was written.");
         return false;
     }
     if (d->serial[0] == 0) d->verify_issues |= 1;
@@ -154,7 +154,7 @@ bool mh_v2_verify_disc_source(const MhV2Writer *w, const MhDisc *d, char *msg, s
     if (!d || (d->kind != MH_DISC_KIND_V2_DEVICE && d->kind != MH_DISC_KIND_V2_IMAGE) ||
         d->v2_raw_lba512 == 0 || d->v2_raw_blocks == 0 ||
         d->v2_raw_blocks != (uint64_t)d->total_sectors * 5) {
-        out_msg(msg, msgn, "Este disco nao possui uma origem RAW V2 verificavel.");
+        out_msg(msg, msgn, "This Disc has no verifiable V2 RAW source.");
         return false;
     }
     raw_path(d, path, sizeof path);
@@ -162,21 +162,21 @@ bool mh_v2_verify_disc_source(const MhV2Writer *w, const MhDisc *d, char *msg, s
         int code = mh_v2w_win32_code(errno);
         MhWbuf t;
         mh_wbuf_init(&t);
-        mh_wbuf_puts(&t, "Nao foi possivel abrir ");
+        mh_wbuf_puts(&t, "Could not open ");
         mh_wbuf_puts(&t, path);
-        mh_wbuf_puts(&t, " (Win32 ");
+        mh_wbuf_puts(&t, " (error ");
         mh_wbuf_u32(&t, (uint32_t)code);
         mh_wbuf_puts(&t, "). ");
-        mh_wbuf_puts(&t, code == 5 ? "Acesso negado. Execute o Manager como administrador."
-                         : code == 0x20 ? "A origem esta em uso por outro processo."
-                                        : "Confira se a origem ainda esta conectada; atualize e recarregue o cartao.");
+        mh_wbuf_puts(&t, code == 5 ? "Access denied. Allow the app to access this location in System Settings, Privacy & Security."
+                         : code == 0x20 ? "The source is in use by another process."
+                                        : "Check that the source is still connected, then refresh and reload the card.");
         out_msg(msg, msgn, t.data ? t.data : "");
         mh_wbuf_free(&t);
         return false;
     }
     buf = mh_alloc(0x500000);
     if (!buf) {
-        out_msg(msg, msgn, "Falha ao posicionar a leitura do disco.");
+        out_msg(msg, msgn, "Could not position the Disc read.");
         mh_io_close(&src);
         return false;
     }
@@ -188,7 +188,7 @@ bool mh_v2_verify_disc_source(const MhV2Writer *w, const MhDisc *d, char *msg, s
         uint32_t chunk = remaining > 0x800 ? 0x800 : remaining, s;
         size_t bytes = (size_t)chunk * MH_V2_SLOT;
         if (!mh_io_read(&src, off, buf, bytes)) {
-            out_msg(msg, msgn, "Erro de leitura durante a verificacao do disco.");
+            out_msg(msg, msgn, "Read error while verifying the Disc.");
             goto out;
         }
         for (s = 0; s < chunk; s++) {
@@ -198,15 +198,16 @@ bool mh_v2_verify_disc_source(const MhV2Writer *w, const MhDisc *d, char *msg, s
             mh_sha1_update(&sha, slot, MH_V2_SECTOR);
             for (i = MH_V2_SECTOR; i < MH_V2_SLOT; i++)
                 if (slot[i]) {
-                    out_msg(msg, msgn, "O padding RAW de um setor nao esta zerado.");
+                    out_msg(msg, msgn, "The RAW padding of a sector is not zeroed.");
                     goto out;
                 }
         }
         off += bytes;
         done += bytes;
         remaining -= chunk;
-        if (w && w->prog && !mh_progress_report(w->prog, done, total, "Verificando disco RAW existente")) {
-            out_msg(msg, msgn, "Verificacao cancelada.");
+        if (w && w->prog) mh_v2_set_phase(w->prog, MH_V2_PHASE_VERIFYING_SOURCES, 0, 0);
+        if (w && w->prog && !mh_progress_report(w->prog, done, total, "Verifying existing RAW Disc")) {
+            out_msg(msg, msgn, "Verification cancelled.");
             goto out;
         }
         mh_progress_yield();
@@ -214,10 +215,10 @@ bool mh_v2_verify_disc_source(const MhV2Writer *w, const MhDisc *d, char *msg, s
     crc = mh_crc32_end(crc);
     mh_sha1_final(&sha, digest);
     if (d->crc32 == crc && memcmp(digest, d->sha1, 20) == 0) {
-        out_msg(msg, msgn, "Disco RAW verificado com sucesso.");
+        out_msg(msg, msgn, "RAW Disc verified successfully.");
         ok = true;
     } else {
-        out_msg(msg, msgn, "CRC32/SHA-1 do disco divergem dos valores gravados no V2.");
+        out_msg(msg, msgn, "The Disc CRC32/SHA-1 differs from the values stored in the V2 library.");
     }
 out:
     mh_free(buf);
@@ -245,14 +246,14 @@ bool mh_v2_admit_disc_without_full_check(MhDisc *d)
             if (++k >= d->nfiles) {
                 d->verified_aux = 1;
                 mh_str_copy(d->verify_text, MH_V2W_MSG_MAX,
-                            "Verificacao completa desativada. A gravacao ainda confirmara os dados no SD.");
+                            "Full verification is turned off. The write will still confirm the data on the card.");
                 d->status = MH_DISC_STATUS_NOTE;
                 return true;
             }
         }
-        mh_str_copy(d->verify_text, MH_V2W_MSG_MAX, "Um BIN esta ausente ou mudou de tamanho.");
+        mh_str_copy(d->verify_text, MH_V2W_MSG_MAX, "A BIN file is missing or changed size.");
     } else {
-        mh_str_copy(d->verify_text, MH_V2W_MSG_MAX, "CUE/BIN incompleto ou invalido.");
+        mh_str_copy(d->verify_text, MH_V2W_MSG_MAX, "Incomplete or invalid CUE/BIN.");
     }
     return false;
 }
@@ -268,11 +269,11 @@ bool mh_v2_manager_admit(const MhV2Writer *w, MhDisc *d, bool full,
     if (!mh_v2_check_disc_source(w, d)) return false;
     if (d->verify_issues == 0) return true;
     mh_wbuf_init(&t);
-    mh_wbuf_puts(&t, "Disco ");
-    mh_wbuf_puts(&t, d->name[0] ? d->name : "sem nome");
+    mh_wbuf_puts(&t, "Disc ");
+    mh_wbuf_puts(&t, d->name[0] ? d->name : "unnamed");
     mh_wbuf_puts(&t, ":\r\n\r\n");
     mh_wbuf_puts(&t, d->verify_text);
-    mh_wbuf_puts(&t, "\r\nAdicionar mesmo assim?");
+    mh_wbuf_puts(&t, "\r\nAdd anyway?");
     yes = ask && ask(ctx, mh_wbuf_cstr(&t));
     mh_wbuf_free(&t);
     if (!yes) return false;
@@ -290,12 +291,12 @@ void mh_v2_auto_attach_cheats(const MhV2Env *env, MhDisc *d)
     if (!d || d->cheats != NULL) return;
     err[0] = 0;
     if (!db || !db->loaded) {
-        mh_str_copy(err, sizeof err, "O banco de cheats incorporado nao passou na verificacao.");
+        mh_str_copy(err, sizeof err, "The built-in cheat database failed verification.");
     } else if (d->serial[0] == 0) {
-        mh_str_copy(err, sizeof err, "Sem serial identificado para associar cheats automaticamente.");
+        mh_str_copy(err, sizeof err, "No serial identified, so cheats cannot be linked automatically.");
     } else if (!mh_cheat_db_find_title_for_disc(db, d->serial, &title)) {
         mh_str_copy(err, sizeof err,
-                    "Este serial nao possui vinculo automatico no GameShark V5. Abra Cheats e escolha o jogo manualmente.");
+                    "This serial has no automatic link in GameShark V5. Open Cheats and choose the game manually.");
     } else {
         if (mh_cheat_profile_build_exact_catalog(db, title, d->serial, &prof, err, sizeof err)) {
             d->cheats = prof;

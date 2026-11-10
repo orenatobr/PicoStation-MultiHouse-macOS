@@ -28,7 +28,7 @@ static int g_checks;
 
 #define NONE 0xFFFFFFFFu
 #define CDX_PATH "resources/embedded/cdx_cheats.bin"
-#define ERR_SYNTAX "Um cheat contem nome, sintaxe ou formato de codigo nao suportado."
+#define ERR_SYNTAX "A cheat has an unsupported name, syntax or code format."
 
 static uint8_t *g_blob;
 static uint64_t g_blob_len;
@@ -84,7 +84,7 @@ static void test_validate_messages(void)
     p = mh_cheat_profile_new();
     p->count = 257;
     CHECK(!mh_cheat_profile_validate(p, err, sizeof err));
-    CHECK_STR(err, "O catalogo excede 256 cheats.");
+    CHECK_STR(err, "The catalog exceeds 256 cheats.");
     p->count = 0; /* no entry array: nothing to free */
     mh_cheat_profile_free(p);
     p = mh_cheat_profile_new();
@@ -125,28 +125,28 @@ static void test_validate_messages(void)
 
     p = manual(1);
     p->entries[0].flags |= 0x80;
-    check_invalid(p, "Um cheat possui flags desconhecidas.");
+    check_invalid(p, "A cheat has unknown flags.");
     p = manual(1);
     p->entries[0].flags |= MH_CHEAT_F_AUDITED;
-    check_invalid(p, "Cada cheat precisa ser exatamente AUDITED xor CUSTOM.");
+    check_invalid(p, "Each cheat must be exactly AUDITED xor CUSTOM.");
     p = manual(1);
     p->entries[0].flags = 0;
-    check_invalid(p, "Cada cheat precisa ser exatamente AUDITED xor CUSTOM.");
+    check_invalid(p, "Each cheat must be exactly AUDITED xor CUSTOM.");
     p = manual(1);
     p->entries[0].flags |= MH_CHEAT_F_MANDATORY;
-    check_invalid(p, "Um cheat obrigatorio precisa ser auditado e permanecer ativo.");
+    check_invalid(p, "A mandatory cheat must be audited and stay enabled.");
     p = manual(1);
     p->entries[0].flags |= MH_CHEAT_F_DB_DEFAULT;
-    check_invalid(p, "Um cheat personalizado possui proveniencia/flags oficiais invalidas.");
+    check_invalid(p, "A custom cheat has invalid official provenance or flags.");
     p = manual(1);
     p->entries[0].id = 5;
-    check_invalid(p, "Um cheat personalizado possui proveniencia/flags oficiais invalidas.");
+    check_invalid(p, "A custom cheat has invalid official provenance or flags.");
     p = manual(1);
     p->entries[0].game = 1;
-    check_invalid(p, "Um cheat personalizado possui proveniencia/flags oficiais invalidas.");
+    check_invalid(p, "A custom cheat has invalid official provenance or flags.");
     p = manual(1);
     p->entries[0].variant = 3;
-    check_invalid(p, "Um cheat personalizado possui proveniencia/flags oficiais invalidas.");
+    check_invalid(p, "A custom cheat has invalid official provenance or flags.");
 
     /* audited provenance against the profile header */
     p = manual(1);
@@ -156,22 +156,22 @@ static void test_validate_messages(void)
     p->game = 1; p->title = 3; p->variant = 3; p->db_crc = MH_CHEAT_DB_CRC;
     CHECK(mh_cheat_profile_validate(p, err, sizeof err));
     e->game = 4;
-    check_invalid(p, "Um cheat auditado perdeu ou divergiu da proveniencia do header.");
+    check_invalid(p, "An audited cheat lost or differs from the header provenance.");
     p = manual(1);
     e = &p->entries[0];
     e->flags = MH_CHEAT_F_AUDITED; e->game = 1; e->variant = 3; e->id = 7;
     p->game = 1; p->title = 3; p->variant = 4; p->db_crc = MH_CHEAT_DB_CRC;
-    check_invalid(p, "Um cheat auditado perdeu ou divergiu da proveniencia do header.");
+    check_invalid(p, "An audited cheat lost or differs from the header provenance.");
     p = manual(1);
     e = &p->entries[0];
     e->flags = MH_CHEAT_F_AUDITED; e->game = 1; e->variant = 3; e->id = NONE;
     p->game = 1; p->title = 3; p->variant = 3; p->db_crc = MH_CHEAT_DB_CRC;
-    check_invalid(p, "Um cheat auditado perdeu ou divergiu da proveniencia do header.");
+    check_invalid(p, "An audited cheat lost or differs from the header provenance.");
     p = manual(1);
     e = &p->entries[0];
     e->flags = MH_CHEAT_F_AUDITED; e->game = 1; e->variant = 3; e->id = 7;
     p->game = 1; p->title = 3; p->variant = 3; p->db_crc = 12345;
-    check_invalid(p, "Perfil auditado possui header de proveniencia invalido.");
+    check_invalid(p, "The audited profile has an invalid provenance header.");
     p = manual(1);
     e = &p->entries[0];
     e->flags = MH_CHEAT_F_AUDITED | MH_CHEAT_F_MANDATORY | MH_CHEAT_F_ENABLED;
@@ -183,13 +183,13 @@ static void test_validate_messages(void)
     /* a custom only profile needs the sentinel header */
     p = manual(1);
     p->db_crc = 1;
-    check_invalid(p, "Perfil somente CUSTOM deve usar proveniencia sentinela e CRC zero.");
+    check_invalid(p, "A CUSTOM-only profile must use the sentinel provenance and a zero CRC.");
     p = manual(1);
     p->game = 1;
-    check_invalid(p, "Perfil somente CUSTOM deve usar proveniencia sentinela e CRC zero.");
+    check_invalid(p, "A CUSTOM-only profile must use the sentinel provenance and a zero CRC.");
     p = manual(1);
     p->title = 0;
-    check_invalid(p, "Perfil somente CUSTOM deve usar proveniencia sentinela e CRC zero.");
+    check_invalid(p, "A CUSTOM-only profile must use the sentinel provenance and a zero CRC.");
 
     /* line and size limits */
     p = manual(3);
@@ -199,10 +199,10 @@ static void test_validate_messages(void)
         for (int k = 0; k < 200; k++) memcpy(p->entries[i].lines + k * 6, W8, 6);
         p->entries[i].nlines = 200;
     }
-    check_invalid(p, "O catalogo excede 510 linhas de codigo.");
+    check_invalid(p, "The catalog exceeds 510 code lines.");
     p = manual(100); /* 100 entries of 1 line: 64 + 100 * 102 = 10264 > 10240 */
     CHECK(mh_cheat_profile_serialized_size(p) == 0x40 + 100 * (0x60 + 6));
-    check_invalid(p, "O catalogo de cheats excede a regiao reservada de 10.240 bytes.");
+    check_invalid(p, "The cheat catalog exceeds the reserved 10,240 byte region.");
     p = manual(99);
     CHECK(mh_cheat_profile_validate(p, err, sizeof err));
     mh_cheat_profile_free(p);
@@ -277,8 +277,8 @@ static void test_add_remove_clone(void)
     mh_cheat_profile_free(p);
 
     CHECK_STR(mh_cheat_entry_hardware_note(),
-              "Use a regiao e a revisao corretas do jogo. Consulte PT/EN e o codigo original no catalogo. "
-              "Condicoes por botao precisam do controle inicializado pelo jogo.");
+              "Use the correct game region and revision. See the PT/EN notes and the original code in "
+              "the catalog. Button conditions need the controller to be initialized by the game.");
     CHECK(mh_cheat_entry_hardware_exclusion(NULL) == 0);
 }
 
@@ -333,7 +333,7 @@ static void test_wire_roundtrip_and_validation(void)
     CHECK(mh_cheat_profile_serialized_size(p) == 0x40 + 3 * 0x60 + 4 * 6);
 
     CHECK(!mh_cheat_profile_serialize(p, 0, &blob, &len, err, sizeof err));
-    CHECK_STR(err, "Escopo de cheats invalido.");
+    CHECK_STR(err, "Invalid cheat scope.");
     CHECK(!mh_cheat_profile_serialize(p, 3, &blob, &len, err, sizeof err) && blob == NULL && len == 0);
     CHECK(mh_cheat_profile_serialize(p, 2, &blob, &len, err, sizeof err));
     CHECK(len == 0x40 + 3 * 0x60 + 4 * 6);
@@ -374,52 +374,52 @@ static void test_wire_roundtrip_and_validation(void)
         CHECK(!mh_cheat_blob_validate(bad, len, err, sizeof err)); \
         CHECK_STR(err, msg);                                   \
     } while (0)
-    BAD("Cabecalho PSTCHT1 invalido.", bad[0] = 'Q');
-    BAD("Cabecalho PSTCHT1 invalido.", ch_wr16(bad + 8, 3));
-    BAD("Cabecalho PSTCHT1 invalido.", ch_wr16(bad + 10, 0x41));
-    BAD("Cabecalho PSTCHT1 invalido.", ch_wr32(bad + 0xc, 1));
-    BAD("Cabecalho PSTCHT1 invalido.", ch_wr32(bad + 0x10, 4));
-    BAD("Cabecalho PSTCHT1 invalido.", ch_wr32(bad + 0x1c, 0x58));
-    BAD("Cabecalho PSTCHT1 invalido.", ch_wr32(bad + 0x28, len + 1));
-    BAD("Cabecalho PSTCHT1 invalido.", bad[0x38] = 0);
-    BAD("Cabecalho PSTCHT1 invalido.", bad[0x38] = 3);
-    BAD("Cabecalho PSTCHT1 invalido.", ch_wr32(bad + 0x18, 600));
+    BAD("Invalid PSTCHT1 header.", bad[0] = 'Q');
+    BAD("Invalid PSTCHT1 header.", ch_wr16(bad + 8, 3));
+    BAD("Invalid PSTCHT1 header.", ch_wr16(bad + 10, 0x41));
+    BAD("Invalid PSTCHT1 header.", ch_wr32(bad + 0xc, 1));
+    BAD("Invalid PSTCHT1 header.", ch_wr32(bad + 0x10, 4));
+    BAD("Invalid PSTCHT1 header.", ch_wr32(bad + 0x1c, 0x58));
+    BAD("Invalid PSTCHT1 header.", ch_wr32(bad + 0x28, len + 1));
+    BAD("Invalid PSTCHT1 header.", bad[0x38] = 0);
+    BAD("Invalid PSTCHT1 header.", bad[0x38] = 3);
+    BAD("Invalid PSTCHT1 header.", ch_wr32(bad + 0x18, 600));
     memcpy(bad, blob, len);
     bad[0x41] ^= 1; /* crc not fixed */
     CHECK(!mh_cheat_blob_validate(bad, len, err, sizeof err));
-    CHECK_STR(err, "Cabecalho PSTCHT1 invalido.");
-    BAD("Proveniencia do header PSTCHT1 invalida.", bad[0x39] = 4);
-    BAD("Proveniencia do header PSTCHT1 invalida.", ch_wr32(bad + 0x34, 1));
-    BAD("Registro de cheat PSTCHT1 invalido.", bad[0x40] = 0);               /* empty name */
-    BAD("Registro de cheat PSTCHT1 invalido.", bad[0x40] = '[');
-    BAD("Registro de cheat PSTCHT1 invalido.", bad[0x40 + 20] = 'X');       /* junk after the NUL */
-    BAD("Registro de cheat PSTCHT1 invalido.", bad[0x40 + 0x58] = 1);       /* reserved bytes */
-    BAD("Registro de cheat PSTCHT1 invalido.", ch_wr16(bad + 0x40 + 0x4c, 0));
-    BAD("Registro de cheat PSTCHT1 invalido.", ch_wr32(bad + 0x40 + 0x48, 0x40 + 3 * 0x60 + 1));
-    BAD("Registro de cheat PSTCHT1 invalido.", ch_wr32(bad + 0x40 + 0x50, 1));
-    BAD("Registro de cheat PSTCHT1 invalido.", bad[0x40 + 0x4f] |= 0x80);
-    BAD("Registro de cheat PSTCHT1 invalido.", bad[0x40 + 3 * 0x60] = 0x61); /* bad opcode (crc of code too) */
-    BAD("Registro PSTCHT1 precisa ser exatamente AUDITED xor CUSTOM.", bad[0x40 + 0x4f] = 0x01);
-    BAD("Registro CUSTOM possui proveniencia oficial invalida.", bad[0x40 + 0x4e] = 1);
-    BAD("Registro CUSTOM possui proveniencia oficial invalida.", ch_wr32(bad + 0x40 + 0x44, 3));
-    BAD("Registro CUSTOM possui proveniencia oficial invalida.", bad[0x40 + 0x4f] = 0x15);
-    BAD("Cheat obrigatorio precisa ser AUDITED e ENABLED no PSTCHT1.", bad[0x40 + 0x4f] = 0x07);
+    CHECK_STR(err, "Invalid PSTCHT1 header.");
+    BAD("Invalid provenance in the PSTCHT1 header.", bad[0x39] = 4);
+    BAD("Invalid provenance in the PSTCHT1 header.", ch_wr32(bad + 0x34, 1));
+    BAD("Invalid PSTCHT1 cheat record.", bad[0x40] = 0);               /* empty name */
+    BAD("Invalid PSTCHT1 cheat record.", bad[0x40] = '[');
+    BAD("Invalid PSTCHT1 cheat record.", bad[0x40 + 20] = 'X');       /* junk after the NUL */
+    BAD("Invalid PSTCHT1 cheat record.", bad[0x40 + 0x58] = 1);       /* reserved bytes */
+    BAD("Invalid PSTCHT1 cheat record.", ch_wr16(bad + 0x40 + 0x4c, 0));
+    BAD("Invalid PSTCHT1 cheat record.", ch_wr32(bad + 0x40 + 0x48, 0x40 + 3 * 0x60 + 1));
+    BAD("Invalid PSTCHT1 cheat record.", ch_wr32(bad + 0x40 + 0x50, 1));
+    BAD("Invalid PSTCHT1 cheat record.", bad[0x40 + 0x4f] |= 0x80);
+    BAD("Invalid PSTCHT1 cheat record.", bad[0x40 + 3 * 0x60] = 0x61); /* bad opcode (crc of code too) */
+    BAD("A PSTCHT1 record must be exactly AUDITED xor CUSTOM.", bad[0x40 + 0x4f] = 0x01);
+    BAD("A CUSTOM record has invalid official provenance.", bad[0x40 + 0x4e] = 1);
+    BAD("A CUSTOM record has invalid official provenance.", ch_wr32(bad + 0x40 + 0x44, 3));
+    BAD("A CUSTOM record has invalid official provenance.", bad[0x40 + 0x4f] = 0x15);
+    BAD("A mandatory cheat must be AUDITED and ENABLED in the PSTCHT1.", bad[0x40 + 0x4f] = 0x07);
     /* "auditado e personalizado ao mesmo tempo" (flags 0x0c) is shadowed by the xor rule above it */
-    BAD("Registro PSTCHT1 precisa ser exatamente AUDITED xor CUSTOM.", bad[0x40 + 0x4f] = 0x0d);
-    BAD("Contagens, efeito, proveniencia ou limite de 31 linhas ativas invalidos no PSTCHT1.",
+    BAD("A PSTCHT1 record must be exactly AUDITED xor CUSTOM.", bad[0x40 + 0x4f] = 0x0d);
+    BAD("Invalid counts, effect, provenance or 31-active-line limit in the PSTCHT1.",
         ch_wr32(bad + 0x14, 1));
-    BAD("Contagens, efeito, proveniencia ou limite de 31 linhas ativas invalidos no PSTCHT1.",
+    BAD("Invalid counts, effect, provenance or 31-active-line limit in the PSTCHT1.",
         ch_wr32(bad + 0x18, 5));
     CHECK(!mh_cheat_blob_validate(blob, len - 1, err, sizeof err));
-    CHECK_STR(err, "Cabecalho PSTCHT1 invalido.");
+    CHECK_STR(err, "Invalid PSTCHT1 header.");
     CHECK(!mh_cheat_blob_validate(blob, 0x3f, err, sizeof err));
-    CHECK_STR(err, "Blob de cheats ausente, truncado ou maior que 10.240 bytes.");
+    CHECK_STR(err, "The cheat blob is missing, truncated or larger than 10,240 bytes.");
     CHECK(!mh_cheat_blob_validate(NULL, 100, err, sizeof err));
-    CHECK_STR(err, "Blob de cheats ausente, truncado ou maior que 10.240 bytes.");
+    CHECK_STR(err, "The cheat blob is missing, truncated or larger than 10,240 bytes.");
     {
         uint8_t *huge = calloc(1, 0x2801);
         CHECK(!mh_cheat_blob_validate(huge, 0x2801, err, sizeof err));
-        CHECK_STR(err, "Blob de cheats ausente, truncado ou maior que 10.240 bytes.");
+        CHECK_STR(err, "The cheat blob is missing, truncated or larger than 10,240 bytes.");
         free(huge);
     }
     free(bad);
@@ -469,7 +469,7 @@ static void test_audited(void)
         uint8_t *none = NULL;
         uint32_t nl = 0;
         CHECK(!mh_cheat_profile_serialize(p, 0, &none, &nl, err, sizeof err) && none == NULL && nl == 0);
-        CHECK_STR(err, "Catalogo original invalido ou divergente.");
+        CHECK_STR(err, "The original catalog is invalid or differs.");
         CHECK(mh_cheat_profile_serialize(p, 1, &none, &nl, err, sizeof err) && none[0x38] == 1);
         free(none);
     }
@@ -534,19 +534,19 @@ static void test_audited(void)
     mh_cheat_profile_free(cat);
     cat = NULL;
     CHECK(!mh_cheat_profile_build_for_disc(&g_db, "SLUS-99999", &cat, err, sizeof err) && cat == NULL);
-    CHECK_STR(err, "Disco confirmado nao possui catalogo de cheats inequivoco.");
+    CHECK_STR(err, "The confirmed disc has no unambiguous cheat catalog.");
     CHECK(!mh_cheat_profile_build_for_disc(&g_db, "", &cat, err, sizeof err));
-    CHECK_STR(err, "Disco confirmado nao possui catalogo de cheats inequivoco.");
+    CHECK_STR(err, "The confirmed disc has no unambiguous cheat catalog.");
     {
         MhCheatDb none;
         memset(&none, 0, sizeof none);
         CHECK(!mh_cheat_profile_build_for_disc(&none, "SLUS-00402", &cat, err, sizeof err));
-        CHECK_STR(err, "Banco de cheats incorporado indisponivel.");
+        CHECK_STR(err, "The embedded cheat database is unavailable.");
         CHECK(!mh_cheat_profile_build_exact_catalog(&none, 835, "X", &cat, err, sizeof err));
-        CHECK_STR(err, "Banco de cheats auditado indisponivel.");
+        CHECK_STR(err, "The audited cheat database is unavailable.");
     }
     CHECK(!mh_cheat_profile_build_exact_catalog(&g_db, 5000, "X", &cat, err, sizeof err));
-    CHECK_STR(err, "Nenhuma variante auditada cabe com seguranca no PSTCHT1 estendido de 10.240 bytes.");
+    CHECK_STR(err, "No audited variant fits safely in the extended 10,240 byte PSTCHT1.");
 
     (void)e;
 }
@@ -628,7 +628,7 @@ static void test_legacy_and_refs(void)
     ch_wr32(b2 + 0x34, MH_CHEAT_DB_LEGACY_CRC);
     rd_fix_crc(b2, len);
     CHECK(!mh_cheat_blob_validate(b2, len, err, sizeof err));
-    CHECK_STR(err, "Proveniencia do header PSTCHT1 invalida.");
+    CHECK_STR(err, "Invalid provenance in the PSTCHT1 header.");
     CHECK(!mh_cheat_profile_deserialize(b2, len, &q, err, sizeof err) && q == NULL);
     free(b2);
     free(blob);
@@ -680,7 +680,7 @@ static void test_legacy_and_refs(void)
         expr;                                                       \
         rd_fix_crc(x, len);                                         \
         CHECK(!mh_cheat_blob_validate(x, len, err, sizeof err));    \
-        CHECK_STR(err, "Referencias do catalogo original invalidas."); \
+        CHECK_STR(err, "Invalid references to the original catalog."); \
         free(x);                                                    \
     } while (0)
     BAD5(ch_wr16(x + 0x40, 200));            /* no such group */
@@ -727,14 +727,14 @@ static void test_restore_and_combined(void)
     CHECK(mh_cheat_profile_build_exact_catalog(&g_db, 0, "S", &fresh, err, sizeof err));
     mh_cheat_profile_remove(fresh, 0);
     CHECK(!mh_cheat_profile_restore_user_state(fresh, saved, err, sizeof err));
-    CHECK_STR(err, "O perfil gravado foi preservado: a nova selecao nao contem todos os grupos anteriores.");
+    CHECK_STR(err, "The saved profile was kept: the new selection does not contain all the previous groups.");
     mh_cheat_profile_free(fresh);
     /* another library */
     CHECK(mh_cheat_profile_build_exact_catalog(&g_db, 1, "S", &other, err, sizeof err));
     CHECK(!mh_cheat_profile_restore_user_state(other, saved, err, sizeof err));
     CHECK_STR(err,
-              "O perfil gravado foi preservado. Outra biblioteca pode ser consultada no editor sem alterar suas "
-              "escolhas.");
+              "The saved profile was kept. Another library can be browsed in the editor without "
+              "changing your choices.");
     CHECK(mh_cheat_profile_restore_user_state(NULL, saved, err, sizeof err));
     CHECK(mh_cheat_profile_restore_user_state(other, NULL, err, sizeof err));
 
@@ -747,8 +747,8 @@ static void test_restore_and_combined(void)
     other->entries[0].flags |= MH_CHEAT_F_ENABLED;
     CHECK(!mh_cheat_profiles_validate_combined(other, saved, err, sizeof err));
     CHECK_STR(err,
-              "Cheats auditados da Case e do disco pertencem a variantes diferentes. Use a variante oficial no "
-              "disco ou mantenha a Case apenas com cheats personalizados.");
+              "Audited cheats on the Case and on the disc belong to different variants. Use the "
+              "official variant on the disc or keep only custom cheats on the Case.");
     {
         /* enabled lines of both together: 510 + 255 */
         MhCheatProfile *a = manual(2), *b = manual(1);
@@ -765,7 +765,7 @@ static void test_restore_and_combined(void)
         b->entries[0].nlines = 255;
         CHECK(mh_cheat_profile_validate(a, err, sizeof err) && mh_cheat_profile_validate(b, err, sizeof err));
         CHECK(!mh_cheat_profiles_validate_combined(a, b, err, sizeof err));
-        CHECK_STR(err, "Case e disco excedem o limite interno de linhas. Desative alguns codigos.");
+        CHECK_STR(err, "Case and disc exceed the internal line limit. Disable some codes.");
         mh_cheat_profile_active_stats(a, &en, &ln, &cost, &aud);
         CHECK(en == 2 && ln == 510 && cost == 510 * 0x2c && aud == 0);
         mh_cheat_profile_free(a);
@@ -784,19 +784,19 @@ static void test_catalog_entry(void)
     CHECK(mh_cheat_profile_add_catalog_entry(p, &g_db, 0, 1, MH_CHEAT_BUDGET_DISC, err, sizeof err));
     CHECK(p->count == 1); /* identical group is already there */
     CHECK(!mh_cheat_profile_add_catalog_entry(p, &g_db, 1, 0, MH_CHEAT_BUDGET_DISC, err, sizeof err));
-    CHECK_STR(err, "Remova os cheats do titulo anterior antes de adicionar outro jogo original.");
+    CHECK_STR(err, "Remove the cheats of the previous title before adding another original game.");
     CHECK(p->variant == 0 && p->title == 0 && p->count == 1);
     CHECK(!mh_cheat_profile_add_catalog_entry(p, &g_db, 0, 77, MH_CHEAT_BUDGET_DISC, err, sizeof err));
-    CHECK_STR(err, "Este grupo nao e suportado pelo motor atual.");
+    CHECK_STR(err, "This group is not supported by the current engine.");
     CHECK(!mh_cheat_profile_add_catalog_entry(p, &g_db, 0, 2, 0x44, err, sizeof err));
-    CHECK_STR(err, "O grupo inteiro nao cabe. Remova outro grupo da lista preparada antes de adicionar este.");
+    CHECK_STR(err, "The whole group does not fit. Remove another group from the prepared list before adding this one.");
     CHECK(p->count == 1);
     CHECK(mh_cheat_profile_add_catalog_entry(p, &g_db, 0, 2, 0x48, err, sizeof err));
     mh_cheat_profile_free(p);
     p = mh_cheat_profile_new();
     CHECK(!mh_cheat_profile_add_catalog_entry(p, &g_db, 0, 1, 0x43, err, sizeof err));
     CHECK(p->game == 0 && p->title == NONE);
-    CHECK_STR(err, "O grupo inteiro nao cabe. Remova outro grupo da lista preparada antes de adicionar este.");
+    CHECK_STR(err, "The whole group does not fit. Remove another group from the prepared list before adding this one.");
     mh_cheat_profile_free(p);
 }
 

@@ -90,13 +90,13 @@ bool mh_disk_eligible(const MhDiskInfo *d, uint32_t flags, const char **why);
 /* orig: the checks in identity_matches / sd_refresh_identity beyond system_disks: same number,
  * size, block size, model, serial, and media_id (when both are non-zero). */
 bool mh_disk_same_identity(const MhDiskInfo *a, const MhDiskInfo *b);
-/* orig: refresh_sd combo text: "<bsd> | <model or Dispositivo USB/SD> | <size> [| <label>]
+/* orig: refresh_sd combo text: "<bsd> | <model or USB/SD device> | <size> [| <label>]
  * [ | PSXRAW V<n>]". (orig: "PhysicalDriveN | ... | X:").  */
 void mh_disk_label_text(const MhDiskInfo *d, char *out, size_t n);
 /* Text shown when the list is empty / after a scan (orig refresh_sd). */
-#define MH_DISK_TXT_NONE "Nenhum dispositivo USB/SD seguro foi detectado."
-#define MH_DISK_TXT_FOUND "Dispositivo detectado. Cartoes V2 existentes sao carregados automaticamente."
-#define MH_DISK_TXT_GENERIC_MODEL "Dispositivo USB/SD"
+#define MH_DISK_TXT_NONE "No safe USB/SD device was detected."
+#define MH_DISK_TXT_FOUND "Device detected. Existing V2 cards are loaded automatically."
+#define MH_DISK_TXT_GENERIC_MODEL "USB/SD device"
 
 /* ---- discovery (platform/mac) ------------------------------------------------------------ */
 
