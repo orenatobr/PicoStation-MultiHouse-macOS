@@ -5,3 +5,4 @@ build/
 *.o
 .graphify-autobuild.log
 graphify-out/
+dist/
