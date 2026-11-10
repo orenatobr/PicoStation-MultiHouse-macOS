@@ -128,11 +128,20 @@ bool mh_disk_identity_matches(const MhDiskInfo *known, const MhDiskOpts *opts, M
 
 /* ---- device handle ----------------------------------------------------------------------- */
 
+struct MhBlockDev;
+/* Platform hooks behind mh_blockdev_recheck / refresh_properties / close. NULL = no-op. */
+typedef struct MhBlockDevOps {
+    bool (*recheck)(struct MhBlockDev *dev, char *err, size_t errn);
+    void (*refresh)(struct MhBlockDev *dev);
+    void (*release)(struct MhBlockDev *dev); /* unlock volumes, free impl; fd still open */
+} MhBlockDevOps;
+
 typedef struct MhBlockDev {
     MhIo io;            /* use mh_io_read/mh_io_write/mh_io_flush/... on &dev->io */
     MhDiskInfo info;    /* identity verified at open time */
     uint64_t size;      /* bytes, from the device itself */
     int writable;
+    const MhBlockDevOps *ops;
     void *impl;         /* platform state: volume lock, mount block */
     uint32_t flags;     /* flags used at open, reused by recheck */
     int standin;        /* regular file used as a fake device (tests) */
