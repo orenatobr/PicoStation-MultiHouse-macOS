@@ -486,6 +486,18 @@ static BOOL case_verified(MhCase *c) {
     return YES;
 }
 
+/* .cue stem without the language tag "(En,Fr,De)" and, for a case, the "(Disc N)" tag; region and revision
+ * tags such as "(USA)" or "(Rev 1)" stay as written. */
+static NSString *strip_cue_tags(NSString *stem, BOOL discTag) {
+    NSString *lang = @"\\s*\\([A-Z][a-z](?:-[A-Za-z]+)?(?:,[A-Z][a-z](?:-[A-Za-z]+)?)*\\)";
+    NSString *pat = discTag ? [NSString stringWithFormat:@"%@|\\s*\\(Disc \\d+\\)", lang] : lang;
+    NSString *out = [stem stringByReplacingOccurrencesOfString:pat
+                                                    withString:@""
+                                                       options:NSRegularExpressionSearch
+                                                         range:NSMakeRange(0, stem.length)];
+    return out.length ? out : stem;
+}
+
 /* Sidebar title: the .cue name as written (no extension). The stored
  * case title is the normalised 32-char card name, so it is used only when the user renamed the case. */
 static NSString *case_sidebar_title(const MhCase *c) {
@@ -496,15 +508,16 @@ static NSString *case_sidebar_title(const MhCase *c) {
     mh_case_title_for_disc(d, derived, sizeof derived);
     mh_str_copy(auto_title, sizeof auto_title, derived);
     if (strcmp(c->title, auto_title) != 0) return stored;
-    NSString *stem = MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension;
+    NSString *stem = strip_cue_tags(MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension, YES);
     return stem.length ? stem : stored;
 }
 
-/* Disc name shown in the UI: the .cue name as written, unless the user typed a name. */
+/* Disc name shown in the UI: the .cue name without the language tag (the "(Disc N)" tag stays, it tells
+ * the discs of a case apart), unless the user typed a name. */
 static NSString *disc_display_name(const MhDisc *d) {
     NSString *stored = MHStr(d->name);
     if ((d->flags & MH_DF_USER_NAMED) || !d->cue_path[0]) return stored;
-    NSString *stem = MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension;
+    NSString *stem = strip_cue_tags(MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension, NO);
     return stem.length ? stem : stored;
 }
 
