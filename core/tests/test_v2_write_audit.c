@@ -519,7 +519,126 @@ static void test_audit_edit_inplace(void)
         mh_project_clear(r);
         free(r);
     }
+    /* growth in place: two more discs than the file has room for; the first library stays untouched */
+    {
+        MhProject *g = new_project();
+        uint8_t *grown;
+        uint64_t szg;
+        MhV2DiscRec nr;
+        char *img3 = tpath("edit_grow.img");
+        FILE *f = fopen(img3, "wb");
+        assert(f && fwrite(before, 1, (size_t)szb, f) == szb);
+        fclose(f);
+        snprintf(cache, sizeof cache, "%s/cache_ed3", g_tmp);
+        mh_ensure_dir(cache);
+        CHECK(mh_v2_load_image(img3, cache, &g_env, g, &vres));
+        make_synth("ed_f", 900, 100, true, 36, cue);
+        CHECK(add_cue(g, cue, 256) == MH_ADD_OK);
+        make_synth("ed_g", 700, 0, false, 37, cue);
+        CHECK(add_cue(g, cue, 256) == MH_ADD_OK);
+        mh_project_recount(g);
+        reset_progress();
+        CHECK(mh_v2_write_image_direct(&g_w, g, img3, &res) && res.ok && res.discs == 5);
+        grown = slurp_all(img3, &szg);
+        CHECK(szg > szb);
+        for (i = 0; i < 3; i++) {
+            size_t n = (size_t)MH_V2_PKG_BLOCKS(rec[i].sectors) * 512;
+            CHECK(memcmp(before + (rec[i].base_lba << 9), grown + (rec[i].base_lba << 9), n) == 0);
+        }
+        for (i = 3; i < 5; i++) {
+            mh_v2_disc_decode(grown + 0x6400 + i * 0x100, &nr, NULL);
+            CHECK(nr.base_lba >= rec[2].base_lba + MH_V2_PKG_BLOCKS(rec[2].sectors));
+        }
+        memset(&vres, 0, sizeof vres);
+        CHECK(mh_v2_validate_image(img3, NULL, &vres) && vres.ok);
+        free(grown);
+        mh_project_clear(g);
+        free(g);
+    }
     free(before);
+    mh_project_clear(p);
+    mh_project_clear(q);
+    free(p);
+    free(q);
+}
+
+/* ---- 3b. the same edit as a card (kind 4 discs, phys == v2_drive), on a file stand-in ------------ */
+
+static void test_audit_card_edit(void)
+{
+    MhProject *p = new_project(), *q = new_project();
+    MhV2Result res, vres;
+    char cue[MH_PATH_MAX], cache[MH_PATH_MAX], err[256], *dev = tpath("card_edit.bin");
+    MhBlockDev *bd;
+    uint8_t *before, *after, *tab;
+    uint64_t szb, sza, cap;
+    MhV2DiscRec rec[3], nr;
+    MhV2Header h;
+    unsigned i, c, j;
+
+    make_synth("ce_a", 600, 200, false, 61, cue);
+    project_add(p, cue, 256);
+    make_synth("ce_b", 800, 200, true, 62, cue);
+    project_add(p, cue, 256);
+    make_synth("ce_c", 500, 0, false, 63, cue);
+    project_add(p, cue, 256);
+    cap = mh_v2_estimate_project_bytes_for_target(p, 7, NULL) + 0x400000;
+    bd = mh_blockdev_open_file(dev, true, cap, err, sizeof err);
+    CHECK(bd != NULL);
+    reset_progress();
+    CHECK(mh_v2_write_handle_direct(&g_w, p, &bd->io, 7, NULL, bd->size, &res) && res.ok);
+    tab = pread_file(dev, 0x6400, 0x300);
+    for (i = 0; i < 3; i++) mh_v2_disc_decode(tab + i * 0x100, &rec[i], NULL);
+    free(tab);
+
+    /* "load the card": the image loader gives kind 5, a card gives kind 4 with the same fields */
+    snprintf(cache, sizeof cache, "%s/cache_ce", g_tmp);
+    mh_ensure_dir(cache);
+    CHECK(mh_v2_load_image(dev, cache, &g_env, q, &vres));
+    mh_project_recount(q);
+    for (c = 0; c < MH_PROJECT_MAX_CASES; c++)
+        if (q->cases[c].in_use)
+            for (j = 0; j < q->cases[c].disc_count; j++) {
+                MhDisc *d = q->cases[c].discs[j];
+                d->kind = MH_DISC_KIND_V2_DEVICE;
+                d->v2_drive = 7;
+            }
+    q->image_loaded = 0;
+    q->image_path[0] = 0;
+    q->card_loaded = 1;
+    q->device = 7;
+    before = slurp_all(dev, &szb);
+
+    CHECK(mh_project_remove_case(q, 0));
+    make_synth("ce_d", 300, 0, false, 64, cue);
+    CHECK(add_cue(q, cue, 256) == MH_ADD_OK);
+    mh_project_recount(q);
+    CHECK(mh_v2_estimate_project_bytes_for_target(q, 7, NULL) <= bd->size);
+    reset_progress();
+    CHECK(mh_v2_write_handle_direct(&g_w, q, &bd->io, 7, NULL, bd->size, &res));
+    if (!res.ok) fprintf(stderr, "card edit: %s\n", res.msg);
+    CHECK(res.ok && res.discs == 3);
+    CHECK(g_count_gravando >= 1);
+    after = slurp_all(dev, &sza);
+    CHECK(sza == szb && sza == bd->size);                 /* a card keeps its size */
+    mh_v2_header_decode(after, &h);
+    CHECK(h.generation == 2);
+    CHECK(h.mbr_sectors == (uint32_t)(bd->size / 512 - 1));
+    for (i = 0; i < 3; i++) {
+        mh_v2_disc_decode(after + 0x6400 + i * 0x100, &nr, NULL);
+        if (nr.base_lba == rec[1].base_lba || nr.base_lba == rec[2].base_lba) {
+            const MhV2DiscRec *o = nr.base_lba == rec[1].base_lba ? &rec[1] : &rec[2];
+            CHECK(memcmp(before + (o->base_lba << 9), after + (o->base_lba << 9), (size_t)MH_V2_PKG_BLOCKS(o->sectors) * 512) == 0);
+        } else {
+            CHECK(nr.base_lba == rec[0].base_lba && nr.sectors == 450);      /* the hole of the removed disc */
+        }
+    }
+    free(before);
+    free(after);
+    mh_blockdev_close(bd);
+    memset(&vres, 0, sizeof vres);
+    CHECK(mh_v2_validate_image(dev, NULL, &vres) && vres.ok);
+    if (!vres.ok) fprintf(stderr, "card validate: %s\n", vres.msg);
     mh_project_clear(p);
     mh_project_clear(q);
     free(p);
@@ -652,6 +771,7 @@ int main(void)
         RUN("model", test_audit_track_map_property);
         RUN("extent", test_audit_extent_property);
         RUN("edit", test_audit_edit_inplace);
+        RUN("card", test_audit_card_edit);
         RUN("alias", test_audit_alias_clash);
         RUN("source", test_audit_source_is_target);
         RUN("devsize", test_audit_device_size);
