@@ -1815,7 +1815,7 @@ static void device_changed(DADiskRef disk, void *ctx) {
     MhDisc *d = _app.currentDisc;
     if (!d || _app.busy) return;
     if (d->serial[0] == 0) [self recoverSerial:d silent:YES];
-    NSMutableString *h = [NSMutableString stringWithString:MHStr(d->name)];
+    NSMutableString *h = [NSMutableString stringWithString:disc_display_name(d)];
     if (d->serial[0]) {
         [h appendFormat:@"  |  Serial: %@", MHStr(d->serial)];
         [h appendString:@"\r\nLinked by serial. Use the button next to it to choose another profile."];
