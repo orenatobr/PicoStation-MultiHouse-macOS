@@ -798,8 +798,7 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
     _lastPhase = phase;
     _lastStep = step;
     NSString *line = text ?: @"";
-    if (phase >= 1 && phase <= MH_V2_PHASE_STEPS)
-        line = [NSString stringWithFormat:@"Step %d of %d  ·  %@", phase, MH_V2_PHASE_STEPS, text.length ? text : MHPhaseTitle(phase)];
+    if (phase >= 1 && phase <= MH_V2_PHASE_STEPS && !text.length) line = MHPhaseTitle(phase);
     [self setStatus:_app.cancelRequested ? @"Cancelling at the next safe point…" : line];
     [_sheet updatePhase:phase step:step steps:steps fraction:pct text:text cancelEnabled:!_app.cannotCancel
              cancelling:_app.cancelRequested];
