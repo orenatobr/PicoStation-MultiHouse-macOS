@@ -508,10 +508,7 @@ NSString *MHPhaseTitle(int phase) {
       cancelEnabled:(BOOL)ce cancelling:(BOOL)cancelling {
     if (_closed) return;
     NSString *ph = MHPhaseTitle(phase);
-    if (phase >= 1 && phase <= MH_V2_PHASE_STEPS)
-        _step.stringValue = [NSString stringWithFormat:@"Step %d of %d  ·  %@", phase, MH_V2_PHASE_STEPS, ph];
-    else
-        _step.stringValue = ph;
+    _step.stringValue = ph;
     NSMutableString *item = [NSMutableString string];
     if (cancelling) [item appendString:@"Cancelling at the next safe point…"];
     else if (!ce) [item appendString:@"Finishing safely… this step cannot be cancelled."];

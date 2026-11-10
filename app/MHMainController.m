@@ -798,8 +798,7 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
     _lastPhase = phase;
     _lastStep = step;
     NSString *line = text ?: @"";
-    if (phase >= 1 && phase <= MH_V2_PHASE_STEPS)
-        line = [NSString stringWithFormat:@"Step %d of %d  ·  %@", phase, MH_V2_PHASE_STEPS, text.length ? text : MHPhaseTitle(phase)];
+    if (phase >= 1 && phase <= MH_V2_PHASE_STEPS && !text.length) line = MHPhaseTitle(phase);
     [self setStatus:_app.cancelRequested ? @"Cancelling at the next safe point…" : line];
     [_sheet updatePhase:phase step:step steps:steps fraction:pct text:text cancelEnabled:!_app.cannotCancel
              cancelling:_app.cancelRequested];
@@ -1345,7 +1344,7 @@ static void hook_attach(void *ctx, MhDisc *d) { mh_v2_auto_attach_cheats(MHApp.s
         case MH_ADD_OK:
             { int sl = res.cas->slot, di = res.disc_index; MHMain(^{ self->_app.curCase = sl; self->_app.curDisc = di; }); }
             if (res.disc_index >= 0 && res.disc_index < res.cas->disc_count)
-                [self autoLoadArtNextToCue:path case:res.cas disc:res.cas->discs[res.disc_index]];
+                [self fetchDefaultArtForDisc:res.cas->discs[res.disc_index]];
             return YES;
         case MH_ADD_PARSE_FAILED:
             MHMessage(@"Couldn't Read Disc", err[0] ? MHStr(err) : @"A CUE file could not be parsed.", MHIconError);
@@ -2054,25 +2053,54 @@ static void device_changed(DADiskRef disk, void *ctx) {
     return YES;
 }
 
-/* Loads "<cue stem>-CASE.art" (or the same name without "(Disc N)") and "<cue stem>-DISC.art" from next to the .cue, when they exist.
- * A file next to the .cue is the user's explicit choice, so it replaces any database default. Worker thread. */
-- (void)autoLoadArtNextToCue:(NSString *)cue case:(MhCase *)c disc:(MhDisc *)d {
-    NSString *stem = cue.stringByDeletingPathExtension;
-    NSFileManager *fm = NSFileManager.defaultManager;
-    char err[MH_ERR_MSG_MAX];
-    /* one case holds every disc of a game, so its art has no "(Disc N)" tag: try the exact name, then without it */
-    NSString *gameStem = [stem stringByReplacingOccurrencesOfString:@"\\s*\\(Disc \\d+\\)" withString:@""
-                                                           options:NSRegularExpressionSearch
-                                                             range:NSMakeRange(0, stem.length)];
-    for (NSString *base in @[ stem, gameStem ]) {
-        NSString *casePath = [base stringByAppendingString:@"-CASE.art"];
-        if (![fm fileExistsAtPath:casePath]) continue;
-        [self importArt:casePath.fileSystemRepresentation isCase:YES forCase:c disc:d err:err size:sizeof err];
-        break;
+/* Where missing default art is fetched from; MH_ART_URL overrides it (tests). The repo mirrors database/art/default. */
+static NSString *art_base_url(void) {
+    const char *env = getenv("MH_ART_URL");
+    return env && *env ? @(env) : @"https://raw.githubusercontent.com/orenatobr/PicoStation-MultiHouse-art/main/art/default/";
+}
+
+/* Downloads "<serial><suffix>" into <data>/database/art/default. YES when the file is there afterwards.
+ * Offline or unknown serials just return NO, and a failed name is not retried in this session. Worker thread. */
+- (BOOL)fetchArtNamed:(NSString *)serial suffix:(NSString *)suffix {
+    static NSMutableSet<NSString *> *failed;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ failed = [NSMutableSet set]; });
+    /* the serial comes from the disc image: keep it to a plain file name before it reaches a path or URL */
+    if (![serial rangeOfString:@"^[A-Za-z0-9_-]{1,15}$" options:NSRegularExpressionSearch].length) return NO;
+    NSString *name = [serial stringByAppendingString:suffix];
+    NSString *dir = [_app.dataDir stringByAppendingPathComponent:@"database/art/default"];
+    NSString *dst = [dir stringByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:dst]) return YES;
+    NSURL *url = [NSURL URLWithString:[art_base_url() stringByAppendingString:name]];
+    @synchronized(failed) { if (!url || [failed containsObject:name]) return NO; }
+    NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+    cfg.timeoutIntervalForRequest = 8;
+    __block NSData *body = nil;
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    [[[NSURLSession sessionWithConfiguration:cfg] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+        if (!err && [(NSHTTPURLResponse *)resp statusCode] == 200) body = data;
+        dispatch_semaphore_signal(done);
+    }] resume];
+    dispatch_semaphore_wait(done, DISPATCH_TIME_FOREVER);
+    /* a valid file is exactly MH_ART_FILE_SIZE bytes and starts with format byte 2 */
+    BOOL ok = body.length == MH_ART_FILE_SIZE && ((const uint8_t *)body.bytes)[0] == 2 &&
+              [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil] &&
+              [body writeToFile:dst atomically:YES];
+    if (!ok) @synchronized(failed) { [failed addObject:name]; }
+    return ok;
+}
+
+/* Gives the disc its default case and disc art, downloading what the local database lacks. Worker thread. */
+- (void)fetchDefaultArtForDisc:(MhDisc *)d {
+    if (!d || !d->serial[0]) return;
+    char alias[16];
+    NSMutableArray<NSString *> *serials = [NSMutableArray arrayWithObject:@(d->serial)];
+    if (mh_db_resolve_alias(_app.db, d->serial, alias, sizeof alias)) [serials addObject:@(alias)];
+    for (int isCase = 1; isCase >= 0; isCase--) {
+        if (d->flags & (isCase ? MH_DF_CASE_ART : MH_DF_CD_ART)) continue;
+        for (NSString *s in serials)
+            if ([self fetchArtNamed:s suffix:isCase ? @"-CASE.art" : @"-CD.art"]) { mh_db_find_art(_app.db, d, isCase); break; }
     }
-    NSString *discPath = [stem stringByAppendingString:@"-DISC.art"];
-    if (d && [fm fileExistsAtPath:discPath])
-        [self importArt:discPath.fileSystemRepresentation isCase:NO forCase:c disc:d err:err size:sizeof err];
 }
 
 /* orig: make_custom_art.isra.0 (the file picker and the project update; the art is the core's) */

@@ -50,17 +50,21 @@ macOS refuses the first launch: right-click the app and choose Open, or run
 
 The SHA-256 of the zip is published as a `.sha256` file in the same release.
 
-### Default cover art (optional)
+### Default cover art
 
-Game cover art (`database/art/default/<SERIAL>-CASE.art` and `-CD.art`) is not bundled in the app. If
-you have the `database` folder from the original package, the app looks for it in this order:
+Case and disc art are not bundled in the app. When you add a game, the app reads its serial and downloads
+`<SERIAL>-CASE.art` and `<SERIAL>-CD.art` from
+[orenatobr/PicoStation-MultiHouse-art](https://github.com/orenatobr/PicoStation-MultiHouse-art) into
+`database/art/default`, so each cover is fetched once and new games need nothing else. Offline, or for a serial the
+repository lacks, the game just keeps the program's own generated cover; you can still pick your own image with
+**Case Art** and **Disc Art**. Set `MH_ART_URL` to use another mirror.
+
+The app also reads art from a `database/art/default` folder that already exists, searched in this order:
 
 1. `$MH_DATA_DIR/database`
 2. next to the `.app` (for example `Managers/database`)
 3. inside the app, under `Contents/Resources`
 4. `~/Library/Application Support/PicoStation Multi House/database`
-
-Everything works without these folders; covers then come from the program's own generator or stay blank.
 
 ## Usage
 
@@ -81,22 +85,6 @@ the card picker and the primary button. Dark mode is supported.
    also save everything as an image (**Image** menu), and open existing V2 images and cards for editing.
 
 All commands are also in the menu bar, and the whole UI works from the keyboard.
-
-### Art next to the CUE
-
-When you add a CUE, the app looks in the same folder for two files named after it and loads them into
-the inspector automatically:
-
-| File | Loaded as |
-| --- | --- |
-| `<cue name>-CASE.art` | Case art |
-| `<cue name>-DISC.art` | Disc art |
-
-For example, `Alundra (USA) (Rev 1).cue` picks up `Alundra (USA) (Rev 1)-CASE.art` and
-`Alundra (USA) (Rev 1)-DISC.art`. For a multi-disc game the case art has no disc number: `Final Fantasy IX (USA, Canada) (Disc 1) (Rev 1).cue`
-picks up `Final Fantasy IX (USA, Canada) (Rev 1)-CASE.art` (the exact name is tried first), and each disc
-keeps its own `-DISC.art`. Either file is optional, and a file found this way replaces the
-default art. Both must be valid 10,240 byte `.art` files; otherwise the default art stays.
 
 ### Write safety
 
