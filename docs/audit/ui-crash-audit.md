@@ -37,31 +37,31 @@ The crash guard (section 4) hooks it explicitly.
 
 ## 2. Findings, by priority
 
-Status values: FIXED (commit), OPEN-UI (sent to the UI lead, his files), OPEN (no owner yet), NOTE.
+Status values: FIXED (commit), OPEN (not fixed yet). Findings 2 to 7 and 9 to 13 were sent to the UI lead (his files) and fixed by him in cee0917.
 
 ### P1: reproducible or realistic crashes
 
 | # | Where | Why it crashes | Fix | Status |
 |---|---|---|---|---|
 | 1 | `MHViews.m` `-[MHCaseCellView configureWithRow:]`, `-[MHDiscCellView configureWithRow:]` (`setArtPath:r.artPath.fileSystemRepresentation`) | Empty string raises NSInvalidArgumentException during table layout. Any case or disc without art. | Pass `UTF8String` (NULL for nil) and let `artImageAtCPath:` ignore empty or NULL. | FIXED 68e11a6 (UI lead) |
-| 2 | `MHMainController.m` `loadImageAtPath:` (about :1426) and `writeImageTo:` (about :1462) | `path.fileSystemRepresentation` runs inside the worker block. An empty path raises on a GCD queue where nothing catches it: abort. Reproduced with `--cmd "open-image "`. Real users reach it only with an empty path, but the same pattern guards 12 other call sites. | `if (!path.length) return;` first, or one helper `MHFS(NSString*)` returning `""` for empty and use it everywhere `fileSystemRepresentation` is used (`:1163 :1343 :1355 :1398 :1404 :1430 :1477 :1481 :1723 :1862 :1889 :1894`). | OPEN-UI |
-| 3 | `MHMainController.m` `-recodeDisc` (about :1854) and `-makeCustomArtForCase:` (about :1881) | The sheet completion block captures raw `MhDisc *` / `MhCase *`. While the sheet is open, menu items (New Project, Remove, Open Image) stay available, free the structs and the block then writes through a dangling pointer. | Capture `slot` and `curDisc` ints, re-resolve with `[_app caseAt:slot]` and a `disc_count` check inside the completion, bail out when `_app.busy`. | OPEN-UI |
-| 4 | `MHMainController.m` `-doWrite` (about :1563) | `_disks[di]` with `di == -1` reads before the array. `mh_v2_write_precheck` reports "no card" today so it is not reached, but nothing local guarantees it. | `if (di < 0) return;` right after `selectedDiskIndex`. | OPEN-UI |
-| 5 | `MHMainController.m` `-testCommand:` (about :2014 to :2108) | `a[1]`..`a[4]` read without a count check: `--cmd select-case` (also select-disc, drag-case, drag-disc, busy, progress, select-sd, write-device) raises NSRangeException. Reproduced (`FUZZ=1 tools/ui-smoke.sh`). Test aid only. | `#define ARG(n) (a.count > (n) ? a[n] : @"")`. | OPEN-UI |
-| 6 | `MHMainController.m` `-dragProgrammaticKind:` (about :2130) | Negative `to` gives `row = MIN(to, count - 1)` below zero and `trows[row]` raises. Test aid only. | `if (from < 0 \|\| to < 0) return;` | OPEN-UI |
+| 2 | `MHMainController.m` `loadImageAtPath:` (about :1426) and `writeImageTo:` (about :1462) | `path.fileSystemRepresentation` runs inside the worker block. An empty path raises on a GCD queue where nothing catches it: abort. Reproduced with `--cmd "open-image "`. Real users reach it only with an empty path, but the same pattern guards 12 other call sites. | `if (!path.length) return;` first, or one helper `MHFS(NSString*)` returning `""` for empty and use it everywhere `fileSystemRepresentation` is used (`:1163 :1343 :1355 :1398 :1404 :1430 :1477 :1481 :1723 :1862 :1889 :1894`). | FIXED cee0917 (UI lead) |
+| 3 | `MHMainController.m` `-recodeDisc` (about :1854) and `-makeCustomArtForCase:` (about :1881) | The sheet completion block captures raw `MhDisc *` / `MhCase *`. While the sheet is open, menu items (New Project, Remove, Open Image) stay available, free the structs and the block then writes through a dangling pointer. | Capture `slot` and `curDisc` ints, re-resolve with `[_app caseAt:slot]` and a `disc_count` check inside the completion, bail out when `_app.busy`. | FIXED cee0917 (UI lead) |
+| 4 | `MHMainController.m` `-doWrite` (about :1563) | `_disks[di]` with `di == -1` reads before the array. `mh_v2_write_precheck` reports "no card" today so it is not reached, but nothing local guarantees it. | `if (di < 0) return;` right after `selectedDiskIndex`. | FIXED cee0917 (UI lead) |
+| 5 | `MHMainController.m` `-testCommand:` (about :2014 to :2108) | `a[1]`..`a[4]` read without a count check: `--cmd select-case` (also select-disc, drag-case, drag-disc, busy, progress, select-sd, write-device) raises NSRangeException. Reproduced (`FUZZ=1 tools/ui-smoke.sh`). Test aid only. | `#define ARG(n) (a.count > (n) ? a[n] : @"")`. | FIXED cee0917 (UI lead) |
+| 6 | `MHMainController.m` `-dragProgrammaticKind:` (about :2130) | Negative `to` gives `row = MIN(to, count - 1)` below zero and `trows[row]` raises. Test aid only. | `if (from < 0 \|\| to < 0) return;` | FIXED cee0917 (UI lead) |
 
 ### P2: robustness, no reproduction yet
 
 | # | Where | Why it can crash | Fix | Status |
 |---|---|---|---|---|
-| 7 | `MHMainController.m` `tableView:pasteboardWriterForRow:` (:1014) | `[self rowsFor:t][row]` without a range check. AppKit asks for rows it just counted, but the list can be rebuilt between layout and drag start. | Return nil outside `0..<count`. | OPEN-UI |
+| 7 | `MHMainController.m` `tableView:pasteboardWriterForRow:` (:1014) | `[self rowsFor:t][row]` without a range check. AppKit asks for rows it just counted, but the list can be rebuilt between layout and drag start. | Return nil outside `0..<count`. | FIXED cee0917 (UI lead) |
 | 8 | `cheat_ui.m` `tableView:pasteboardWriterForRow:` (:1540) | Same pattern on `_rows[row]`. | Same guard. | FIXED ab38345 |
-| 9 | `MHMainController.m` `tableView:acceptDrop:` (:1051) | Case and disc numbers come from the pasteboard string and are cast to `uint8_t` (-1 becomes 255). The core checks `in_use`, so today it is a no-op, not a crash. | Range check against `MH_PROJECT_MAX_CASES` and 255 before the call. | OPEN-UI |
-| 10 | `MHMainController.m` (:1146, :1332) and `MHAppDelegate.m` `application:openURLs:` | `[paths addObject:u.path]`, nil `path` raises. | `if (u.path)`. | OPEN-UI |
-| 11 | `MHMainController.m` `-addCuePath:target:` (about :1210) | Worker thread writes `_app.curCase/_app.curDisc` while the main thread reads them (selection change, refresh). Benign data race. | Set them in the `done:` block. | OPEN-UI |
-| 12 | `MHPanes.m` `loadView` (:288) | `typeof(self) s = weak; s->_detailsScroll...` dereferences nil (SIGSEGV) if the controller is gone. | `if (!s) return;` | OPEN-UI |
-| 13 | `MHApp.m` `find_data_dir` (:149) | `@(env)` is nil for a non UTF-8 `MH_DATA_DIR`; `_dataDir` becomes nil, every consumer passes NULL to `mh_path_join` (it tolerates NULL) so the data folder is silently wrong. | `NSString *e = @(env); if (e.length) return e;`. | OPEN-UI |
-| 14 | `MHTheme.m` `artImageAtPath:` | Decodes art (ImageIO plus `mh_art_decode`) on the main thread inside `viewForTableColumn`. A huge or corrupt `.art` stalls the UI (hang, not a crash). Cached by size and mtime after the first decode. | Decode on a background queue, set the image on main. | OPEN-UI |
+| 9 | `MHMainController.m` `tableView:acceptDrop:` (:1051) | Case and disc numbers come from the pasteboard string and are cast to `uint8_t` (-1 becomes 255). The core checks `in_use`, so today it is a no-op, not a crash. | Range check against `MH_PROJECT_MAX_CASES` and 255 before the call. | FIXED cee0917 (UI lead) |
+| 10 | `MHMainController.m` (:1146, :1332) and `MHAppDelegate.m` `application:openURLs:` | `[paths addObject:u.path]`, nil `path` raises. | `if (u.path)`. | FIXED cee0917 (UI lead) |
+| 11 | `MHMainController.m` `-addCuePath:target:` (about :1210) | Worker thread writes `_app.curCase/_app.curDisc` while the main thread reads them (selection change, refresh). Benign data race. | Set them in the `done:` block. | FIXED cee0917 (UI lead) |
+| 12 | `MHPanes.m` `loadView` (:288) | `typeof(self) s = weak; s->_detailsScroll...` dereferences nil (SIGSEGV) if the controller is gone. | `if (!s) return;` | FIXED cee0917 (UI lead) |
+| 13 | `MHApp.m` `find_data_dir` (:149) | `@(env)` is nil for a non UTF-8 `MH_DATA_DIR`; `_dataDir` becomes nil, every consumer passes NULL to `mh_path_join` (it tolerates NULL) so the data folder is silently wrong. | `NSString *e = @(env); if (e.length) return e;`. | FIXED cee0917 (UI lead) |
+| 14 | `MHTheme.m` `artImageAtPath:` | Decodes art (ImageIO plus `mh_art_decode`) on the main thread inside `viewForTableColumn`. A huge or corrupt `.art` stalls the UI (hang, not a crash). Cached by size and mtime after the first decode. | Decode on a background queue, set the image on main. | OPEN (perf, not a crash) |
 
 ### P3: notes, verified safe
 
@@ -143,7 +143,7 @@ tools/ui-smoke.sh                          # all scenarios
 ONLY='xeno|empty' tools/ui-smoke.sh        # name filter (regex)
 FUZZ=1 tools/ui-smoke.sh                   # plus the test-hook fuzz cases (several fail today, see findings 5 and 6)
 STRICT=1 tools/ui-smoke.sh                 # missing input folders fail instead of SKIP
-GAMES_DIR=... ART_DIR=... TIMEOUT=120 TIMEOUT_BIG=300 tools/ui-smoke.sh
+GAMES_DIR=... ART_DIR=... TIMEOUT=120 tools/ui-smoke.sh
 ```
 
 Each scenario is one launch with `MH_NO_ZOOM=1`, `MH_DATA_DIR` unset (`nodata`) or set to `ART_DIR` (`art`),
@@ -163,3 +163,11 @@ two cases with reorder and cross-case disc drags (including out of range rows), 
 600 characters, unicode, format specifiers), odd selections (-1, 9999), remove everything / decline removal,
 duplicate add, panes + sheets + focus + busy/progress + `shot` + `ax-dump`, appearance matrix, and ten
 games at once.
+
+### Results on the fixed tree (HEAD ab38345 plus the lead's cee0917, fresh `make app` into a scratch BUILD)
+
+`FUZZ=1 tools/ui-smoke.sh`: 29 scenarios, all PASS after correcting one wrong expectation in the script
+(moving the only disc of a case into another case removes the first case). Before the fixes the same
+build of the old code crashed in `case-without-art` (SIGTRAP), `fuzz-select-case-no-arg` (NSRangeException)
+and `fuzz-open-image-empty` (abort on the worker queue). The whole matrix takes about 10 minutes, mostly
+disc verification on add; the ten-games scenario switches verification off with `verify-on-add 0`.

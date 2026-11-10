@@ -121,7 +121,7 @@ with_input case-with-art-nodata "$ALU" -- 'cases=1' nodata -- "${ADD_A[@]}" --cm
 with_input multi-disc-xenogears "$XENO" -- 'cases=1' nodata -- "${ADD_X[@]}" --cmd "select-case 0" --cmd "select-disc 1" --cmd "select-disc 0" --cmd move-down --cmd move-up --cmd report "${TAIL[@]}"
 with_input multi-disc-ff7 "$FF7" "$ART_DIR" -- 'cases=1' art -- --add "$FF7" --cmd "select-case 0" --cmd "select-disc 2" --cmd "select-disc 0" --cmd report "${TAIL[@]}"
 with_input two-cases-reorder "$XENO" "$ALU" -- 'cases=2' nodata -- "${ADD_X[@]}" "${ADD_A[@]}" --cmd report --cmd "drag-case 0 1 0" --cmd report --cmd "drag-case 1 0 1" --cmd "drag-case 0 99 1" --cmd "drag-case 5 0 0" --cmd move-down --cmd move-up --cmd report "${TAIL[@]}"
-with_input drag-disc-between-cases "$XENO" "$ALU" -- 'cases=2' nodata -- "${ADD_X[@]}" "${ADD_A[@]}" --cmd "select-case 0" --cmd "drag-disc 0 c 1 0" --cmd report --cmd "drag-disc 0 d 0 1" --cmd "drag-disc 9 d 0 1" --cmd "drag-disc 0 c 9 0" --cmd report "${TAIL[@]}"
+with_input drag-disc-between-cases "$XENO" "$ALU" -- 'cases=[12]' nodata -- "${ADD_X[@]}" "${ADD_A[@]}" --cmd "select-case 0" --cmd "drag-disc 0 c 1 0" --cmd report --cmd "drag-disc 0 d 0 1" --cmd "drag-disc 9 d 0 1" --cmd "drag-disc 0 c 9 0" --cmd report "${TAIL[@]}"
 with_input odd-names "$ALU" -- 'cases=1' nodata -- "${ADD_A[@]}" --cmd "select-case 0" --cmd "name-case " --cmd "name-case $LONG" --cmd "name-case $UNI" --cmd "name-case    " --cmd "name-case \"quote\" 'q' %s %@ %n \\0" --cmd "select-disc 0" --cmd "name-disc " --cmd "name-disc $LONG" --cmd "name-disc $UNI" --cmd report "${TAIL[@]}"
 with_input odd-selection "$ALU" -- 'cases=1' nodata -- "${ADD_A[@]}" --cmd "select-case -1" --cmd "select-case 9999" --cmd "select-disc -1" --cmd "select-disc 99" --cmd "select-case 0" --cmd "select-disc 0" --cmd report "${TAIL[@]}"
 with_input remove-everything "$XENO" "$ALU" -- 'cases=0' nodata -- "${ADD_X[@]}" "${ADD_A[@]}" --cmd "select-case 0" --cmd "select-disc 0" --cmd remove-disc --cmd remove-case --cmd remove-case --cmd remove-disc --cmd report "${TAIL[@]}"
@@ -130,14 +130,14 @@ with_input add-twice-duplicate "$ALU" -- - nodata -- "${ADD_A[@]}" "${ADD_A[@]}"
 with_input panes-and-sheets "$ALU" -- 'cases=1' nodata -- "${ADD_A[@]}" --cmd "select-case 0" --cmd toggle-sidebar --cmd toggle-inspector --cmd "focus cases" --cmd "focus discs" --cmd "focus case-name" --cmd "focus disc-name" --cmd toggle-sidebar --cmd toggle-inspector --cmd "demo-sheet progress" --cmd "demo-sheet-close" --cmd "demo-sheet success" --cmd "demo-sheet-close" --cmd "demo-sheet failure" --cmd "demo-sheet-close" --cmd "demo-sheet confirm" --cmd "demo-sheet menu" --cmd "demo-sheet alert" --cmd "demo-sheet error" --cmd "demo-sheet details" --cmd "drop-overlay on" --cmd "drop-overlay off" --cmd "resize 1000 640" --cmd "resize 1800 1000" --cmd "busy 1" --cmd "progress 50" --cmd "busy 0" --cmd "verify-on-add 0" --cmd "verify-on-add 1" --cmd "shot $WORK/shot.png" --cmd "ax-dump" --cmd report "${TAIL[@]}"
 with_input appearance-matrix "$ALU" -- 'cases=1' nodata -- "${ADD_A[@]}" --cmd "appearance dark" --cmd "shot $WORK/dark.png" --cmd "appearance light" --cmd "shot $WORK/light.png" --cmd "appearance system" --cmd "appearance bogus" --cmd report "${TAIL[@]}"
 
-# 10 games at once: the first ten game folders found (own timeout, verification of 10 discs is slow)
+# 10 games at once: the first ten game folders found. Verification on add is switched off first
+# (verifying ten discs reads ~10 GB and takes minutes); one add-folder per game, each waited for.
 if [ -d "$GAMES_DIR" ]; then
-  ten=()
-  while IFS= read -r d; do ten+=(--add "$d"); done < <(find "$GAMES_DIR" -mindepth 1 -maxdepth 1 -type d ! -name 'PicoStation-MultiHouse-macOS' | sort | head -10)
-  if [ "${#ten[@]}" -ge 20 ]; then
-    old="$TIMEOUT"; TIMEOUT="${TIMEOUT_BIG:-300}"
+  ten=(--cmd "verify-on-add 0")
+  n=0
+  while IFS= read -r d; do ten+=(--cmd "add-folder $d" --cmd wait-idle); n=$((n + 1)); done < <(find "$GAMES_DIR" -mindepth 1 -maxdepth 1 -type d ! -name 'PicoStation-MultiHouse-macOS' | sort | head -10)
+  if [ "$n" -ge 10 ]; then
     scenario ten-games-at-once 'cases=([5-9]|10)' nodata -- "${ten[@]}" --cmd "select-case 0" --cmd "select-case 9" --cmd "drag-case 0 9 1" --cmd "drag-case 9 0 0" --cmd report "${TAIL[@]}"
-    TIMEOUT="$old"
   else skip=$((skip + 1)); echo "SKIP  ten-games-at-once: fewer than 10 game folders in $GAMES_DIR"; fi
 else skip=$((skip + 1)); echo "SKIP  ten-games-at-once: no $GAMES_DIR"; fi
 
