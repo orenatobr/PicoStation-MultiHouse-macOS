@@ -17,8 +17,40 @@ NSString *MHDisplay(NSString *s) {
     return [s stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"];
 }
 
-static NSInteger run_alert(NSString *title, NSString *text, NSArray<NSString *> *buttons,
-                           NSAlertStyle style) {
+static NSWindow *g_host;
+void MHSetHostWindow(NSWindow *w) { g_host = w; }
+NSWindow *MHHostWindow(void) { return g_host; }
+
+static NSWindow *usable_host(void) {
+    NSWindow *h = g_host;
+    return (h && h.isVisible && !h.isMiniaturized && !h.attachedSheet) ? h : nil;
+}
+
+void MHRunSheet(NSWindow *sheet, NSWindow *parent) {
+    NSWindow *host = parent && parent.isVisible && !parent.isMiniaturized && !parent.attachedSheet ? parent : nil;
+    if (host) {
+        [host beginSheet:sheet completionHandler:^(NSModalResponse r) { [NSApp stopModal]; }];
+        [NSApp runModalForWindow:sheet];
+    } else {
+        [sheet center];
+        [NSApp runModalForWindow:sheet];
+        [sheet orderOut:nil];
+    }
+}
+
+void MHEndSheet(NSWindow *sheet) {
+    if (sheet.sheetParent) {
+        [sheet.sheetParent endSheet:sheet];
+    } else {
+        [NSApp stopModal];
+        [sheet orderOut:nil];
+    }
+}
+
+/* Alerts are sheets on the main window (HIG). The call stays synchronous: the sheet runs a nested
+ * modal loop. buttons[0] is the default (rightmost) button. */
+static NSInteger run_alert(NSString *title, NSString *text, NSArray<NSString *> *buttons, NSAlertStyle style,
+                           NSInteger destructiveIndex) {
     __block NSInteger r = 0;
     MHMain(^{
         if (MHAlertHook) { r = MHAlertHook(title, text, buttons); return; }
@@ -27,7 +59,21 @@ static NSInteger run_alert(NSString *title, NSString *text, NSArray<NSString *> 
         a.messageText = title;
         a.informativeText = MHDisplay(text);
         for (NSString *b in buttons) [a addButtonWithTitle:b];
-        r = [a runModal] - NSAlertFirstButtonReturn;
+        if (destructiveIndex >= 0 && destructiveIndex < (NSInteger)a.buttons.count)
+            a.buttons[destructiveIndex].hasDestructiveAction = YES;
+        a.buttons.firstObject.keyEquivalent = @"\r";
+        for (NSUInteger i = 1; i < a.buttons.count; i++)
+            if ([a.buttons[i].title isEqualToString:@"Cancel"] || [a.buttons[i].title isEqualToString:@"No"])
+                a.buttons[i].keyEquivalent = @"\033";
+        NSWindow *host = usable_host();
+        if (host) {
+            __block NSModalResponse code = NSAlertFirstButtonReturn;
+            [a beginSheetModalForWindow:host completionHandler:^(NSModalResponse c) { code = c; [NSApp stopModal]; }];
+            [NSApp runModalForWindow:a.window];
+            r = code - NSAlertFirstButtonReturn;
+        } else {
+            r = [a runModal] - NSAlertFirstButtonReturn;
+        }
     });
     return r;
 }
@@ -35,15 +81,20 @@ static NSInteger run_alert(NSString *title, NSString *text, NSArray<NSString *> 
 void MHMessage(NSString *title, NSString *text, MHIcon icon) {
     NSAlertStyle st = icon == MHIconError ? NSAlertStyleCritical
                     : icon == MHIconWarning ? NSAlertStyleWarning : NSAlertStyleInformational;
-    run_alert(title, text, @[ @"OK" ], st);
+    run_alert(title, text, @[ @"OK" ], st, -1);
+}
+
+BOOL MHConfirm(NSString *title, NSString *text, NSString *confirmLabel, BOOL destructive) {
+    if (MHAlertHook) return MHAlertHook(title, text, @[ confirmLabel, @"Cancel" ]) == 0;
+    if (destructive) /* Cancel is the default; the red button is on the left */
+        return run_alert(title, text, @[ @"Cancel", confirmLabel ], NSAlertStyleWarning, 1) == 1;
+    return run_alert(title, text, @[ confirmLabel, @"Cancel" ], NSAlertStyleInformational, -1) == 0;
 }
 
 BOOL MHAsk(NSString *text) {
-    /* Default answer is No (MB_DEFBUTTON2): it is the first button, so Return picks it. The
-     * hook sees the buttons in logical order (Sim, Nao). */
-    if (MHAlertHook) return MHAlertHook(@"Confirmacao", text, @[ @"Sim", @"Nao" ]) == 0;
-    NSInteger r = run_alert(@"Confirmacao", text, @[ @"Nao", @"Sim" ], NSAlertStyleWarning);
-    return r == 1;
+    /* The default answer is No. The hook sees the buttons in logical order (Yes, No). */
+    if (MHAlertHook) return MHAlertHook(@"Please confirm", text, @[ @"Yes", @"No" ]) == 0;
+    return run_alert(@"Please confirm", text, @[ @"No", @"Yes" ], NSAlertStyleWarning, -1) == 1;
 }
 
 @implementation MHApp {

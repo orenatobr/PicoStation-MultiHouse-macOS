@@ -41,6 +41,12 @@ static void free_buf(void *info, const void *data, size_t size) { free((void *)d
     dispatch_once(&once, ^{ c = dynamic(@"mh.brandFill", (MHPalette){ 0x0070D1, 0x0A64B8, 0x00539E, 0x0A5AA6 }); });
     return c;
 }
++ (NSColor *)destructiveFill {
+    static NSColor *c;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ c = dynamic(@"mh.destructiveFill", (MHPalette){ 0xC0211A, 0xB3261E, 0x9A150F, 0xA01D17 }); });
+    return c;
+}
 + (NSColor *)statusVerified {
     static NSColor *c;
     static dispatch_once_t once;
@@ -209,6 +215,7 @@ static void free_buf(void *info, const void *data, size_t size) { free((void *)d
         case MHStatusReview: case MHStatusFixable: return MHTheme.statusReview;
         case MHStatusError: return MHTheme.statusError;
         case MHStatusWritten: return MHTheme.statusWritten;
+        case MHStatusReady: return MHTheme.textSecondary;
     }
     return MHTheme.textSecondary;
 }
@@ -219,6 +226,7 @@ static void free_buf(void *info, const void *data, size_t size) { free((void *)d
         case MHStatusFixable: return @"Fixable";
         case MHStatusError: return @"Error";
         case MHStatusWritten: return @"Written";
+        case MHStatusReady: return @"Ready";
     }
     return @"";
 }
@@ -229,6 +237,7 @@ static void free_buf(void *info, const void *data, size_t size) { free((void *)d
         case MHStatusFixable: return @"wrench.and.screwdriver.fill";
         case MHStatusError: return @"xmark.octagon.fill";
         case MHStatusWritten: return @"sdcard.fill";
+        case MHStatusReady: return @"checkmark.circle";
     }
     return @"circle";
 }
@@ -253,9 +262,12 @@ static void free_buf(void *info, const void *data, size_t size) { free((void *)d
     self.needsDisplay = YES;
 }
 
+- (NSColor *)tint { return _tintOverride ?: [MHStatusChip colorForKind:_kind]; }
+- (void)setTintOverride:(NSColor *)c { _tintOverride = c; self.needsDisplay = YES; }
+
 - (NSDictionary *)textAttrs {
     return @{ NSFontAttributeName : [NSFont systemFontOfSize:11 weight:NSFontWeightSemibold],
-              NSForegroundColorAttributeName : [MHStatusChip colorForKind:_kind] };
+              NSForegroundColorAttributeName : [self tint] };
 }
 
 - (NSSize)intrinsicContentSize {
@@ -269,7 +281,7 @@ static void free_buf(void *info, const void *data, size_t size) { free((void *)d
 - (BOOL)isOpaque { return NO; }
 
 - (void)drawRect:(NSRect)dirty {
-    NSColor *col = [MHStatusChip colorForKind:_kind];
+    NSColor *col = [self tint];
     NSRect b = self.bounds;
     NSImage *icon = [MHTheme symbol:[MHStatusChip symbolForKind:_kind] size:11 color:col
                         description:[MHStatusChip titleForKind:_kind]];

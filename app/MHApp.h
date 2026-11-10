@@ -51,10 +51,21 @@ typedef NS_ENUM(NSInteger, MHIcon) { MHIconError, MHIconInfo, MHIconWarning };
 
 /* ---- message boxes (orig: MessageBoxW). Safe from any thread: hop to the main thread. ---- */
 void MHMessage(NSString *title, NSString *text, MHIcon icon);
-/* orig: MessageBoxW(..., L"Confirmacao", MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2) == IDYES */
+/* Generic yes/no question ("Please confirm", Yes / No, default No). YES when "Yes" was pressed. */
 BOOL MHAsk(NSString *text);
+/* Confirmation sheet with its own title and confirm button label. destructive: the confirm button
+ * is red and Cancel is the default. YES when confirmed. */
+BOOL MHConfirm(NSString *title, NSString *text, NSString *confirmLabel, BOOL destructive);
+/* The window alerts and sheets attach to (the main window); nil falls back to app modal. */
+void MHSetHostWindow(NSWindow *w);
+NSWindow *MHHostWindow(void);
+/* Shows `sheet` on `parent` and runs it modally until MHEndSheet (nested run loop, so callers can
+ * keep a synchronous flow). Without a visible parent it runs as a modal window. */
+void MHRunSheet(NSWindow *sheet, NSWindow *parent);
+void MHEndSheet(NSWindow *sheet);
 /* Test hook: when set, every message box goes through it instead of NSAlert. buttons are the
- * captions; return the 0 based index of the pressed one (for ask boxes 0 = Sim, 1 = Nao). */
+ * captions in logical order; return the 0 based index of the pressed one (confirmations list the
+ * confirming button first and "Cancel" or "No" second, so 0 = confirmed). */
 extern NSInteger (^MHAlertHook)(NSString *title, NSString *text, NSArray<NSString *> *buttons);
 /* Runs a block on the main thread and waits (any thread). */
 void MHMain(dispatch_block_t block);

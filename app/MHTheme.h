@@ -17,6 +17,7 @@ static const CGFloat MHRowHeightCard = 64, MHRowHeightArt = 48, MHMinHit = 28;
 /* ---- colors (dynamic) ---- */
 @property(class, readonly) NSColor *brandBlue;        /* text, links, accents, focus tint */
 @property(class, readonly) NSColor *brandFill;        /* fill of prominent buttons (white text on it >= 4.5:1) */
+@property(class, readonly) NSColor *destructiveFill;  /* fill of destructive buttons (white text on it >= 4.5:1) */
 @property(class, readonly) NSColor *statusVerified;   /* verified discs */
 @property(class, readonly) NSColor *statusReview;     /* discs with observations */
 @property(class, readonly) NSColor *statusError;      /* errors, destructive */
@@ -73,12 +74,14 @@ typedef NS_ENUM(NSInteger, MHStatusKind) {
     MHStatusReview,    /* exclamationmark.triangle.fill, "Review" */
     MHStatusFixable,   /* wrench.and.screwdriver.fill, "Fixable" (missing file, can be located) */
     MHStatusError,     /* xmark.octagon.fill, "Error" */
-    MHStatusWritten    /* sdcard.fill, "Written" */
+    MHStatusWritten,   /* sdcard.fill, "Written" */
+    MHStatusReady      /* checkmark.circle, "Ready" (structure is fine but the disc was not fully verified) */
 };
 
 @interface MHStatusChip : NSView
 @property(nonatomic) MHStatusKind kind;
 @property(nonatomic) BOOL compact; /* icon only (the word stays in the accessibility label) */
+@property(nonatomic, strong) NSColor *tintOverride; /* e.g. white on an emphasized selection; nil = kind color */
 + (NSColor *)colorForKind:(MHStatusKind)k;
 + (NSString *)titleForKind:(MHStatusKind)k;
 + (NSString *)symbolForKind:(MHStatusKind)k;
