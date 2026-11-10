@@ -63,7 +63,7 @@ Reading hints:
   confusing `register0x00000020 + lVar8` stack offsets. Treat `lVar8` as the frame pointer
   adjustment and recover locals from the access pattern.
 * Image file offsets: `.text` VA 0x140001000 = file 0x400, `.data` VA 0x140040000 = file
-  0x3F000, `.rdata` VA 0x140f09000 = file 0xF0F000. Use `xxd -s` on `mh64.exe` for raw data.
+  0x3F000, `.rdata` VA 0x140f09000 = file 0xF08000. Use `xxd -s` on `mh64.exe` for raw data.
 * x64 Windows calling convention is irrelevant for the port, only semantics matter.
 * To confirm a decompiled expression, disassemble: `objdump -d --start-address=0x... --stop-address=0x... mh64.exe`
   (Apple objdump understands PE).
