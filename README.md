@@ -23,14 +23,18 @@ case template and the music) were extracted from the original executable with
 
 ## Install
 
-Requires a Mac with Apple Silicon (M1 or newer) and macOS 12 or later.
+Requires a Mac with Apple Silicon (M1 or newer) and macOS 12 or later. Intel Macs are not supported
+(the build is arm64 only).
 
 ```sh
-curl -L -o PicoStation-Multi-House-V3-macOS-arm64.zip \
+curl -L -o ~/Downloads/PicoStation-Multi-House-V3-macOS-arm64.zip \
   https://github.com/orenatobr/PicoStation-MultiHouse-macOS/releases/latest/download/PicoStation-Multi-House-V3-macOS-arm64.zip \
-  && ditto -x -k PicoStation-Multi-House-V3-macOS-arm64.zip . \
-  && open "PicoStation Multi House V3.app"
+  && ditto -x -k ~/Downloads/PicoStation-Multi-House-V3-macOS-arm64.zip /Applications \
+  && open "/Applications/PicoStation Multi House V3.app"
 ```
+
+This installs the app into `/Applications`. Run it from a normal APFS volume: macOS may refuse to
+launch an app that was extracted to an exFAT or NTFS drive.
 
 `curl` does not mark the file as downloaded from the internet, so Gatekeeper does not block the app
 (it is ad-hoc signed, without a developer certificate). If you download it with a browser instead,
