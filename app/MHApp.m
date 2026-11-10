@@ -51,6 +51,9 @@ BOOL MHAsk(NSString *text) {
     MhDb *_db;
     MhCheatDb *_cheat;
     MhArt *_art;
+    MhV2Env *_env;
+    MhV2Writer *_writer;
+    uint8_t *_menu, *_music;
 }
 
 + (MHApp *)shared {
@@ -66,6 +69,8 @@ BOOL MHAsk(NSString *text) {
         _db = calloc(1, sizeof(MhDb));
         _cheat = calloc(1, sizeof(MhCheatDb));
         _art = calloc(1, sizeof(MhArt));
+        _env = calloc(1, sizeof(MhV2Env));
+        _writer = calloc(1, sizeof(MhV2Writer));
         _curCase = -1;
         _curDisc = -1;
         _verifyOnAdd = YES; /* orig: DAT_140e7b3ac = 1 */
@@ -77,20 +82,28 @@ BOOL MHAsk(NSString *text) {
 - (MhDb *)db { return _db; }
 - (MhCheatDb *)cheatDb { return _cheat; }
 - (MhArt *)art { return _art; }
+- (MhV2Env *)env { return _env; }
+- (MhV2Writer *)writer { return _writer; }
+- (MhDiskOpts)diskOpts {
+    MhDiskOpts o = {.flags = mh_disk_flags_from_env(), .recover = mh_v2_recover_probe, .recover_user = _env};
+    return o;
+}
 
-/* The original kept database/art, database/cues, menu-defaults.dat and custom/art next to the
- * exe. On macOS: MH_DATA_DIR, else the folder holding the .app when it has a "database" folder,
- * else ~/Library/Application Support/PicoStation Multi House V3. */
+/* The original kept database/art, menu-defaults.dat and custom/art next to the exe. Search order:
+ * $MH_DATA_DIR, the folder holding the .app, Contents/Resources, then (created if needed)
+ * ~/Library/Application Support/PicoStation Multi House. A folder wins when it has "database". */
 static NSString *find_data_dir(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
     const char *env = getenv("MH_DATA_DIR");
     if (env && *env) return @(env);
-    NSString *beside = NSBundle.mainBundle.bundlePath.stringByDeletingLastPathComponent;
-    if ([fm fileExistsAtPath:[beside stringByAppendingPathComponent:@"database"]]) return beside;
-    NSString *support = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory,
-                             NSUserDomainMask, YES).firstObject
-        stringByAppendingPathComponent:@"PicoStation Multi House V3"];
-    [fm createDirectoryAtPath:support withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *cands[] = {NSBundle.mainBundle.bundlePath.stringByDeletingLastPathComponent,
+                         NSBundle.mainBundle.resourcePath ?: @""};
+    for (int i = 0; i < 2; i++)
+        if ([fm fileExistsAtPath:[cands[i] stringByAppendingPathComponent:@"database/art/default"]]) return cands[i];
+    NSString *support = [NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES)
+                             .firstObject stringByAppendingPathComponent:@"PicoStation Multi House"];
+    [fm createDirectoryAtPath:[support stringByAppendingPathComponent:@"database/art/default"]
+        withIntermediateDirectories:YES attributes:nil error:nil];
     return support;
 }
 
@@ -128,6 +141,21 @@ static NSString *find_embedded_dir(void) {
         _cheatOK = mh_cheat_db_load(_cheat, blob, (size_t)len) != 0;
         mh_free(blob);
     }
+
+    mh_path_join(_embeddedDir.fileSystemRepresentation, "picostation_menu.bin", path, sizeof path);
+    uint64_t menuSize = 0;
+    BOOL menuOK = mh_menu_embedded_load(path, &_menu, &menuSize);
+    mh_path_join(_embeddedDir.fileSystemRepresentation, "umbrella_music.vag", path, sizeof path);
+    uint64_t musicSize = 0;
+    BOOL musicOK = mh_read_entire_file(path, &_music, &musicSize);
+    if (!menuOK || !musicOK) _dbOK = NO; /* embedded data incomplete: same box as a failed database */
+    _env->menu = _menu;
+    _env->menu_size = menuSize;
+    _env->db = _db;
+    _env->cheats = _cheatOK ? _cheat : NULL;
+    _writer->env = _env;
+    _writer->music = _music;
+    _writer->music_size = musicSize;
 
     if (mh_art_init(_art, mh_image_load_imageio)) {
         mh_path_join(_embeddedDir.fileSystemRepresentation, "case_template.bgra", path, sizeof path);

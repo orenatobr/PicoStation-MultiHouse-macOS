@@ -32,5 +32,6 @@ Code in `app/`. Cheat windows are `app/cheat_ui.*` (other engineer). Original ->
 * Context menu of discs: double click as in the original, plus right click.
 * Confirmation shows the BSD name (`disk6`) where the original printed `PhysicalDriveN`; other texts kept verbatim, including the Windows wording.
 * Forced light appearance (original is light themed). Initial state is zoomed.
-* `MHBridge.m` holds placeholders for v2 load/write, manager_admit, recode, hydrate until those modules land.
-* Testing aids: `--add`, `--cmd`, `--auto-answer`, `--quit`, env `MH_NO_ZOOM`, `MH_DATA_DIR`.
+* Everything binds directly to the core (mh_v2_*, mh_sd_write_project_direct, mh_manager_recode_copy). Progress phases come from the MhProgress text ("Concluido: " repaints the lists, "Atualizando tabelas..." and later phases disable cancel).
+* CRIAR CARTAO V2 is a custom drawn button (blue when enabled) so it reads as active in any window state.
+* Testing aids (also `add-folder`, `save-image`, `open-image`, `new-project`, `refresh-sd`, `sd-list`, `select-sd`, `load-sd`, `write-device <bsd>` which only accepts a disk that mh_disk_enumerate offered and never disk0/3/6; use MH_DISK_TEST_ALLOW_IMAGES=1 with `hdiutil attach -nomount` images): `--add`, `--cmd`, `--auto-answer`, `--quit`, env `MH_NO_ZOOM`, `MH_DATA_DIR`.

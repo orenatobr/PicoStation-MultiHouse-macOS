@@ -52,4 +52,10 @@ NSColor *MHColorFace(void);
 @interface MHDropLine : NSView
 @end
 
+/* The big default button ("CRIAR CARTAO V2"): drawn here so it reads as active (blue) or
+ * inactive (grey) whatever the window state. */
+@interface MHPrimaryButton : NSButton
+@property(copy) NSString *label;
+@end
+
 #endif

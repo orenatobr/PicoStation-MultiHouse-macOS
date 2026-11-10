@@ -180,3 +180,26 @@ NSColor *MHColorFace(void) { return [NSColor colorWithSRGBRed:240 / 255. green:2
     NSRectFill(self.bounds);
 }
 @end
+
+@implementation MHPrimaryButton
+- (void)drawRect:(NSRect)r {
+    NSRect b = NSInsetRect(self.bounds, 0.5, 0.5);
+    NSBezierPath *path = [NSBezierPath bezierPathWithRoundedRect:b xRadius:6 yRadius:6];
+    NSColor *fill, *text;
+    if (self.isEnabled) {
+        fill = self.isHighlighted ? [NSColor colorWithSRGBRed:0 green:0.30 blue:0.68 alpha:1]
+                                  : [NSColor colorWithSRGBRed:0 green:0.40 blue:0.85 alpha:1];
+        text = NSColor.whiteColor;
+    } else {
+        fill = [NSColor colorWithWhite:0.86 alpha:1];
+        text = [NSColor colorWithWhite:0.55 alpha:1];
+    }
+    [fill setFill];
+    [path fill];
+    NSDictionary *at = @{NSFontAttributeName : self.font ?: [NSFont systemFontOfSize:12], NSForegroundColorAttributeName : text};
+    NSString *t = self.label ?: self.title;
+    NSSize sz = [t sizeWithAttributes:at];
+    [t drawAtPoint:NSMakePoint(NSMidX(self.bounds) - sz.width / 2, NSMidY(self.bounds) - sz.height / 2) withAttributes:at];
+}
+- (BOOL)isFlipped { return NO; }
+@end

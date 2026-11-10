@@ -20,3 +20,9 @@ The PicoStation firmware descends from [paulocode/picostation](https://github.co
 ## License
 
 Apache License 2.0, the same license as the upstream PicoStation repositories. See `LICENSE`.
+
+## External data folder (covers)
+
+Default case/disc art is read from `database/art/default` (`<SERIAL>-CASE.art`, `<SERIAL>-CD.art`). The app looks in, in order:
+`$MH_DATA_DIR`, the folder next to the `.app`, `Contents/Resources`, and `~/Library/Application Support/PicoStation Multi House/`
+(created on first run). `menu-defaults.dat` and `custom/art` live in the same folder.

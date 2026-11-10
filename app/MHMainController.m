@@ -2,7 +2,7 @@
 #import "MHApp.h"
 #import "MHViews.h"
 #import "MHDialogs.h"
-#import "MHBridge.h"
+#include "mh/v2write.h"
 #import "cheat_ui.h"
 #import <DiskArbitration/DiskArbitration.h>
 #include "mh/base.h"
@@ -267,11 +267,14 @@ static NSString *status_text(unsigned s) { /* orig: the OK/OBS/CORR/ERRO ladder 
     [_popSD setAccessibilityLabel:@"Cartao SD"];
     [_root addSubview:_popSD];
     _btnRefresh = [self buttonWith:@"Atualizar" tag:ID_REFRESH action:@selector(refreshSDAction:)];
-    _btnWrite = [self buttonWith:@"CRIAR CARTAO V2" tag:ID_WRITE action:@selector(cmdWrite:)];
-    _btnWrite.bezelColor = NSColor.controlAccentColor;
-    _btnWrite.attributedTitle = [[NSAttributedString alloc]
-        initWithString:@"CRIAR CARTAO V2"
-            attributes:@{NSFontAttributeName : g_font, NSForegroundColorAttributeName : NSColor.whiteColor}];
+    _btnWrite = [[MHPrimaryButton alloc] initWithFrame:NSZeroRect];
+    _btnWrite.target = self;
+    _btnWrite.action = @selector(cmdWrite:);
+    _btnWrite.tag = ID_WRITE;
+    _btnWrite.font = g_font;
+    _btnWrite.bordered = NO;
+    [_root addSubview:_btnWrite];
+    [self setWriteTitle:@"CRIAR CARTAO V2"];
     _progress = [[NSProgressIndicator alloc] initWithFrame:NSZeroRect];
     _progress.style = NSProgressIndicatorStyleBar;
     _progress.indeterminate = NO;
@@ -617,9 +620,10 @@ static void set_preview(MHPreviewView *v, const char *path) {
 }
 
 - (void)setWriteTitle:(NSString *)t {
-    _btnWrite.attributedTitle = [[NSAttributedString alloc]
-        initWithString:t attributes:@{NSFontAttributeName : g_font, NSForegroundColorAttributeName : NSColor.whiteColor}];
+    ((MHPrimaryButton *)_btnWrite).label = t;
+    _btnWrite.title = t;
     [_btnWrite setAccessibilityLabel:t];
+    [_btnWrite setNeedsDisplay:YES];
 }
 
 /* The shared tail of every project change: orig `project_recount; refresh_cases; refresh_fields`. */
@@ -673,8 +677,28 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
     if (total) pct = done < total ? (double)(done * 100 / total) : 100;
     _progress.doubleValue = pct;
     [self setStatus:_app.cancelRequested ? @"Cancelando no limite seguro da operacao..." : (text ?: @"")];
+    /* The core passes the phase as text (docs/map/v2.md). Orig kind 8: repaint the lists when a
+     * disc finished (it turns blue); kind 7: no cancel once the tables are being committed. */
+    if ([text hasPrefix:@"Concluido: "]) [self refreshRowColors];
+    if ([text isEqualToString:@"Atualizando tabelas e artes do V2"] || [text isEqualToString:@"Sincronizando tabelas, menu e artes"] ||
+        [text isEqualToString:@"Verificando tabelas e artes"] || [text isEqualToString:@"Finalizando biblioteca do SD"])
+        [self markCannotCancel];
+}
+
+/* Re-reads the blue/status state of the cached rows without touching the selection. */
+- (void)refreshRowColors {
+    MhProject *p = _app.project;
+    for (MHRow *r in _caseRows) {
+        MhCase *c = &p->cases[r.param];
+        if (c->in_use) r.blue = case_blue(c);
+    }
+    MhCase *c = _app.currentCase;
+    for (MHRow *r in _discRows)
+        if (c && r.param < c->disc_count && c->discs[r.param]) r.blue = (c->discs[r.param]->flags & MH_BLUE_FLAGS) != 0;
     [_tCases reloadData];
-    [_tDiscs reloadData]; /* orig: kind 8 invalidated both lists; cheap with cached rows */
+    [_tDiscs reloadData];
+    [self selectRowOf:_tCases param:_app.curCase];
+    [self selectRowOf:_tDiscs param:_app.curDisc];
 }
 
 /* The core cannot be cancelled once the card is being committed (orig: progress kind 7). */
@@ -1082,11 +1106,13 @@ static bool hook_admit(void *ctx, MhDisc *d) {
     return [c admitOnWorker:d verify:MHApp.shared.verifyOnAdd];
 }
 
-static void hook_attach(void *ctx, MhDisc *d) { mhb_attach_cheats(d, MHApp.shared.cheatDb); }
+static void hook_attach(void *ctx, MhDisc *d) { mh_v2_auto_attach_cheats(MHApp.shared.env, d); }
 
 - (BOOL)admitOnWorker:(MhDisc *)d verify:(BOOL)verify {
     MHMain(^{ [self setStatus:verify ? @"Verificando disco antes de adicionar..." : @"Conferindo CUE/BIN..."]; });
-    BOOL ok = mhb_manager_admit(d, verify, &_prog);
+    MhV2Writer w = *_app.writer;
+    w.prog = &_prog;
+    BOOL ok = mh_v2_manager_admit(&w, d, verify, mh_keep_disc_with_observations, NULL);
     if (!ok && !mh_progress_cancelled(&_prog) && d && d->verified == 0)
         MHMessage(MH_TITLE, MHStr(d->verify_text), MHIconError);
     return ok;
@@ -1344,8 +1370,11 @@ static NSString *image_cache_dir(NSString *leaf) {
     __block BOOL ok = NO;
     [self startJob:^(MhProgress *prog) {
         MHMain(^{ [self setStatus:@"Carregando imagem V2..."]; });
-        ok = mhb_load_image(path.fileSystemRepresentation, cache.fileSystemRepresentation, self->_app.project, msg.s, sizeof msg.s);
-        if (ok) mhb_hydrate(self->_app.project, self->_app.db, self->_app.cheatDb);
+        MhV2Result r;
+        memset(&r, 0, sizeof r);
+        ok = mh_v2_load_image(path.fileSystemRepresentation, cache.fileSystemRepresentation, self->_app.env, self->_app.project, &r);
+        mh_str_copy(msg.s, sizeof msg.s, r.msg);
+        if (ok) mh_v2_hydrate_project(self->_app.project, self->_app.env);
     } done:^{
         [self setBusy:NO];
         if (ok) {
@@ -1368,80 +1397,55 @@ static NSString *image_cache_dir(NSString *leaf) {
 
 /* orig: write_image_direct_to.isra.0 */
 - (void)writeImageTo:(NSString *)path {
-    if (!_app.dbOK) {
-        MHMessage(MH_TITLE, @"GRAVACAO BLOQUEADA: o banco incorporado de identificacao, hashes e SBI falhou na validacao interna. Reinstale o executavel oficial.", MHIconError);
+    const char *blocked = mh_v2_blocked_text(_app.dbOK, _app.cheatOK);
+    if (blocked) { MHMessage(MH_TITLE, MHStr(blocked), MHIconError); return; }
+    if (![self allReady]) return;
+    MhV2Result prep;
+    memset(&prep, 0, sizeof prep);
+    if (!mh_v2_prepare_write(_app.project, &prep)) {
+        MHMessage(MH_TITLE, prep.msg[0] ? MHStr(prep.msg) : @MH_V2W_NOT_PREPARED, MHIconError);
         return;
     }
-    if (!_app.cheatOK) {
-        MHMessage(MH_TITLE, @"GRAVACAO BLOQUEADA: o banco externo auditado de cheats precisa permanecer em database\\cheats ao lado do Manager.", MHIconError);
-        return;
-    }
-    if (![self allReady:NULL]) return;
-    MhbWriteInfo prep = {0};
-    if (!mhb_prepare_write(_app.project, &prep)) {
-        MHMessage(MH_TITLE, prep.msg[0] ? MHStr(prep.msg) : @"Existem discos que ainda nao foram preparados para gravacao.", MHIconError);
-        return;
-    }
-    __block MhbWriteInfo info = {0};
+    __block MhV2Result res;
+    memset(&res, 0, sizeof res);
     __block BOOL ok = NO, loaded = NO;
     NSString *cache = image_cache_dir(@"PicoStationV2ImageCache");
     _progress.doubleValue = 0;
     [self startJob:^(MhProgress *prog) {
-        MHMain(^{ [self setStatus:@"Gravando imagem V2..."]; });
-        ok = mhb_write_image(self->_app.project, path.fileSystemRepresentation, prog, &info);
+        MHMain(^{ [self setStatus:@MH_V2W_IMAGE_STATUS]; });
+        MhV2Writer w = *self->_app.writer;
+        w.prog = prog;
+        ok = mh_v2_write_image_direct(&w, self->_app.project, path.fileSystemRepresentation, &res);
         if (ok) {
-            loaded = mhb_load_image(path.fileSystemRepresentation, cache.fileSystemRepresentation, self->_app.project, info.msg, sizeof info.msg);
-            if (loaded) mhb_hydrate(self->_app.project, self->_app.db, self->_app.cheatDb);
+            MhV2Result lr;
+            memset(&lr, 0, sizeof lr);
+            loaded = mh_v2_load_image(path.fileSystemRepresentation, cache.fileSystemRepresentation, self->_app.env, self->_app.project, &lr);
+            if (loaded) mh_v2_hydrate_project(self->_app.project, self->_app.env);
         }
     } done:^{
         if (!ok) {
-            [self writeFailure:info.msg[0] ? MHStr(info.msg) : @"Falha ao gravar a imagem V2."];
+            [self writeFailure:res.msg[0] ? MHStr(res.msg) : @MH_V2W_IMAGE_FAILED];
         } else if (!loaded) {
             [self setBusy:NO];
-            MHMessage(MH_TITLE, @"A imagem foi gravada, mas nao pode ser reaberta para edicao.", MHIconError);
+            MHMessage(MH_TITLE, @MH_V2W_IMAGE_NOT_REOPENED, MHIconError);
         } else {
             [self setBusy:NO];
             self->_app.curCase = self->_app.curDisc = -1;
             [self refreshProject];
-            [self setStatus:@"Imagem V2 concluida e carregada para edicao."];
+            [self setStatus:@MH_V2W_IMAGE_DONE];
         }
     }];
 }
 
 #pragma mark - write (orig: all_ready, cmd_write, write_failure)
 
-/* orig: all_ready. anyNote receives whether a disc carries observations. */
-- (BOOL)allReady:(BOOL *)anyNote {
-    if (anyNote) *anyNote = NO;
-    MhProject *p = _app.project;
-    if (p->disc_count == 0) {
-        MHMessage(MH_TITLE, @"Adicione ao menos um jogo antes de gravar.", MHIconError);
-        return NO;
-    }
-    for (int i = 0; i < MH_PROJECT_MAX_CASES; i++) {
-        MhCase *c = &p->cases[i];
-        if (!c->in_use || !c->disc_count) continue;
-        for (unsigned k = 0; k < c->disc_count; k++) {
-            MhDisc *d = c->discs[k];
-            NSMutableString *m = nil;
-            if (!d) {
-                m = [NSMutableString stringWithFormat:@"Gravacao nao iniciada. Case: %@\r\nDisco %u", MHStr(c->title), k + 1];
-            } else if (d->status == MH_DISC_STATUS_FIXABLE || d->status == MH_DISC_STATUS_ERROR) {
-                char base[MH_PATH_MAX];
-                mh_path_basename(d->cue_path, base, sizeof base);
-                m = [NSMutableString stringWithFormat:@"Gravacao nao iniciada. Case: %@\r\nDisco %u\r\n%@", MHStr(c->title), k + 1, MHStr(d->notes)];
-                /* orig: the separator between disc number and notes is the 2 byte "\r\n" DAT_140f0f7c6 */
-                if (d->verify_text[0]) [m appendFormat:@"\r\n\r\nUltima verificacao: %@", MHStr(d->verify_text)];
-                [m appendFormat:@"\r\nCUE: %@", MHStr(base)];
-            }
-            if (m) {
-                MHMessage(MH_TITLE, m.length ? m : @"Estrutura do disco incompleta.", MHIconError);
-                return NO;
-            }
-            if (d->status == MH_DISC_STATUS_NOTE && anyNote) *anyNote = YES;
-        }
-    }
-    return YES;
+/* orig: all_ready (text from the core). */
+- (BOOL)allReady {
+    char msg[MH_ERR_MSG_MAX] = "";
+    bool obs = false;
+    if (mh_v2_all_ready(_app.project, &obs, msg, sizeof msg)) return YES;
+    MHMessage(MH_TITLE, msg[0] ? MHStr(msg) : @"Estrutura do disco incompleta.", MHIconError);
+    return NO;
 }
 
 - (void)cmdWrite:(id)s {
@@ -1458,94 +1462,59 @@ static NSString *image_cache_dir(NSString *leaf) {
     return (i < 0 || i >= _diskCount) ? -1 : (int)i;
 }
 
+/* orig: cmd_write, up to the confirmation window. */
 - (void)doWrite {
     int di = [self selectedDiskIndex];
     MhProject *p = _app.project;
-    NSString *msg;
-    if (!_app.dbOK) {
-        msg = @"GRAVACAO BLOQUEADA: o banco incorporado de identificacao, hashes e SBI falhou na validacao interna. Reinstale o executavel oficial.";
-    } else if (!_app.cheatOK) {
-        msg = @"GRAVACAO BLOQUEADA: o banco externo auditado de cheats precisa permanecer em database\\cheats ao lado do Manager.";
-    } else {
-        if (![self allReady:NULL]) return;
-        if (di < 0) {
-            msg = @"Selecione um cartao SD.";
-        } else {
-            MhDiskInfo disk = _disks[di];
-            if (p->card_loaded && p->device != (int32_t)disk.number) {
-                msg = @"Este projeto foi carregado de outro cartao. Selecione o mesmo PhysicalDrive para aplicar as alteracoes.";
-            } else {
-                uint64_t need = mhb_estimate_bytes(p, (int)disk.number);
-                if (need > disk.size) {
-                    msg = @"Os jogos nao cabem no cartao selecionado.";
-                } else {
-                    MhbWriteInfo prep = {0};
-                    if (!mhb_prepare_write(p, &prep)) {
-                        MHMessage(MH_TITLE, prep.msg[0] ? MHStr(prep.msg) : @"Existem discos que ainda nao foram preparados para gravacao.", MHIconError);
-                        return;
-                    }
-                    [self confirmAndWrite:disk needBytes:need];
-                    return;
-                }
-            }
-        }
+    if (!_app.dbOK || !_app.cheatOK) {
+        MHMessage(MH_TITLE, MHStr(mh_v2_blocked_text(_app.dbOK, _app.cheatOK)), MHIconError);
+        return;
     }
-    MHMessage(MH_TITLE, msg, MHIconError);
+    if (![self allReady]) return;
+    uint64_t need = 0;
+    const char *why = mh_v2_write_precheck(p, _app.dbOK, _app.cheatOK, di >= 0, di >= 0 ? _disks[di].number : 0,
+                                           di >= 0 ? _disks[di].size : 0, &need);
+    if (why) { MHMessage(MH_TITLE, MHStr(why), MHIconError); return; }
+    MhV2Result prep;
+    memset(&prep, 0, sizeof prep);
+    if (!mh_v2_prepare_write(p, &prep)) {
+        MHMessage(MH_TITLE, prep.msg[0] ? MHStr(prep.msg) : @MH_V2W_NOT_PREPARED, MHIconError);
+        return;
+    }
+    [self confirmAndWrite:_disks[di] needBytes:need];
 }
 
 - (void)confirmAndWrite:(MhDiskInfo)disk needBytes:(uint64_t)need {
-    MhProject *p = _app.project;
-    MhWbuf b;
-    mh_wbuf_init(&b);
-    mh_wbuf_puts(&b, p->card_loaded
-        ? "As alteracoes serao aplicadas diretamente no cartao PSXRAW V2. Os dados RAW dos jogos preservados permanecerao nos mesmos LBAs.\r\n\r\n"
-        : "O cartao inteiro sera preparado diretamente como PSXRAW V2.\r\n\r\n");
-    /* orig: "PhysicalDrive<N>"; the macOS equivalent is the BSD name of the disk */
-    mh_wbuf_puts(&b, disk.bsd_name);
-    mh_wbuf_puts(&b, "\r\nModelo: ");
-    mh_wbuf_puts(&b, disk.model);
-    mh_wbuf_puts(&b, "\r\nSerial: ");
-    mh_wbuf_puts(&b, disk.serial[0] ? disk.serial : "nao informado");
-    mh_wbuf_puts(&b, "\r\nCases: ");
-    mh_wbuf_u32(&b, p->case_count);
-    mh_wbuf_puts(&b, "  |  Discos: ");
-    mh_wbuf_u32(&b, p->disc_count);
-    mh_wbuf_puts(&b, "\r\nEspaco RAW final aproximado: ");
-    mh_wbuf_size(&b, need);
-    mh_wbuf_puts(&b, "\r\nDiscos novos preparados na inclusao; discos ja gravados serao preservados.");
-    mh_wbuf_puts(&b, "\r\n\r\nATENCAO: escolher o PhysicalDrive errado pode apagar outro dispositivo.");
-    NSString *text = MHStr(mh_wbuf_cstr(&b));
-    mh_wbuf_free(&b);
-    if (!MHConfirmWrite(_window, text)) {
+    char text[2048];
+    mh_v2_write_confirm_text(_app.project, disk.bsd_name, disk.model, disk.serial, need, text, sizeof text);
+    if (!MHConfirmWrite(_window, MHStr(text))) {
         [_window makeKeyAndOrderFront:nil];
         return;
     }
-    __block MhbWriteInfo info = {0};
+    __block MhV2Result res;
+    memset(&res, 0, sizeof res);
+    __block MhMsg err = {{0}};
     __block BOOL ok = NO;
     _progress.doubleValue = 0;
     [self startJob:^(MhProgress *prog) {
-        MHMain(^{ [self setStatus:@"Gravando discos pendentes e atualizando a biblioteca..."]; });
-        ok = mhb_write_sd(&disk, self->_app.project, prog, &info);
+        MHMain(^{ [self setStatus:@MH_V2W_SD_STATUS]; });
+        MhV2Writer w = *self->_app.writer;
+        w.prog = prog;
+        MhDiskOpts opts = self->_app.diskOpts;
+        ok = mh_sd_write_project_direct(&disk, &opts, self->_app.project, true, &w, err.s, MH_ERR_MSG_MAX, &res);
     } done:^{
         if (!ok) {
-            [self writeFailure:info.msg[0] ? MHStr(info.msg) : @"Falha na gravacao direta do SD."];
+            const char *m = err.s[0] ? err.s : res.msg;
+            [self writeFailure:m[0] ? MHStr(m) : @MH_V2W_SD_FAILED];
             return;
         }
         self->_progress.doubleValue = 100;
         [self setBusy:NO];
         self->_app.project->dirty = 0;
-        [self setStatus:@"Concluido: discos pendentes gravados; biblioteca atualizada."];
-        MhWbuf m;
-        mh_wbuf_init(&m);
-        mh_wbuf_puts(&m, "Operacao concluida diretamente no SD.\r\n\r\nCases: ");
-        mh_wbuf_u32(&m, info.cases);
-        mh_wbuf_puts(&m, "\r\nDiscos: ");
-        mh_wbuf_u32(&m, info.discs);
-        mh_wbuf_puts(&m, "\r\nTamanho RAW utilizado: ");
-        mh_wbuf_size(&m, info.raw_bytes);
-        mh_wbuf_puts(&m, "\r\n\r\nO cartao e PSXRAW e nao possui arquivos visiveis no Windows. Nao formate o cartao.");
-        MHMessage(MH_TITLE, MHStr(mh_wbuf_cstr(&m)), MHIconInfo);
-        mh_wbuf_free(&m);
+        [self setStatus:@MH_V2W_SD_DONE];
+        char done[1024];
+        mh_v2_write_done_text(res.cases, res.discs, res.size, done, sizeof done);
+        MHMessage(MH_TITLE, MHStr(done), MHIconInfo);
         self->_app.project->card_loaded = 0;
         if (!self->_app.loading) [self refreshSD];
         [self loadSelectedV2:NO];
@@ -1557,12 +1526,11 @@ static NSString *image_cache_dir(NSString *leaf) {
     BOOL cancelled = _app.cancelRequested;
     [self setBusy:NO];
     [self refreshProject];
-    if (!cancelled) {
-        [self setStatus:@"Gravacao interrompida. Reconecte o mesmo SD e reaplique sem fechar o Manager."];
-        MHMessage(MH_TITLE, [text stringByAppendingString:@"\r\n\r\nMantenha o Manager aberto. Reconecte o mesmo destino e reaplique: os discos azuis ja concluidos serao aproveitados. A biblioteca precisa ser finalizada antes do uso no console."], MHIconError);
-    } else {
-        [self setStatus:@"Cancelado. Mantenha o Manager aberto e reaplique para retomar os discos pendentes."];
-    }
+    char out[2048];
+    mh_v2_write_failure_text(text.UTF8String, cancelled, out, sizeof out);
+    if (cancelled) { [self setStatus:MHStr(out)]; return; }
+    [self setStatus:@MH_V2W_FAIL_STATUS];
+    MHMessage(MH_TITLE, MHStr(out), MHIconError);
 }
 
 #pragma mark - SD list (orig: refresh_sd, load_selected_v2, WM_DEVICECHANGE)
@@ -1597,7 +1565,7 @@ static void device_changed(DADiskRef disk, void *ctx) {
     dispatch_async(_queue, ^{
         MhDiskInfo *list = calloc(MH_DISK_MAX, sizeof(MhDiskInfo));
         char err[256] = "";
-        MhDiskOpts opts = {.flags = mh_disk_flags_from_env()};
+        MhDiskOpts opts = self->_app.diskOpts;
         int n = mh_disk_enumerate(list, MH_DISK_MAX, &opts, err, sizeof err);
         dispatch_async(dispatch_get_main_queue(), ^{
             if (gen == self->_sdGen) [self applyDisks:list count:n previous:previous];
@@ -1648,8 +1616,12 @@ static void device_changed(DADiskRef disk, void *ctx) {
     _app.loading = YES;
     [self startJob:^(MhProgress *prog) {
         MHMain(^{ [self setStatus:@"Carregando biblioteca V2 existente..."]; });
-        ok = mhb_load_physical(&disk, cache.fileSystemRepresentation, self->_app.project, msg.s, sizeof msg.s);
-        if (ok) mhb_hydrate(self->_app.project, self->_app.db, self->_app.cheatDb);
+        MhV2Result r;
+        memset(&r, 0, sizeof r);
+        MhDiskOpts opts = self->_app.diskOpts;
+        ok = mh_v2_load_physical(&disk, &opts, cache.fileSystemRepresentation, self->_app.env, self->_app.project, &r);
+        mh_str_copy(msg.s, sizeof msg.s, r.msg);
+        if (ok) mh_v2_hydrate_project(self->_app.project, self->_app.env);
     } done:^{
         self->_app.loading = NO;
         [self setBusy:NO];
@@ -1784,7 +1756,7 @@ static void device_changed(DADiskRef disk, void *ctx) {
     __block MhMsg err = {{0}};
     __block BOOL ok = NO;
     [self startJob:^(MhProgress *prog) {
-        ok = mhb_recode_copy(d, dst.fileSystemRepresentation, prog, err.s, sizeof err.s);
+        ok = mh_manager_recode_copy(d, dst.fileSystemRepresentation, prog, err.s, sizeof err.s);
     } done:^{
         BOOL cancelled = self->_app.cancelRequested;
         [self setBusy:NO];
@@ -1841,6 +1813,7 @@ static void device_changed(DADiskRef disk, void *ctx) {
     NSMutableString *s = [NSMutableString string];
     [s appendFormat:@"cases=%u discs=%u dirty=%u curCase=%d curDisc=%d\n", _app.project->case_count,
                     _app.project->disc_count, _app.project->dirty, _app.curCase, _app.curDisc];
+    [s appendFormat:@"  write button: \"%@\" enabled=%d  status: %@  key=%d\n", _btnWrite.title, _btnWrite.isEnabled, _status.stringValue, _window.isKeyWindow];
     for (MHRow *r in _caseRows) [s appendFormat:@"  case slot=%ld %@\n", (long)r.param, [r.cells componentsJoinedByString:@" | "]];
     for (MHRow *r in _discRows) [s appendFormat:@"  disc idx=%ld %@\n", (long)r.param, [r.cells componentsJoinedByString:@" | "]];
     return s;
@@ -1884,6 +1857,37 @@ static void device_changed(DADiskRef disk, void *ctx) {
         [self setBusy:[a[1] boolValue]];
     } else if ([op isEqualToString:@"shot"]) {
         [self writeShot:a[1]];
+    } else if ([op isEqualToString:@"add-folder"]) {
+        [self importPaths:@[ [[a subarrayWithRange:NSMakeRange(1, a.count - 1)] componentsJoinedByString:@" "] ]];
+    } else if ([op isEqualToString:@"save-image"]) {
+        [self writeImageTo:[[a subarrayWithRange:NSMakeRange(1, a.count - 1)] componentsJoinedByString:@" "]];
+    } else if ([op isEqualToString:@"open-image"]) {
+        [self loadImageAtPath:[[a subarrayWithRange:NSMakeRange(1, a.count - 1)] componentsJoinedByString:@" "]];
+    } else if ([op isEqualToString:@"new-project"]) {
+        mh_project_clear(_app.project);
+        [self useDefaultMenu];
+        _app.curCase = _app.curDisc = -1;
+        [self refreshProject];
+    } else if ([op isEqualToString:@"refresh-sd"]) {
+        [self refreshSD];
+    } else if ([op isEqualToString:@"write-device"]) {
+        /* Only a disk that mh_disk_enumerate offered (eligible) can be picked, and never the
+         * system disks of the dev machine. */
+        NSString *bsd = a[1];
+        int idx = -1;
+        for (int i = 0; i < _diskCount; i++) if (!strcmp(_disks[i].bsd_name, bsd.UTF8String)) idx = i;
+        if (idx < 0 || [@[ @"disk0", @"disk3", @"disk6" ] containsObject:bsd]) {
+            printf("write-device refused: %s not an eligible target\n", bsd.UTF8String);
+        } else {
+            [_popSD selectItemAtIndex:idx];
+            [self doWrite];
+        }
+    } else if ([op isEqualToString:@"sd-list"]) {
+        for (int i = 0; i < _diskCount; i++) printf("sd %s has_v2=%d state=%d size=%llu\n", _disks[i].bsd_name, _disks[i].has_v2, _disks[i].v2_state, _disks[i].size);
+    } else if ([op isEqualToString:@"select-sd"]) {
+        for (int i = 0; i < _diskCount; i++) if (!strcmp(_disks[i].bsd_name, [a[1] UTF8String])) [_popSD selectItemAtIndex:i];
+    } else if ([op isEqualToString:@"load-sd"]) {
+        [self loadSelectedV2:NO];
     } else if ([op isEqualToString:@"context"]) {
         printf("context menu for disc %d\n", _app.curDisc);
     } else if ([op isEqualToString:@"progress"]) {
