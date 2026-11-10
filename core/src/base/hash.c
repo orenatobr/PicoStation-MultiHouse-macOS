@@ -5,12 +5,43 @@
 
 #include "crc_table.inc"
 
+#if defined(__aarch64__) && defined(__APPLE__)
+#include <arm_acle.h>
+#include <arm_neon.h>
+#define MH_HW_HASH 1 /* every Apple Silicon core has the CRC32 and SHA-1 instructions */
+#endif
+
 /* orig: crc32_update @0x140012e40 (bitwise there, table driven here, same result) */
-uint32_t mh_crc32_update(uint32_t crc, const void *buf, size_t len)
+uint32_t mh_crc32_update_portable(uint32_t crc, const void *buf, size_t len)
 {
     const uint8_t *p = buf;
     while (len--) crc = (crc >> 8) ^ k_crc32_table[(crc ^ *p++) & 0xFF];
     return crc;
+}
+
+#ifdef MH_HW_HASH
+/* The ARM CRC32 instruction is the same reflected 0xEDB88320 polynomial, eight bytes at a time. */
+__attribute__((target("crc"))) static uint32_t crc32_update_hw(uint32_t crc, const uint8_t *p, size_t len)
+{
+    while (len >= 8) {
+        uint64_t v;
+        memcpy(&v, p, 8);
+        crc = __crc32d(crc, v);
+        p += 8;
+        len -= 8;
+    }
+    while (len--) crc = __crc32b(crc, *p++);
+    return crc;
+}
+#endif
+
+uint32_t mh_crc32_update(uint32_t crc, const void *buf, size_t len)
+{
+#ifdef MH_HW_HASH
+    return crc32_update_hw(crc, buf, len);
+#else
+    return mh_crc32_update_portable(crc, buf, len);
+#endif
 }
 
 uint32_t mh_crc32(const void *buf, size_t len)
@@ -49,6 +80,51 @@ void mh_sha1_block(uint32_t h[5], const uint8_t blk[64])
     h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e;
 }
 
+#ifdef MH_HW_HASH
+/* SHA-1 on the ARMv8 crypto instructions: 20 groups of four rounds, message schedule with SHA1SU0/SU1. */
+__attribute__((target("sha2"))) static void sha1_blocks_hw(uint32_t h[5], const uint8_t *data, size_t n)
+{
+    const uint32x4_t k[4] = {vdupq_n_u32(0x5A827999u), vdupq_n_u32(0x6ED9EBA1u), vdupq_n_u32(0x8F1BBCDCu),
+                             vdupq_n_u32(0xCA62C1D6u)};
+    uint32x4_t abcd = vld1q_u32(h);
+    uint32_t e = h[4];
+    while (n--) {
+        uint32x4_t abcd_save = abcd, w[20];
+        uint32_t e_save = e;
+        int i;
+        for (i = 0; i < 4; i++) w[i] = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(data + 16 * i)));
+        for (i = 4; i < 20; i++)
+            w[i] = vsha1su1q_u32(vsha1su0q_u32(w[i - 4], w[i - 3], w[i - 2]), w[i - 1]);
+        for (i = 0; i < 20; i++) {
+            uint32x4_t t = vaddq_u32(w[i], k[i / 5]);
+            uint32_t next = vsha1h_u32(vgetq_lane_u32(abcd, 0));
+            if (i < 5) abcd = vsha1cq_u32(abcd, e, t);
+            else if (i < 10 || i >= 15) abcd = vsha1pq_u32(abcd, e, t);
+            else abcd = vsha1mq_u32(abcd, e, t);
+            e = next;
+        }
+        abcd = vaddq_u32(abcd, abcd_save);
+        e += e_save;
+        data += 64;
+    }
+    vst1q_u32(h, abcd);
+    h[4] = e;
+}
+#endif
+
+/* Whole 64 byte blocks, as fast as the machine allows (same result as calling mh_sha1_block n times). */
+void mh_sha1_blocks(uint32_t h[5], const uint8_t *data, size_t n)
+{
+#ifdef MH_HW_HASH
+    sha1_blocks_hw(h, data, n);
+#else
+    while (n--) {
+        mh_sha1_block(h, data);
+        data += 64;
+    }
+#endif
+}
+
 /* orig: sha1_init @0x1400309f0 */
 void mh_sha1_init(MhSha1 *c)
 {
@@ -62,17 +138,26 @@ void mh_sha1_update(MhSha1 *c, const void *data, size_t len)
 {
     const uint8_t *p = data;
     c->total += len;
-    while (len) {
+    if (c->buflen) { /* top up the partial block first */
         size_t k = 64 - c->buflen;
         if (k > len) k = len;
         memcpy(c->buf + c->buflen, p, k);
         c->buflen += (uint32_t)k;
         p += k;
         len -= k;
-        if (c->buflen == 64) {
-            mh_sha1_block(c->h, c->buf);
-            c->buflen = 0;
-        }
+        if (c->buflen < 64) return;
+        mh_sha1_block(c->h, c->buf);
+        c->buflen = 0;
+    }
+    if (len >= 64) { /* the whole blocks straight from the caller's buffer */
+        size_t n = len / 64;
+        mh_sha1_blocks(c->h, p, n);
+        p += n * 64;
+        len -= n * 64;
+    }
+    if (len) {
+        memcpy(c->buf, p, len);
+        c->buflen = (uint32_t)len;
     }
 }
 
