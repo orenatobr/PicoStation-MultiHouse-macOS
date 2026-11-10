@@ -8,7 +8,8 @@
  *   the default menu (resources/embedded/picostation_menu.bin, 93 sectors, Mode 2 Form 1):
  *     LBA 22 root dir, 23 SYSTEM.CNF (BOOT=cdrom:\SCES_313.37;1), 24..71 SCES_313.37 (the
  *     PSn00bSDK menu executable), 72 PICO.DAT; the defaults record sits inside the executable
- *     (sector 57, byte 1372 of the raw sector)
+ *     (sector 60, byte 152 of the raw sector; the same text at sector 57, byte 1372 is plain data,
+ *     not a valid record)
  *
  * Defaults record (MH_MENU_DEFAULTS_SIZE = 64 bytes, "menu-defaults.dat" holds exactly one):
  *   0x00 "PST_DEFAULTS_V1!"   0x10 u32 0x00400001   0x14 u16 width 0x140/0x170/0x200
