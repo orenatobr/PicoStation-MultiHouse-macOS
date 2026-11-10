@@ -129,20 +129,55 @@ static bool in_list(const uint32_t *l, int n, uint32_t v) {
 
 /* ---- mounts of one disk -------------------------------------------------------------------- */
 
+/* Whole IOMedia below `media` (children, recursively): the synthesized APFS container of a
+ * physical store, whose volumes mount as /dev/diskM, not /dev/diskN. */
+static int descendant_wholes(io_registry_entry_t media, uint32_t *nums, int max) {
+    int n = 0;
+    uint32_t v;
+    io_iterator_t it = IO_OBJECT_NULL;
+    if (IORegistryEntryCreateIterator(media, kIOServicePlane, kIORegistryIterateRecursively, &it) !=
+        KERN_SUCCESS)
+        return 0;
+    io_registry_entry_t e;
+    while ((e = IOIteratorNext(it)) != IO_OBJECT_NULL) {
+        if (IOObjectConformsTo(e, kIOMediaClass) && ioreg_bsd_whole(e, &v) && n < max) nums[n++] = v;
+        IOObjectRelease(e);
+    }
+    IOObjectRelease(it);
+    return n;
+}
+
+/* "diskNsM" or "diskN" is (a slice of) disk `bsd`: disk4 vs disk40 must not match. */
+static bool mount_on(const char *from, const char *bsd) {
+    size_t bl = strlen(bsd);
+    if (strncmp(from, "/dev/", 5) != 0 || strncmp(from + 5, bsd, bl) != 0) return false;
+    char c = from[5 + bl];
+    if (c == 0) return true;
+    return c == 's' && from[5 + bl + 1] >= '0' && from[5 + bl + 1] <= '9';
+}
+
+/* Mounted volumes that live on disk `bsd`: its own slices and the volumes of synthesized
+ * containers stored on it. Returns the count (may exceed max); names are "diskNsM". */
 static int disk_mounts(const char *bsd, char names[][32], int max) {
+    uint32_t kids[16];
+    int nk = 0;
+    io_service_t media = media_for_bsd(bsd);
+    if (media != IO_OBJECT_NULL) {
+        nk = descendant_wholes(media, kids, 16);
+        IOObjectRelease(media);
+    }
     struct statfs *fs = NULL;
     int cnt = getmntinfo(&fs, MNT_NOWAIT);
-    size_t bl = strlen(bsd);
     int n = 0;
     for (int i = 0; i < cnt; i++) {
         const char *f = fs[i].f_mntfromname;
-        if (strncmp(f, "/dev/", 5) != 0 || strncmp(f + 5, bsd, bl) != 0) continue;
-        char c = f[5 + bl];
-        if (c != 0 && c != 's') continue; /* disk4 vs disk40 */
-        if (c == 's') {
-            const char *q = f + 5 + bl + 1;
-            if (*q < '0' || *q > '9') continue;
+        bool hit = mount_on(f, bsd);
+        for (int k = 0; !hit && k < nk; k++) {
+            char kb[16];
+            snprintf(kb, sizeof kb, "disk%u", kids[k]);
+            hit = mount_on(f, kb);
         }
+        if (!hit) continue;
         if (n < max) mh_str_copy(names[n], 32, f + 5);
         n++;
     }
@@ -385,27 +420,103 @@ bool mh_disk_identity_matches(const MhDiskInfo *known, const MhDiskOpts *opts, M
 typedef struct {
     dispatch_semaphore_t sem;
     DAReturn status;
-    bool done;
 } UnmountCtx;
 
+/* The context lives on the heap: after a timeout the callback may still fire. It is leaked in
+ * that case (a few bytes, and the operation is being refused anyway). */
 static void unmount_cb(DADiskRef disk, DADissenterRef dissenter, void *ctx) {
     UnmountCtx *c = ctx;
     c->status = dissenter ? DADissenterGetStatus(dissenter) : kDAReturnSuccess;
-    c->done = true;
     dispatch_semaphore_signal(c->sem);
 }
 
-/* Unmounts every volume of `bsd` (kDADiskUnmountOptionWhole, never forced). Text and retry
- * schedule are the original's: lock attempts at 40,75,110,...,285 ms, "em uso" when still
- * busy, a separate text for any other failure. */
-static bool unmount_whole(const MhDiskInfo *info, char *err, size_t errn) {
+/* The whole disks to unmount for the volumes of `info`: containers first, the disk itself last. */
+typedef struct {
+    char name[4][32];
+    int n;
+} WholeSet;
+
+static void whole_set(const MhDiskInfo *info, WholeSet *ws) {
     char names[16][32];
     int found = disk_mounts(info->bsd_name, names, 16);
+    ws->n = 0;
+    for (int i = 0; i < found && i < 16; i++) {
+        char w[32];
+        mh_str_copy(w, sizeof w, names[i]);
+        char *sl = strchr(w + 4, 's');
+        if (sl) *sl = 0;
+        if (!strcmp(w, info->bsd_name)) continue;
+        bool dup = false;
+        for (int k = 0; k < ws->n; k++) dup |= !strcmp(ws->name[k], w);
+        if (!dup && ws->n < 3) mh_str_copy(ws->name[ws->n++], 32, w);
+    }
+    mh_str_copy(ws->name[ws->n++], 32, info->bsd_name);
+}
+
+/* Unmounts all volumes of one whole disk (kDADiskUnmountOptionWhole, never forced) with the
+ * original retry schedule 40,75,110,...,285 ms while the answer is "busy". 0 ok, 1 busy,
+ * 2 any other failure. */
+static int unmount_one(DASessionRef s, const char *bsd) {
+    DADiskRef disk = DADiskCreateFromBSDName(kCFAllocatorDefault, s, bsd);
+    if (!disk) return 2;
+    int res = 2;
+    for (unsigned delay = 40; delay != 320; delay += 35) {
+        UnmountCtx *c = calloc(1, sizeof *c);
+        if (!c) break;
+        c->sem = dispatch_semaphore_create(0);
+        DADiskUnmount(disk, kDADiskUnmountOptionWhole, unmount_cb, c);
+        if (dispatch_semaphore_wait(c->sem, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC)) != 0)
+            break; /* no answer: failure, c is leaked on purpose */
+        DAReturn st = c->status;
+        free(c);
+        if (st == kDAReturnSuccess) { res = 0; break; }
+        /* DiskArbitration reports a busy mount as unix_err(EBUSY) = 0xc010 */
+        bool busy = st == kDAReturnBusy || st == kDAReturnExclusiveAccess || st == (0xc000u | EBUSY);
+        res = busy ? 1 : 2;
+        if (!busy) break;
+        usleep(delay * 1000);
+    }
+    CFRelease(disk);
+    return res;
+}
+
+static void mount_cb(DADiskRef disk, DADissenterRef dissenter, void *ctx) {
+    dispatch_semaphore_t sem = (__bridge_transfer dispatch_semaphore_t)ctx; /* released here */
+    dispatch_semaphore_signal(sem);
+}
+
+/* Best effort after a refused or failed open: give the user their volumes back. */
+static void remount(const WholeSet *ws, int upto) {
+    DASessionRef s = DASessionCreate(kCFAllocatorDefault);
+    if (!s) return;
+    dispatch_queue_t q = dispatch_queue_create("mh.disk.mount", DISPATCH_QUEUE_SERIAL);
+    DASessionSetDispatchQueue(s, q);
+    for (int i = 0; i < upto; i++) {
+        DADiskRef d = DADiskCreateFromBSDName(kCFAllocatorDefault, s, ws->name[i]);
+        if (!d) continue;
+        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+        DADiskMount(d, NULL, kDADiskMountOptionWhole, mount_cb, (__bridge_retained void *)sem);
+        dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
+        CFRelease(d);
+    }
+    DASessionSetDispatchQueue(s, NULL);
+    CFRelease(s);
+}
+
+/* Unmounts every volume on `info` (its own and those of synthesized containers stored on it).
+ * Text and retry schedule are the original's: "em uso" when still busy, a separate text for
+ * any other failure. On failure the volumes already unmounted are mounted again. */
+static bool unmount_whole(const MhDiskInfo *info, WholeSet *done, char *err, size_t errn) {
+    char names[16][32];
+    int found = disk_mounts(info->bsd_name, names, 16);
+    done->n = 0;
     if (found == 0) return true; /* already unmounted (even better than the original) */
     if (found > 16) {
         mh_err_set(err, errn, "O SD possui volumes demais para serem bloqueados com seguranca.");
         return false;
     }
+    WholeSet ws;
+    whole_set(info, &ws);
     DASessionRef s = DASessionCreate(kCFAllocatorDefault);
     if (!s) {
         mh_err_set(err, errn, "Nao foi possivel desmontar um volume do SD com seguranca.");
@@ -413,39 +524,21 @@ static bool unmount_whole(const MhDiskInfo *info, char *err, size_t errn) {
     }
     dispatch_queue_t q = dispatch_queue_create("mh.disk.unmount", DISPATCH_QUEUE_SERIAL);
     DASessionSetDispatchQueue(s, q);
-    DADiskRef disk = DADiskCreateFromBSDName(kCFAllocatorDefault, s, info->bsd_name);
-    bool ok = false;
-    if (disk) {
-        bool busy = false;
-        for (unsigned delay = 40; delay != 320; delay += 35) {
-            UnmountCtx c = {dispatch_semaphore_create(0), kDAReturnSuccess, false};
-            DADiskUnmount(disk, kDADiskUnmountOptionWhole, unmount_cb, &c);
-            long to = dispatch_semaphore_wait(c.sem, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC));
-            if (to != 0) { busy = false; break; } /* no answer: treat as failure */
-            if (c.status == kDAReturnSuccess) { ok = true; break; }
-            /* DiskArbitration reports a busy mount as unix_err(EBUSY) = 0xc010 */
-            busy = c.status == kDAReturnBusy || c.status == kDAReturnExclusiveAccess ||
-                   c.status == (0xc000u | EBUSY);
-            if (!busy) break;
-            usleep(delay * 1000);
-        }
-        if (!ok) {
-            if (busy)
-                mh_err_set(err, errn, "Um volume do SD esta em uso e nao pode ser bloqueado. Feche o Explorador e outros programas que usam o cartao.");
-            else
-                mh_err_set(err, errn, "Nao foi possivel desmontar um volume do SD com seguranca.");
-        }
-    } else {
-        mh_err_set(err, errn, "Nao foi possivel desmontar um volume do SD com seguranca.");
-    }
-    if (disk) CFRelease(disk);
+    int res = 0, i;
+    for (i = 0; i < ws.n && res == 0; i++) res = unmount_one(s, ws.name[i]);
     DASessionSetDispatchQueue(s, NULL);
     CFRelease(s);
-    if (ok && disk_mounts(info->bsd_name, names, 16) != 0) {
-        mh_err_set(err, errn, "Nao foi possivel desmontar um volume do SD com seguranca.");
-        ok = false;
+    if (res == 0 && disk_mounts(info->bsd_name, names, 16) != 0) res = 2;
+    if (res != 0) {
+        if (res == 1)
+            mh_err_set(err, errn, "Um volume do SD esta em uso e nao pode ser bloqueado. Feche o Explorador e outros programas que usam o cartao.");
+        else
+            mh_err_set(err, errn, "Nao foi possivel desmontar um volume do SD com seguranca.");
+        remount(&ws, ws.n);
+        return false;
     }
-    return ok;
+    *done = ws;
+    return true;
 }
 
 /* ---- block device handle -------------------------------------------------------------------- */
@@ -507,12 +600,14 @@ static MhBlockDev *open_dev(const MhDiskInfo *known, const MhDiskOpts *opts, boo
         mh_err_set(err, errn, "O SD mudou, foi removido ou falhou na verificacao de identidade.");
         return NULL;
     }
-    if (write && !unmount_whole(&fresh, err, errn)) return NULL;
+    WholeSet unmounted = {.n = 0};
+    if (write && !unmount_whole(&fresh, &unmounted, err, errn)) return NULL;
 
     int fd = mh_disk_open_raw(known->bsd_name, write, NULL);
     if (fd < 0) {
         mh_err_set(err, errn, write ? "Execute como administrador e feche programas usando o SD."
                                     : "Nao foi possivel abrir o SD para leitura.");
+        if (unmounted.n) remount(&unmounted, unmounted.n); /* the user cancelled the dialog, say */
         return NULL;
     }
     MhBlockDev *dev = calloc(1, sizeof *dev);
@@ -521,6 +616,7 @@ static MhBlockDev *open_dev(const MhDiskInfo *known, const MhDiskOpts *opts, boo
         free(dev);
         free(im);
         close(fd);
+        if (unmounted.n) remount(&unmounted, unmounted.n);
         mh_err_set(err, errn, "Memoria insuficiente.");
         return NULL;
     }

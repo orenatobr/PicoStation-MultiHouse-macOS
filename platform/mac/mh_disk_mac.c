@@ -118,6 +118,7 @@ int mh_disk_open_raw(const char *bsd_name, bool write, int *used_auth) {
         return -1;
     }
     fcntl(fd, F_NOCACHE, 1);
+    fcntl(fd, F_SETFD, FD_CLOEXEC); /* fds from authopen arrive without it */
     return fd;
 }
 

@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "mh/base.h"
@@ -75,6 +76,11 @@ static void detach_all(void) {
 }
 
 static void cleanup(void) {
+    /* a failed CHECK may leave a raw device open, which makes hdiutil detach refuse */
+    for (int fd = 3; fd < 64; fd++) {
+        struct stat st;
+        if (fstat(fd, &st) == 0 && S_ISCHR(st.st_mode)) close(fd);
+    }
     detach_all();
     if (g_tmpdir) [[NSFileManager defaultManager] removeItemAtPath:g_tmpdir error:nil];
     g_tmpdir = nil;
@@ -142,6 +148,40 @@ static bool make_image(const char *name, const char *fs, char dev[32], char moun
                 mine = true;
     }
     return mine;
+}
+
+/* APFS image with the default GPT layout: the whole disk `phys` holds the container, the
+ * synthesized disk `cont` carries the mounted volume. Only nodes hdiutil returned for OUR image
+ * file are accepted (cross-checked with hdiutil info like make_image). */
+static bool make_apfs_image(char phys[32], char cont[32], char mountpoint[256]) {
+    NSString *base = [g_tmpdir stringByAppendingPathComponent:@"apfs"];
+    NSString *dmg = [base stringByAppendingString:@".dmg"];
+    int st;
+    run(@[ @"/usr/bin/hdiutil", @"create", @"-size", @"64m", @"-type", @"UDIF", @"-fs", @"APFS",
+           @"-volname", @"MHAPFS", base ], &st);
+    if (st != 0 || ![[NSFileManager defaultManager] fileExistsAtPath:dmg]) return false;
+    NSString *out = run(@[ @"/usr/bin/hdiutil", @"attach", @"-plist", dmg ], &st);
+    if (st != 0) return false;
+    NSDictionary *pl = [NSPropertyListSerialization
+        propertyListWithData:[out dataUsingEncoding:NSUTF8StringEncoding] options:0 format:NULL error:NULL];
+    phys[0] = cont[0] = mountpoint[0] = 0;
+    for (NSDictionary *e in pl[@"system-entities"]) {
+        NSString *de = e[@"dev-entry"];
+        if (!de || !strict_disk_node(de.UTF8String)) continue;
+        if (strlcpy(g_attached[g_nattached], de.UTF8String, 32) < 32) g_nattached++;
+        if ([e[@"content-hint"] isEqualToString:@"GUID_partition_scheme"]) strlcpy(phys, de.UTF8String, 32);
+        else strlcpy(cont, de.UTF8String, 32);
+    }
+    for (NSDictionary *e in pl[@"system-entities"])
+        if (e[@"mount-point"]) strlcpy(mountpoint, [e[@"mount-point"] UTF8String], 256);
+    if (!phys[0] || !cont[0] || !mountpoint[0]) return false;
+    NSString *info = run(@[ @"/usr/bin/hdiutil", @"info", @"-plist" ], &st);
+    NSDictionary *ip = [NSPropertyListSerialization
+        propertyListWithData:[info dataUsingEncoding:NSUTF8StringEncoding] options:0 format:NULL error:NULL];
+    for (NSDictionary *img in ip[@"images"])
+        for (NSDictionary *e in img[@"system-entities"])
+            if ([e[@"dev-entry"] isEqualToString:@(phys)] && [img[@"image-path"] isEqualToString:dmg]) return true;
+    return false;
 }
 
 static const char *bsd_of(const char *dev) { return dev + 5; }
@@ -290,6 +330,7 @@ static void test_images(void) {
     if (!d) fprintf(stderr, "open_write failed: %s\n", err);
     CHECK(d != NULL);
     CHECK(d->writable && d->size == known.size);
+    CHECK(fcntl(d->io.fd, F_GETFD) & FD_CLOEXEC); /* a spawned diskutil/authopen must not inherit the raw disk */
     CHECK(mh_blockdev_recheck(d, err, sizeof err));
     uint8_t blk[512], hdr[512], rd[512];
     memset(hdr, 0, sizeof hdr);
@@ -381,6 +422,33 @@ static void test_images(void) {
     detach_all();
 }
 
+
+/* A volume mounted through a synthesized APFS container is a mounted volume of the physical
+ * disk: it must be counted, unmounted before the raw open and its mount must not be missed. */
+static void test_apfs_image(void) {
+    char phys[32], cont[32], mp[256], err[512];
+    MhDiskOpts on = {.flags = MH_DISK_ALLOW_IMAGES};
+    CHECK(make_apfs_image(phys, cont, mp));
+    printf("APFS image: store %s, container %s mounted at %s\n", phys, cont, mp);
+    MhDiskInfo list[MH_DISK_MAX];
+    int n = mh_disk_enumerate(list, MH_DISK_MAX, &on, err, sizeof err);
+    const MhDiskInfo *me = find(list, n, bsd_of(phys));
+    CHECK(me && me->is_image && !me->is_synthesized);
+    CHECK(find(list, n, bsd_of(cont)) == NULL); /* the container itself is never offered */
+    CHECK(me->mounted == 1 && !strcmp(me->label, "MHAPFS"));
+    MhDiskInfo known = *me;
+    MhBlockDev *d = mh_blockdev_open_write(&known, &on, err, sizeof err);
+    if (!d) fprintf(stderr, "open_write (APFS) failed: %s\n", err);
+    CHECK(d != NULL);
+    struct statfs sf;
+    CHECK(statfs(mp, &sf) != 0 || strncmp(sf.f_mntfromname, cont, strlen(cont)) != 0); /* unmounted */
+    uint8_t blk[512];
+    fill(blk, sizeof blk, 3);
+    CHECK(mh_io_write_block_verified(&d->io, 512, blk));
+    mh_blockdev_close(d);
+    detach_all();
+}
+
 int main(void) {
     @autoreleasepool {
         setvbuf(stdout, NULL, _IOLBF, 0);
@@ -391,8 +459,10 @@ int main(void) {
         test_safety_readonly();
         test_authopen_plumbing();
         const char *img = getenv("MH_DISK_TEST_IMAGES");
-        if (img && !strcmp(img, "1"))
+        if (img && !strcmp(img, "1")) {
             test_images();
+            test_apfs_image();
+        }
         else
             printf("image tests skipped (set MH_DISK_TEST_IMAGES=1 or use tools/test-disk.sh --images)\n");
         printf("disk-mac: ok\n");
