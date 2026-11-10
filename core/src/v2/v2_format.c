@@ -135,7 +135,9 @@ void mh_v2_case_decode(const uint8_t r[MH_V2_CASE_SIZE], MhV2CaseRec *o, bool *c
     o->index = r[6];
     o->variant = r[7];
     memcpy(o->name, r + 8, MH_V2_CASE_NAME_MAX);
+    o->name[MH_V2_CASE_NAME_MAX] = 0;
     memcpy(o->code, r + 0x28, MH_V2_CASE_CODE_MAX);
+    o->code[MH_V2_CASE_CODE_MAX] = 0;
     o->art_id = mh_v2_rd16(r + 0x38);
     memcpy(o->disc_ids, r + 0x3a, 5);
     o->crc = mh_v2_rd32(r + 0x4c);
@@ -170,7 +172,9 @@ void mh_v2_disc_decode(const uint8_t r[MH_V2_DISC_SIZE], MhV2DiscRec *o, bool *c
     o->slot = r[7];
     o->flags = mh_v2_rd32(r + 8);
     memcpy(o->serial, r + 0xc, MH_V2_SERIAL_MAX);
+    o->serial[MH_V2_SERIAL_MAX] = 0;
     memcpy(o->title, r + 0x1c, MH_V2_TITLE_MAX);
+    o->title[MH_V2_TITLE_MAX] = 0;
     o->base_lba = mh_v2_rd64(r + 0x3c);
     o->track_lba = mh_v2_rd64(r + 0x44);
     o->raw_lba = mh_v2_rd64(r + 0x4c);

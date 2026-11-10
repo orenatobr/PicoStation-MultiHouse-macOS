@@ -193,8 +193,8 @@ typedef struct MhV2CaseRec {
     uint8_t disc_count;     /* +5, 1..5 */
     uint8_t index;          /* +6, must equal the table position */
     uint8_t variant;        /* +7, copied from the project Case (+4 byte 1); opaque */
-    char name[MH_V2_CASE_NAME_MAX]; /* +8 */
-    char code[MH_V2_CASE_CODE_MAX]; /* +0x28 (the Case serial) */
+    char name[MH_V2_CASE_NAME_MAX + 1]; /* +8; decode always adds a NUL (the field may be unterminated on a corrupt card) */
+    char code[MH_V2_CASE_CODE_MAX + 1]; /* +0x28 (the Case serial), NUL added by decode */
     uint16_t art_id;        /* +0x38, 0xFFFF = none, else must equal the Case index */
     uint8_t disc_ids[5];    /* +0x3A, Disc table indexes; entries >= disc_count must be 0 */
     uint32_t crc;           /* +0x4C, CRC-32 of bytes 0..0x4B */
@@ -222,8 +222,8 @@ typedef struct MhV2DiscRec {
     uint8_t case_index;     /* +6 */
     uint8_t slot;           /* +7, position inside the Case */
     uint32_t flags;         /* +8, MH_V2_DF_* */
-    char serial[MH_V2_SERIAL_MAX]; /* +0xC */
-    char title[MH_V2_TITLE_MAX];   /* +0x1C (a_copy of the short name, 31 characters at most) */
+    char serial[MH_V2_SERIAL_MAX + 1]; /* +0xC, NUL added by decode */
+    char title[MH_V2_TITLE_MAX + 1]; /* +0x1C (short name, 31 characters at most), NUL added by decode */
     uint64_t base_lba;      /* +0x3C package start: >= 0x2800, multiple of 256 */
     uint64_t track_lba;     /* +0x44 track map, == base_lba */
     uint64_t raw_lba;       /* +0x4C raw data, == base_lba + 0x100 */
