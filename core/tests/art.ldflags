@@ -1,0 +1,1 @@
+-framework ImageIO -framework CoreFoundation -framework CoreGraphics
