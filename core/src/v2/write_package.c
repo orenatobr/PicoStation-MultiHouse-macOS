@@ -97,6 +97,9 @@ bool mh_v2_build_package_metadata(const MhDisc *d, uint8_t rec[MH_V2_DISC_SIZE],
     mh_v2_wr16(trk + 0xa, trk_flags);
     mh_v2_wr32(trk + 0xc, 0);
     mh_v2_wr32(trk + 0xc, mh_crc32(trk, sizeof trk));
+    /* the firmware (FUN_10022084) and the loader refuse a map whose INDEX 01 is not inside its
+     * own track (a pregap of the next track reaching back past it): never write one */
+    if (!mh_track_sector_valid(trk, d->total_sectors)) goto bad;
     memcpy(out, trk, sizeof trk);
 
     mh_v2_wr32(rec + 0x6c, 0);

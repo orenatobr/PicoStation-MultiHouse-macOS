@@ -1031,9 +1031,11 @@ static void test_failures(void)
     CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
     CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
     d->total_sectors += 451;
-    /* the last track is not checked against the end of the disc (original behaviour) */
+    /* the last track is not checked against the end of the disc by the original, but the firmware
+     * (FUN_10022084: index1 < end) and the loader refuse such a map, so the port refuses it too */
     d->tracks[1].start = d->total_sectors + 5;
-    CHECK(mh_v2_write_image_direct(&g_w, p, img, &res) && res.ok);
+    CHECK(!mh_v2_write_image_direct(&g_w, p, img, &res));
+    CHECK_STR(res.msg, "Nao foi possivel montar a Track Table deste disco.");
     mh_project_clear(p);
     free(p);
 
