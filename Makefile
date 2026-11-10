@@ -10,6 +10,13 @@ CFLAGS_T := $(CSTD) $(WARN) -g -O1 $(SAN) -Icore/include
 BUILD    ?= $(HOME)/.cache/picostation-mh-build
 
 .PHONY: test clean app
+
+VERSION ?= 0.1.0
+APPNAME := PicoStation Multi House V3
+APPDIR  := $(BUILD)/$(APPNAME).app
+APP_M   := $(wildcard app/*.m) $(wildcard platform/mac/*.m)
+APP_C   := $(wildcard core/src/*/*.c) $(wildcard platform/mac/*.c)
+APP_FW  := -framework Cocoa -framework DiskArbitration -framework IOKit -framework ImageIO -framework CoreGraphics -framework CoreFoundation -framework UniformTypeIdentifiers
 test:
 	@set -e; for f in $$(ls core/tests/test_*.c 2>/dev/null); do \
 	  m=$$(basename $$f .c); m=$${m#test_}; $(MAKE) --no-print-directory test-$$m; done
@@ -31,3 +38,16 @@ clean:
 .PHONY: lint-dash
 lint-dash:
 	@! grep -rIl --exclude-dir=.git --exclude-dir=build --exclude=LICENSE $$(printf '\xe2\x80\x94') . && echo "no em dash"
+
+# Universal-free, arm64-only app bundle, ad-hoc signed.
+app:
+	@rm -rf "$(APPDIR)"
+	@mkdir -p "$(APPDIR)/Contents/MacOS" "$(APPDIR)/Contents/Resources/embedded" "$(BUILD)/obj"
+	clang -arch arm64 -O2 -g -std=gnu11 -fobjc-arc -mmacosx-version-min=12.0 -Icore/include -Iapp -Iplatform/mac \
+	  $(APP_M) $(APP_C) $(APP_FW) -o "$(APPDIR)/Contents/MacOS/PicoStationMultiHouse"
+	@sed 's/@VERSION@/$(VERSION)/' app/Info.plist > "$(APPDIR)/Contents/Info.plist"
+	@cp resources/AppIcon.icns "$(APPDIR)/Contents/Resources/AppIcon.icns"
+	@cp resources/embedded/* "$(APPDIR)/Contents/Resources/embedded/"
+	@xattr -cr "$(APPDIR)" 2>/dev/null || true
+	codesign --force --deep --sign - "$(APPDIR)"
+	@echo "built $(APPDIR)"
