@@ -404,6 +404,7 @@ NSString *MHPhaseTitle(int phase) {
     NSImageView *_resultIcon;
     NSTextView *_resultText;
     NSString *_failureText;
+    NSLayoutConstraint *_resultBottom;
     dispatch_block_t _completion;
     BOOL _closed;
 }
@@ -459,6 +460,7 @@ NSString *MHPhaseTitle(int phase) {
     _resultText.editable = NO;
     _resultText.selectable = YES;
     _resultText.font = MHTheme.bodyFont;
+    _resultText.textColor = MHTheme.textPrimary;
     _resultText.drawsBackground = NO;
     _resultText.textContainerInset = NSMakeSize(MHSpace8, MHSpace8);
     _resultText.verticallyResizable = YES;
@@ -482,7 +484,7 @@ NSString *MHPhaseTitle(int phase) {
     rb.spacing = MHSpace16;
     rb.translatesAutoresizingMaskIntoConstraints = NO;
     [rbox.widthAnchor constraintEqualToAnchor:rb.widthAnchor].active = YES;
-    [rbox.heightAnchor constraintEqualToConstant:132].active = YES;
+    [rbox.heightAnchor constraintEqualToConstant:160].active = YES;
     [rb.views.lastObject.widthAnchor constraintEqualToAnchor:rb.widthAnchor].active = YES;
     _resultBox = rb;
     _resultBox.hidden = YES;
@@ -495,7 +497,7 @@ NSString *MHPhaseTitle(int phase) {
             [v.leadingAnchor constraintEqualToAnchor:host.leadingAnchor constant:MHSpace24],
             [v.trailingAnchor constraintEqualToAnchor:host.trailingAnchor constant:-MHSpace24] ]];
     }
-    [_resultBox.bottomAnchor constraintEqualToAnchor:host.bottomAnchor constant:-MHSpace24].active = YES;
+    _resultBottom = [_resultBox.bottomAnchor constraintEqualToAnchor:host.bottomAnchor constant:-MHSpace24];
     [_progressBox.bottomAnchor constraintLessThanOrEqualToAnchor:host.bottomAnchor constant:-MHSpace24].active = YES;
     _window = make_sheet(host);
     [_window setContentSize:NSMakeSize(480, 196)];
@@ -531,7 +533,8 @@ NSString *MHPhaseTitle(int phase) {
     _resultText.string = MHDisplay(body ?: @"");
     _progressBox.hidden = YES;
     _resultBox.hidden = NO;
-    [_window setContentSize:NSMakeSize(480, 280)];
+    _resultBottom.active = YES;
+    [_window setContentSize:NSMakeSize(480, 308)];
     [_window makeFirstResponder:_done];
 }
 

@@ -58,3 +58,6 @@ Safety of `write-device`: only a disk offered by `mh_disk_enumerate`, never disk
 * Double click on a row renames it; the context menu is on right click and in the Library menu.
 * Confirmation shows the BSD name (`disk6`) where the original printed `PhysicalDriveN`.
 * Appearance follows the system (the original was light only).
+
+## Screenshots
+`docs/screenshots/`: `library-light.png`, `library-dark.png` (11 real games, a case and a disc selected), `empty-light.png`, `empty-dark.png`, `write-confirmation-light.png`, `write-progress-dark.png`.
