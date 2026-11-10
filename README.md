@@ -72,6 +72,8 @@ the card picker and the primary button. Dark mode is supported.
 
 1. Drag game folders or `.cue` files onto the window, or use **Add Game** and **Add Disc** in the
    toolbar. Each CUE is checked (structure, serial, Redump hash) when "Verify on add" is ticked.
+   **Remove Game** and **Remove Disc** delete what is selected: select several rows (shift-click or
+   command-click) to remove several games or several discs at once, after one confirmation.
 2. Adjust names, cover art, cheats and the menu (**Menu Settings**). Reorder discs and cases by dragging,
    or with Move Up and Move Down (option-command-up and option-command-down).
 3. Pick the card in the bottom bar and press **Create V2 Card**. A confirmation sheet asks you to

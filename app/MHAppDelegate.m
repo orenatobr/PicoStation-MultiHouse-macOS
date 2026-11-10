@@ -106,6 +106,8 @@ static NSString *fkey(unichar c) { return [NSString stringWithCharacters:&c leng
     top(bar, @"File", &m);
     item(m, @"Add Game…", @selector(addGame:), @"n", cmd, _main);
     item(m, @"Add Disc…", @selector(addDisc:), @"n", cmd | shift, _main);
+    item(m, @"Remove Game…", @selector(removeGame:), @"", 0, _main);
+    item(m, @"Remove Disc…", @selector(removeDisc:), @"", 0, _main);
     [m addItem:NSMenuItem.separatorItem];
     item(m, @"Open Image…", @selector(imageOpen:), @"o", cmd, _main);
     item(m, @"Save Image As…", @selector(imageSaveAs:), @"s", cmd | shift, _main);
