@@ -1226,6 +1226,69 @@ static void test_estimate_kept(void)
     free(p);
 }
 
+
+static void poke(const char *path, uint64_t off, uint8_t v)
+{
+    FILE *f = fopen(path, "r+b");
+    assert(f && fseeko(f, (off_t)off, SEEK_SET) == 0 && fwrite(&v, 1, 1, f) == 1);
+    fclose(f);
+}
+
+/* Analysis and manual verification of a disc that was loaded from an image (kind 5 source). */
+static void test_loaded_disc_analysis(void)
+{
+    MhProject *p = new_project(), *q = new_project();
+    MhV2Result res, vres;
+    char *img = tpath("ana.img"), cache[MH_PATH_MAX], msg[256];
+    MhDisc *d;
+    uint64_t raw;
+    uint8_t *tab;
+    MhV2DiscRec dr;
+
+    build_ab(p, "ana");
+    CHECK(mh_v2_write_image_direct(&g_w, p, img, &res) && res.ok);
+    snprintf(cache, sizeof cache, "%s/cache5", g_tmp);
+    mh_ensure_dir(cache);
+    CHECK(mh_v2_load_image(img, cache, &g_env, q, &vres));
+    d = q->cases[0].discs[0];
+    CHECK(d->kind == MH_DISC_KIND_V2_IMAGE && d->total_sectors == 900 + 150);
+    CHECK(mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg) && strcmp(msg, "Disco RAW verificado com sucesso.") == 0);
+    CHECK(mh_v2_check_disc_source(&g_w, d));
+    CHECK(d->verified == 1 && (d->verify_issues & 0x10) == 0 && (d->verify_issues & 0x20) == 0);
+    CHECK(d->crc32 == d->verify_crc32 && memcmp(d->sha1, d->verify_sha1, 20) == 0);
+    /* the source file is the image: the manual verification reads it back */
+    tab = pread_file(img, 0x6400, 0x100);
+    mh_v2_disc_decode(tab, &dr, NULL);
+    free(tab);
+    raw = dr.raw_lba << 9;
+    /* a flipped data byte: card data differs from the record */
+    poke(img, raw + 10 * 0xa00 + 100, 0xa5);
+    CHECK(mh_v2_check_disc_source(&g_w, d));
+    CHECK(d->verify_issues & 0x10);
+    CHECK(strstr(d->verify_text, "Os dados no cartao nao conferem com o registro do disco.\r\n") != NULL);
+    CHECK(!mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg));
+    CHECK_STR(msg, "CRC32/SHA-1 do disco divergem dos valores gravados no V2.");
+    /* a byte in the zero padding of a slot */
+    poke(img, raw + 20 * 0xa00 + 0x940, 1);
+    CHECK(!mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg));
+    CHECK_STR(msg, "O padding RAW de um setor nao esta zerado.");
+    CHECK(!mh_v2_check_disc_source(&g_w, d) || (d->verify_issues & 0x20));
+    /* writing the damaged disc to another image is refused by the padding test of the stream */
+    {
+        MhV2Result r2;
+        CHECK(!mh_v2_write_image_direct(&g_w, q, tpath("ana2.img"), &r2));
+        CHECK(rd_fail_text(&r2, "Gravacao nao iniciada. Case: ") || rd_fail_text(&r2, "Gravacao interrompida."));
+    }
+    /* a disc without RAW source cannot be verified */
+    d->v2_raw_blocks = 0;
+    CHECK(!mh_v2_verify_disc_source(&g_w, d, msg, sizeof msg));
+    CHECK_STR(msg, "Este disco nao possui uma origem RAW V2 verificavel.");
+    mh_project_clear(p);
+    mh_project_clear(q);
+    free(p);
+    free(q);
+}
+
 static void test_max_discs(void)
 {
     MhProject *p = new_project();
@@ -1450,6 +1513,7 @@ int main(void)
         RUN("fail", test_failures);
         RUN("card", test_card_standin);
         RUN("estimate", test_estimate_kept);
+        RUN("analysis", test_loaded_disc_analysis);
         RUN("max", test_max_discs);
         RUN("empty", test_empty_project_and_small_target);
         RUN("texts", test_texts);
