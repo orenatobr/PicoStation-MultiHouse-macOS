@@ -70,14 +70,22 @@ static int hexlike(chw c)
     return k <= 0x36 && !((nonhex >> k) & 1);
 }
 
-/* UTF-8 to UTF-16 (invalid bytes become U+FFFD). Returns a NUL terminated array. */
-static chw *utf8_to_w(const char *s, size_t *out_len)
+/* UTF-8 to UTF-16 (invalid bytes become U+FFFD). Returns a NUL terminated array. s[len] must be NUL;
+ * NULs before it are kept as code units (the original text had an explicit length). */
+static chw *utf8n_to_w(const char *s, size_t len, size_t *out_len)
 {
-    size_t cap = strlen(s) + 1, n = 0;
-    chw *w = mh_alloc(cap * sizeof(chw));
+    const char *end = s + len;
+    size_t n = 0;
+    chw *w = mh_alloc((len + 1) * sizeof(chw));
     uint32_t cp;
     if (!w) return NULL;
-    while ((cp = mh_utf8_next(&s)) != 0) {
+    while (s < end) {
+        if (*s == 0) {
+            w[n++] = 0;
+            s++;
+            continue;
+        }
+        cp = mh_utf8_next(&s);
         if (cp >= 0x10000) {
             cp -= 0x10000;
             w[n++] = (chw)(0xD800 + (cp >> 10));
@@ -90,6 +98,8 @@ static chw *utf8_to_w(const char *s, size_t *out_len)
     if (out_len) *out_len = n;
     return w;
 }
+
+static chw *utf8_to_w(const char *s, size_t *out_len) { return utf8n_to_w(s, strlen(s), out_len); }
 
 /* UTF-16 to UTF-8 into a bounded buffer. */
 static void w_to_utf8(const chw *w, char *dst, size_t n)
@@ -169,7 +179,7 @@ int mh_cheat_parse_code_line(const char *text, size_t len, uint8_t out[6])
     if (!cut) return 0;
     memcpy(cut, text, len);
     cut[len] = 0;
-    w = utf8_to_w(cut, &wl);
+    w = utf8n_to_w(cut, len, &wl);
     mh_free(cut);
     if (!w) return 0;
     r = parse_line_w(w, wl, out);
