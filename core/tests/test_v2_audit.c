@@ -359,6 +359,80 @@ static void test_load_records(void)
 }
 
 
+/* confirm_session_marker / v2_confirm_resume_target: which discs are checked, and against what */
+static void test_resume_target(void)
+{
+    char dev[300];
+    uint8_t *card = calloc(1, 0x600000), marker[512];
+    MhProject *p = calloc(1, sizeof *p);
+    MhDisc *d = mh_calloc(sizeof *d);
+    MhIo io;
+    MhV2Result r;
+    const uint64_t bytes = 0x600000;
+    unsigned i;
+    for (i = 0; i < 512; i++) marker[i] = (uint8_t)(i * 7 + 1);
+    memcpy(card + (0x2800 + 0xff) * 512, marker, 512);
+    snprintf(dev, sizeof dev, "%s/resume.bin", g_dir);
+    save(dev, card, bytes);
+    CHECK(mh_io_open(&io, dev, MH_IO_READ, false, NULL));
+    mh_project_init(p);
+    p->cases[0].in_use = 1;
+    p->cases[0].disc_count = 1;
+    p->cases[0].discs[0] = d;
+    d->flags = MH_DF_KEEP_PACKAGE;
+    d->v2_slot = 3;
+    d->v2_card_blocks = bytes;
+    d->v2_pkg_b = 0x2800;
+    memcpy(d->v2_marker, marker, 512);
+
+    CHECK(mh_v2_confirm_session_marker(&io, d, bytes));
+    d->v2_card_blocks = bytes + 512; /* a different card size, no image path */
+    CHECK(!mh_v2_confirm_session_marker(&io, d, bytes));
+    snprintf(d->v2_pkg_path, sizeof d->v2_pkg_path, "%s/some.img", g_dir); /* an image: size is not compared */
+    CHECK(mh_v2_confirm_session_marker(&io, d, bytes));
+    d->v2_pkg_path[0] = 0;
+    d->v2_card_blocks = bytes;
+    CHECK(!mh_v2_confirm_session_marker(&io, d, 0x2800ull * 512 + 0xff * 512)); /* marker block beyond the card */
+    d->v2_marker[100] ^= 1;
+    CHECK(!mh_v2_confirm_session_marker(&io, d, bytes));
+    d->v2_marker[100] ^= 1;
+
+    /* card 3: the disc belongs to it, the marker is read */
+    memset(&r, 0, sizeof r);
+    CHECK(mh_v2_confirm_resume_target(p, &io, 3, NULL, bytes, &r));
+    CHECK(mh_v2_confirm_resume_target(p, &io, 3, "", bytes, &r));
+    CHECK(mh_v2_confirm_resume_target(p, &io, 4, NULL, bytes, &r));   /* another card: not ours */
+    CHECK(mh_v2_confirm_resume_target(p, &io, -1, NULL, bytes, &r));  /* image target without a path */
+    d->v2_marker[0] ^= 1;
+    memset(&r, 0, sizeof r);
+    r.ok = 1;
+    CHECK(!mh_v2_confirm_resume_target(p, &io, 3, NULL, bytes, &r));
+    CHECK(r.ok == 0 && strcmp(r.msg, "O destino nao corresponde ao ponto de retomada. Reconecte o mesmo SD usado "
+                                     "nesta sessao.") == 0);
+    CHECK(mh_v2_confirm_resume_target(p, &io, 4, NULL, bytes, &r));
+    d->v2_marker[0] ^= 1;
+    d->flags = 0; /* not flagged to keep: never checked */
+    d->v2_marker[0] ^= 1;
+    CHECK(mh_v2_confirm_resume_target(p, &io, 3, NULL, bytes, &r));
+    d->v2_marker[0] ^= 1;
+    d->flags = MH_DF_KEEP_PACKAGE;
+
+    /* image target: matched by the path of the package */
+    snprintf(d->v2_pkg_path, sizeof d->v2_pkg_path, "%s/some.img", g_dir);
+    CHECK(mh_v2_confirm_resume_target(p, &io, -1, d->v2_pkg_path, bytes, &r));
+    d->v2_marker[0] ^= 1;
+    CHECK(!mh_v2_confirm_resume_target(p, &io, -1, d->v2_pkg_path, bytes, &r));
+    CHECK(mh_v2_confirm_resume_target(p, &io, -1, "/nonexistent/other.img", bytes, &r));
+    CHECK(mh_v2_confirm_resume_target(p, &io, 3, NULL, bytes, &r)); /* a package of an image is not a card's */
+    CHECK(!mh_v2_confirm_resume_target(p, &io, 3, d->v2_pkg_path, bytes, &r));
+    CHECK(!mh_v2_confirm_resume_target(NULL, &io, 3, NULL, bytes, &r));
+    mh_io_close(&io);
+    mh_disc_free(d);
+    p->cases[0].in_use = 0;
+    free(p);
+    free(card);
+}
+
 static MhProgress *g_pp;
 static int g_progress_calls;
 static void cancel_after_first(void *u, uint64_t d, uint64_t t, const char *x)
@@ -425,6 +499,7 @@ int main(void)
     test_header_selection();
     test_load_records();
     test_sd_write_cancel();
+    test_resume_target();
 
     {
         char cmd[512];
