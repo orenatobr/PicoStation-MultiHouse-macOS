@@ -105,6 +105,13 @@ static void test_code_line(void)
     CHECK(!mh_cheat_parse_code_line(NULL, 0, o));
     CHECK(!mh_cheat_parse_code_line("8005E9CC 03E8", 0, o)); /* length 0 */
     CHECK(mh_cheat_parse_code_line("8005E9CC 03E8 junk", 13, o)); /* the length decides */
+    /* an embedded NUL is an ordinary character for the original (UTF-16 with a length): it ends the line only
+     * through ; # // or a backslash, anything else after it is garbage */
+    CHECK(!mh_cheat_parse_code_line("8005E9CC 03E8\0 junk", 19, o));
+    CHECK(!mh_cheat_parse_code_line("8005E9CC 03E8\0", 14, o));
+    CHECK(!mh_cheat_parse_code_line("8005E9CC" "\0" "03E8", 13, o));
+    CHECK(mh_cheat_parse_code_line("8005E9CC 03E8 ;\0x", 17, o) && memcmp(o, want, 6) == 0);
+    CHECK(mh_cheat_parse_code_line("8005E9CC 03E8\0", 13, o) && memcmp(o, want, 6) == 0); /* the NUL is outside */
 #undef P
 }
 
