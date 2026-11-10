@@ -486,6 +486,52 @@ static BOOL case_verified(MhCase *c) {
     return YES;
 }
 
+/* .cue stem without the language tag "(En,Fr,De)" and, for a case, the "(Disc N)" tag; region and revision
+ * tags such as "(USA)" or "(Rev 1)" stay as written. */
+static NSString *strip_cue_tags(NSString *stem, BOOL discTag) {
+    NSString *lang = @"\\s*\\([A-Z][a-z](?:-[A-Za-z]+)?(?:,[A-Z][a-z](?:-[A-Za-z]+)?)*\\)";
+    NSString *pat = discTag ? [NSString stringWithFormat:@"%@|\\s*\\(Disc \\d+\\)", lang] : lang;
+    NSString *out = [stem stringByReplacingOccurrencesOfString:pat
+                                                    withString:@""
+                                                       options:NSRegularExpressionSearch
+                                                         range:NSMakeRange(0, stem.length)];
+    return out.length ? out : stem;
+}
+
+/* Sidebar title: the .cue name as written (no extension). The stored
+ * case title is the normalised 32-char card name, so it is used only when the user renamed the case. */
+static NSString *case_sidebar_title(const MhCase *c) {
+    NSString *stored = MHStr(c->title);
+    const MhDisc *d = c->disc_count ? c->discs[0] : NULL;
+    if (!d || !d->cue_path[0]) return stored;
+    char derived[MH_CASE_TITLE_MAX], auto_title[MH_CASE_TITLE_MAX];
+    mh_case_title_for_disc(d, derived, sizeof derived);
+    mh_str_copy(auto_title, sizeof auto_title, derived);
+    if (strcmp(c->title, auto_title) != 0) return stored;
+    NSString *stem = strip_cue_tags(MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension, YES);
+    return stem.length ? stem : stored;
+}
+
+/* Disc name shown in the UI: the .cue name without the language tag (the "(Disc N)" tag stays, it tells
+ * the discs of a case apart), unless the user typed a name. */
+static NSString *disc_display_name(const MhDisc *d) {
+    NSString *stored = MHStr(d->name);
+    if ((d->flags & MH_DF_USER_NAMED) || !d->cue_path[0]) return stored;
+    NSString *stem = strip_cue_tags(MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension, NO);
+    return stem.length ? stem : stored;
+}
+
+/* Widen the sidebar so the longest title shows in full (cell = thumbnail + text + status chip + insets). */
+- (void)fitSidebarToTitles {
+    /* the selected row draws heavier text, so measure semibold to never truncate */
+    NSDictionary *attrs = @{NSFontAttributeName : [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold]};
+    CGFloat w = 0;
+    for (MHLibRow *r in _caseRows) w = MAX(w, ceil([r.title sizeWithAttributes:attrs].width));
+    CGFloat need = MIN(MAX(w + 52 + 24 + 24 + 12, 240), 640);
+    _sideItem.minimumThickness = need;
+    _sideItem.maximumThickness = MAX(need, 360);
+}
+
 - (void)refreshCases {
     [_caseRows removeAllObjects];
     MhProject *p = _app.project;
@@ -496,7 +542,7 @@ static BOOL case_verified(MhCase *c) {
         MHLibRow *r = [[MHLibRow alloc] init];
         r.param = i;
         r.position = ++pos;
-        r.title = MHStr(c->title);
+        r.title = case_sidebar_title(c);
         r.count = c->disc_count;
         r.artPath = MHStr(c->art_path);
         r.status = c->disc_count ? case_worst(c) : 1;
@@ -506,6 +552,7 @@ static BOOL case_verified(MhCase *c) {
                      status_word(r.status) ];
         [_caseRows addObject:r];
     }
+    [self fitSidebarToTitles];
     _suppressSel = YES;
     [_tCases reloadData];
     _suppressSel = NO;
@@ -535,7 +582,7 @@ static BOOL case_verified(MhCase *c) {
             MHLibRow *r = [[MHLibRow alloc] init];
             r.param = i;
             r.position = i + 1;
-            r.title = MHStr(d ? d->name : "");
+            r.title = d ? disc_display_name(d) : @"";
             r.serial = MHStr(d ? d->serial : "");
             r.artPath = MHStr(d ? d->cd_art_path : "");
             r.count = d ? d->ntracks : 0;
@@ -567,10 +614,10 @@ static BOOL case_verified(MhCase *c) {
     MhDisc *d = _app.currentDisc;
     BOOL enAddDisc = NO, enCase = NO, enDisc = NO;
     _suppressEdit = YES;
-    NSString *ct = c ? MHStr(c->title) : @"";
+    NSString *ct = c ? case_sidebar_title(c) : @"";
     if (![_fCase.stringValue isEqualToString:ct] && _window.firstResponder != _fCase.currentEditor) _fCase.stringValue = ct;
     if (![_fCaseInsp.stringValue isEqualToString:ct] && _window.firstResponder != _fCaseInsp.currentEditor) _fCaseInsp.stringValue = ct;
-    NSString *dn = d ? MHStr(d->name) : @"";
+    NSString *dn = d ? disc_display_name(d) : @"";
     if (![_fDisc.stringValue isEqualToString:dn] && _window.firstResponder != _fDisc.currentEditor) _fDisc.stringValue = dn;
     _insp.btnCheats.title = [NSString stringWithFormat:@"Cheats (%u)…", d && d->cheats ? d->cheats->count : 0];
     _insp.btnCheats.accessibilityLabel = [NSString stringWithFormat:@"Cheats, %u", d && d->cheats ? d->cheats->count : 0];
@@ -799,8 +846,16 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
         [self refreshFields];
         return;
     }
-    if (f == _fCase || f == _fCaseInsp) [self applyCaseName:f.stringValue];
-    else if (f == _fDisc) [self applyDiscName:f.stringValue];
+    /* untouched fields show the .cue name; do not write its normalised form back */
+    MhCase *c = _app.currentCase;
+    MhDisc *d = _app.currentDisc;
+    if (f == _fCase || f == _fCaseInsp) {
+        if (c && [f.stringValue isEqualToString:case_sidebar_title(c)]) return;
+        [self applyCaseName:f.stringValue];
+    } else if (f == _fDisc) {
+        if (d && [f.stringValue isEqualToString:disc_display_name(d)]) return;
+        [self applyDiscName:f.stringValue];
+    }
 }
 
 - (void)applyCaseName:(NSString *)text {
