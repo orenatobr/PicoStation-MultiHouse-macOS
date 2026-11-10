@@ -486,6 +486,31 @@ static BOOL case_verified(MhCase *c) {
     return YES;
 }
 
+/* Sidebar title: the .cue name as written (no extension). The stored
+ * case title is the normalised 32-char card name, so it is used only when the user renamed the case. */
+static NSString *case_sidebar_title(const MhCase *c) {
+    NSString *stored = MHStr(c->title);
+    const MhDisc *d = c->disc_count ? c->discs[0] : NULL;
+    if (!d || !d->cue_path[0]) return stored;
+    char derived[MH_CASE_TITLE_MAX], auto_title[MH_CASE_TITLE_MAX];
+    mh_case_title_for_disc(d, derived, sizeof derived);
+    mh_str_copy(auto_title, sizeof auto_title, derived);
+    if (strcmp(c->title, auto_title) != 0) return stored;
+    NSString *stem = MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension;
+    return stem.length ? stem : stored;
+}
+
+/* Widen the sidebar so the longest title shows in full (cell = thumbnail + text + status chip + insets). */
+- (void)fitSidebarToTitles {
+    /* the selected row draws heavier text, so measure semibold to never truncate */
+    NSDictionary *attrs = @{NSFontAttributeName : [NSFont systemFontOfSize:13 weight:NSFontWeightSemibold]};
+    CGFloat w = 0;
+    for (MHLibRow *r in _caseRows) w = MAX(w, ceil([r.title sizeWithAttributes:attrs].width));
+    CGFloat need = MIN(MAX(w + 52 + 24 + 24 + 12, 240), 640);
+    _sideItem.minimumThickness = need;
+    _sideItem.maximumThickness = MAX(need, 360);
+}
+
 - (void)refreshCases {
     [_caseRows removeAllObjects];
     MhProject *p = _app.project;
@@ -496,7 +521,7 @@ static BOOL case_verified(MhCase *c) {
         MHLibRow *r = [[MHLibRow alloc] init];
         r.param = i;
         r.position = ++pos;
-        r.title = MHStr(c->title);
+        r.title = case_sidebar_title(c);
         r.count = c->disc_count;
         r.artPath = MHStr(c->art_path);
         r.status = c->disc_count ? case_worst(c) : 1;
@@ -506,6 +531,7 @@ static BOOL case_verified(MhCase *c) {
                      status_word(r.status) ];
         [_caseRows addObject:r];
     }
+    [self fitSidebarToTitles];
     _suppressSel = YES;
     [_tCases reloadData];
     _suppressSel = NO;
