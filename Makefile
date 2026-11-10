@@ -19,7 +19,7 @@ APP_C   := $(wildcard core/src/*/*.c) $(wildcard platform/mac/*.c)
 APP_FW  := -framework Cocoa -framework DiskArbitration -framework IOKit -framework ImageIO -framework CoreGraphics -framework CoreFoundation -framework UniformTypeIdentifiers
 test:
 	@set -e; for f in $$(ls core/tests/test_*.c 2>/dev/null); do \
-	  m=$$(basename $$f .c); m=$${m#test_}; $(MAKE) --no-print-directory test-$$m; done
+	  m=$$(basename $$f .c); m=$${m#test_}; m=$${m%%_*}; echo $$m; done | sort -u | while read m; do $(MAKE) --no-print-directory test-$$m || exit 1; done
 
 test-%:
 	@mkdir -p $(BUILD)/tests
