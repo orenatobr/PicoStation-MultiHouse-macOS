@@ -242,6 +242,31 @@ static NSString *plural(NSUInteger n, NSString *one, NSString *many) {
 - (BOOL)isOpaque { return NO; }
 @end
 
+/* ---------------------------------------------------------------- card */
+
+@implementation MHCardView
+- (instancetype)initWithContent:(NSView *)c insets:(NSEdgeInsets)i {
+    if ((self = [super initWithFrame:NSZeroRect])) {
+        c.translatesAutoresizingMaskIntoConstraints = NO;
+        [self addSubview:c];
+        [NSLayoutConstraint activateConstraints:@[
+            [c.topAnchor constraintEqualToAnchor:self.topAnchor constant:i.top],
+            [c.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:i.left],
+            [c.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-i.right],
+            [c.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-i.bottom] ]];
+    }
+    return self;
+}
+- (BOOL)isOpaque { return NO; }
+- (void)drawRect:(NSRect)r {
+    NSBezierPath *p = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(self.bounds, 0.5, 0.5) xRadius:MHRadiusCard yRadius:MHRadiusCard];
+    [MHTheme.surfaceRaised setFill];
+    [p fill];
+    [MHTheme.cardStroke setStroke];
+    [p stroke];
+}
+@end
+
 /* ---------------------------------------------------------------- empty state */
 
 @implementation MHEmptyStateView {

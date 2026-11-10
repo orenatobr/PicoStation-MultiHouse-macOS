@@ -123,14 +123,7 @@ BOOL MHConfirmWrite(NSWindow *parent, MHWriteSummary *s) {
     gv.columnSpacing = MHSpace12;
     [gv columnAtIndex:0].xPlacement = NSGridCellPlacementTrailing;
     gv.translatesAutoresizingMaskIntoConstraints = NO;
-    NSBox *box = [[NSBox alloc] initWithFrame:NSZeroRect];
-    box.boxType = NSBoxCustom;
-    box.cornerRadius = MHRadiusCard;
-    box.borderWidth = 1;
-    box.borderColor = MHTheme.cardStroke;
-    box.fillColor = MHTheme.surfaceRaised;
-    box.contentViewMargins = NSMakeSize(MHSpace16, MHSpace12);
-    box.contentView = gv;
+    MHCardView *box = [[MHCardView alloc] initWithContent:gv insets:NSEdgeInsetsMake(MHSpace12, MHSpace16, MHSpace12, MHSpace16)];
     box.translatesAutoresizingMaskIntoConstraints = NO;
 
     NSTextField *warn = wrap_label(@"Choosing the wrong disk can erase another device. Check the card above before you continue.",
@@ -358,14 +351,7 @@ void MHShowDetails(NSWindow *parent, NSString *title, NSString *text) {
     sc.autohidesScrollers = YES;
     sc.borderType = NSNoBorder;
     sc.drawsBackground = NO;
-    NSBox *box = [[NSBox alloc] initWithFrame:NSZeroRect];
-    box.boxType = NSBoxCustom;
-    box.cornerRadius = MHRadiusCard;
-    box.borderWidth = 1;
-    box.borderColor = MHTheme.cardStroke;
-    box.fillColor = MHTheme.surfaceRaised;
-    box.contentViewMargins = NSZeroSize;
-    box.contentView = sc;
+    MHCardView *box = [[MHCardView alloc] initWithContent:sc insets:NSEdgeInsetsMake(1, 1, 1, 1)];
     box.translatesAutoresizingMaskIntoConstraints = NO;
     c.btnCopy = push(@"Copy", c, @selector(copyAll:));
     NSButton *close = prominent(@"Close", c, @selector(close:), MHTheme.brandFill);
@@ -485,14 +471,7 @@ NSString *MHPhaseTitle(int phase) {
     rs.autohidesScrollers = YES;
     rs.borderType = NSNoBorder;
     rs.drawsBackground = NO;
-    NSBox *rbox = [[NSBox alloc] initWithFrame:NSZeroRect];
-    rbox.boxType = NSBoxCustom;
-    rbox.cornerRadius = MHRadiusCard;
-    rbox.borderWidth = 1;
-    rbox.borderColor = MHTheme.cardStroke;
-    rbox.fillColor = MHTheme.surfaceRaised;
-    rbox.contentViewMargins = NSZeroSize;
-    rbox.contentView = rs;
+    MHCardView *rbox = [[MHCardView alloc] initWithContent:rs insets:NSEdgeInsetsMake(1, 1, 1, 1)];
     rbox.translatesAutoresizingMaskIntoConstraints = NO;
     _copy = push(@"Copy Details", self, @selector(copyDetails:));
     _done = prominent(@"Done", self, @selector(close:), MHTheme.brandFill);
@@ -508,7 +487,7 @@ NSString *MHPhaseTitle(int phase) {
     _resultBox = rb;
     _resultBox.hidden = YES;
 
-    NSView *host = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 232)];
+    NSView *host = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 480, 196)];
     for (NSView *v in @[ _progressBox, _resultBox ]) {
         [host addSubview:v];
         [NSLayoutConstraint activateConstraints:@[
@@ -519,7 +498,7 @@ NSString *MHPhaseTitle(int phase) {
     [_resultBox.bottomAnchor constraintEqualToAnchor:host.bottomAnchor constant:-MHSpace24].active = YES;
     [_progressBox.bottomAnchor constraintLessThanOrEqualToAnchor:host.bottomAnchor constant:-MHSpace24].active = YES;
     _window = make_sheet(host);
-    [_window setContentSize:NSMakeSize(480, 232)];
+    [_window setContentSize:NSMakeSize(480, 196)];
     _window.initialFirstResponder = _cancel;
 }
 
@@ -552,6 +531,7 @@ NSString *MHPhaseTitle(int phase) {
     _resultText.string = MHDisplay(body ?: @"");
     _progressBox.hidden = YES;
     _resultBox.hidden = NO;
+    [_window setContentSize:NSMakeSize(480, 280)];
     [_window makeFirstResponder:_done];
 }
 

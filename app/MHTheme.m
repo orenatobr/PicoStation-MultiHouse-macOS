@@ -105,7 +105,7 @@ static void free_buf(void *info, const void *data, size_t size) { free((void *)d
 #pragma mark symbols
 
 + (NSImage *)symbol:(NSString *)name size:(CGFloat)pt weight:(NSFontWeight)weight description:(NSString *)desc {
-    NSImage *img = [NSImage imageWithSystemSymbolName:name accessibilityDescription:desc];
+    NSImage *img = [NSImage imageWithSystemSymbolName:name accessibilityDescription:desc ?: @""];
     if (!img) { /* not available on this macOS: a plain circle keeps the layout intact */
         img = [NSImage imageWithSize:NSMakeSize(pt, pt) flipped:NO drawingHandler:^BOOL(NSRect r) {
             [[NSBezierPath bezierPathWithOvalInRect:NSInsetRect(r, 1.5, 1.5)] stroke];

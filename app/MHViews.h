@@ -65,6 +65,11 @@
 @interface MHDiscRowView : NSTableRowView
 @end
 
+/* Rounded raised card that sizes itself from its content (NSBox does not under Auto Layout). */
+@interface MHCardView : NSView
+- (instancetype)initWithContent:(NSView *)content insets:(NSEdgeInsets)insets;
+@end
+
 /* ---- empty state ---- */
 @interface MHEmptyStateView : NSView
 @property(strong, readonly) NSButton *addGame, *addDisc;

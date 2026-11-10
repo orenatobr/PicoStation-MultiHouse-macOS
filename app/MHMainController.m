@@ -417,6 +417,7 @@ static NSString *status_word(unsigned s) { /* the OK / Review / Fixable / Error 
 - (void)tableView:(NSTableView *)t didAddRowView:(NSTableRowView *)rv forRow:(NSInteger)r {
     NSArray<MHLibRow *> *rows = [self rowsFor:t];
     if (r < 0 || r >= (NSInteger)rows.count) return;
+    rv.accessibilityRole = NSAccessibilityRowRole;
     rv.accessibilityLabel = [rows[r] spokenDescriptionForDisc:t == _tDiscs];
     rv.accessibilityHelp = t == _tDiscs ? @"Disc. Press Return to rename, Delete to remove."
                                          : @"Case. Press Return to rename, Delete to remove.";
@@ -1994,25 +1995,40 @@ static void device_changed(DADiskRef disk, void *ctx) {
 }
 
 /* Walks the accessibility tree: one line per element with role, label, help and value. */
-static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) {
-    if (!el || depth > 18) return;
-    NSValue *key = [NSValue valueWithPointer:(__bridge const void *)el];
-    if ([seen containsObject:key]) return;
-    [seen addObject:key];
+static void ax_line(id el, id queryTarget, int depth, NSMutableString *out) {
     NSString *role = [el respondsToSelector:@selector(accessibilityRole)] ? [el accessibilityRole] : @"?";
-    NSString *label = [el respondsToSelector:@selector(accessibilityLabel)] ? [el accessibilityLabel] : nil;
-    NSString *help = [el respondsToSelector:@selector(accessibilityHelp)] ? [el accessibilityHelp] : nil;
-    id value = [el respondsToSelector:@selector(accessibilityValue)] ? [el accessibilityValue] : nil;
-    NSString *ident = [el respondsToSelector:@selector(accessibilityIdentifier)] ? [el accessibilityIdentifier] : nil;
+    id t = queryTarget ?: el;
+    NSString *label = [t respondsToSelector:@selector(accessibilityLabel)] ? [t accessibilityLabel] : nil;
+    NSString *help = [t respondsToSelector:@selector(accessibilityHelp)] ? [t accessibilityHelp] : nil;
+    id value = [t respondsToSelector:@selector(accessibilityValue)] ? [t accessibilityValue] : nil;
+    NSString *ident = [t respondsToSelector:@selector(accessibilityIdentifier)] ? [t accessibilityIdentifier] : nil;
     [out appendFormat:@"%*s%@", depth * 2, "", role ?: @"(none)"];
     if (label.length) [out appendFormat:@"  label=\"%@\"", label];
     if (help.length) [out appendFormat:@"  help=\"%@\"", help];
     if (value && [value isKindOfClass:NSString.class] && [value length]) [out appendFormat:@"  value=\"%@\"", value];
     if (ident.length) [out appendFormat:@"  id=%@", ident];
     [out appendString:@"\n"];
+}
+
+/* Walks the accessibility tree: one line per element with role, label, help and value. Controls are
+ * asked through their view (cells are only proxies); table rows are listed through their row views. */
+static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) {
+    if (!el || depth > 18) return;
+    NSValue *key = [NSValue valueWithPointer:(__bridge const void *)el];
+    if ([seen containsObject:key]) return;
+    [seen addObject:key];
+    id target = [el isKindOfClass:NSCell.class] ? [(NSCell *)el controlView] : el;
+    ax_line(el, target, depth, out);
+    if ([target isKindOfClass:NSTableView.class]) {
+        NSTableView *tv = target;
+        for (NSInteger r = 0; r < tv.numberOfRows; r++) {
+            NSTableRowView *rv = [tv rowViewAtRow:r makeIfNecessary:YES];
+            if (rv) ax_line(rv, rv, depth + 1, out);
+        }
+        return;
+    }
     if ([el respondsToSelector:@selector(accessibilityChildren)]) {
-        NSArray *kids = [el accessibilityChildren];
-        for (id k in kids) ax_walk(k, depth + 1, out, seen);
+        for (id k in [el accessibilityChildren]) ax_walk(k, depth + 1, out, seen);
     }
 }
 
