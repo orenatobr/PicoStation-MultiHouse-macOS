@@ -1,6 +1,7 @@
 #import "MHDialogs.h"
 #import "MHApp.h"
 #import "MHTheme.h"
+#import "MHViews.h"
 #include "mh/v2write.h"
 
 @implementation MHWriteSummary
@@ -33,10 +34,13 @@ static NSButton *push(NSString *title, id target, SEL sel) {
     return b;
 }
 
-static void make_prominent(NSButton *b, NSColor *fill) {
-    b.bezelColor = fill;
-    b.attributedTitle = [[NSAttributedString alloc] initWithString:b.title attributes:@{
-        NSForegroundColorAttributeName : NSColor.whiteColor, NSFontAttributeName : MHTheme.headlineFont }];
+static MHPrimaryButton *prominent(NSString *title, id target, SEL sel, NSColor *fill) {
+    MHPrimaryButton *b = [[MHPrimaryButton alloc] initWithFrame:NSZeroRect];
+    b.title = title;
+    b.target = target;
+    b.action = sel;
+    b.fillColor = fill;
+    return b;
 }
 
 static NSString *size_text(uint64_t bytes) {
@@ -140,8 +144,7 @@ BOOL MHConfirmWrite(NSWindow *parent, MHWriteSummary *s) {
 
     NSButton *cancel = push(@"Cancel", c, @selector(cancel:));
     cancel.keyEquivalent = @"\033";
-    c.apply = push(action, c, @selector(accept:));
-    make_prominent(c.apply, MHTheme.destructiveFill);
+    c.apply = prominent(action, c, @selector(accept:), MHTheme.destructiveFill);
     c.apply.enabled = NO;
     c.apply.accessibilityHelp = @"Starts the write. Available after you tick the confirmation.";
     c.apply.toolTip = @"Tick the confirmation first";
@@ -280,8 +283,7 @@ BOOL MHMenuDefaultsDialog(NSWindow *parent, uint8_t rec[MH_MENU_DEFAULTS_SIZE]) 
     NSButton *restore = push(@"Restore Defaults", c, @selector(restore:));
     NSButton *cancel = push(@"Cancel", c, @selector(cancel:));
     cancel.keyEquivalent = @"\033";
-    NSButton *save = push(@"Save", c, @selector(save:));
-    make_prominent(save, MHTheme.brandFill);
+    NSButton *save = prominent(@"Save", c, @selector(save:), MHTheme.brandFill);
     save.keyEquivalent = @"\r";
     NSStackView *buttons = button_row(@[ restore ], @[ cancel, save ]);
 
@@ -366,8 +368,7 @@ void MHShowDetails(NSWindow *parent, NSString *title, NSString *text) {
     box.contentView = sc;
     box.translatesAutoresizingMaskIntoConstraints = NO;
     c.btnCopy = push(@"Copy", c, @selector(copyAll:));
-    NSButton *close = push(@"Close", c, @selector(close:));
-    make_prominent(close, MHTheme.brandFill);
+    NSButton *close = prominent(@"Close", c, @selector(close:), MHTheme.brandFill);
     close.keyEquivalent = @"\r";
     NSStackView *buttons = button_row(@[ c.btnCopy ], @[ close ]);
     NSStackView *all = [NSStackView stackViewWithViews:@[ t, box, buttons ]];
@@ -494,8 +495,7 @@ NSString *MHPhaseTitle(int phase) {
     rbox.contentView = rs;
     rbox.translatesAutoresizingMaskIntoConstraints = NO;
     _copy = push(@"Copy Details", self, @selector(copyDetails:));
-    _done = push(@"Done", self, @selector(close:));
-    make_prominent(_done, MHTheme.brandFill);
+    _done = prominent(@"Done", self, @selector(close:), MHTheme.brandFill);
     _done.keyEquivalent = @"\r";
     NSStackView *rb = [NSStackView stackViewWithViews:@[ rh, rbox, button_row(@[ _copy ], @[ _done ]) ]];
     rb.orientation = NSUserInterfaceLayoutOrientationVertical;
@@ -578,7 +578,6 @@ NSString *MHPhaseTitle(int phase) {
     _failureText = text;
     _copy.hidden = NO;
     _done.title = @"Close";
-    make_prominent(_done, MHTheme.brandFill);
     [self showResultIcon:@"xmark.octagon.fill" color:MHTheme.statusError desc:@"Error" title:title text:text];
 }
 

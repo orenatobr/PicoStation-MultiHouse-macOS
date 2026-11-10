@@ -581,6 +581,7 @@ static BOOL case_verified(MhCase *c) {
     _suppressEdit = NO;
     _content.caption.stringValue = c ? plural(c->disc_count, @"disc", @"discs") : @"";
     _content.mode = p->case_count == 0 ? MHContentLibraryEmpty : (c ? MHContentCase : MHContentNoSelection);
+    _insp.hasSelection = c != NULL;
     [self enableEditControlsAddDisc:enAddDisc caseCtl:enCase discCtl:enDisc];
 
     NSMutableString *t = [NSMutableString string];
@@ -1012,7 +1013,9 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
 
 - (id<NSPasteboardWriting>)tableView:(NSTableView *)t pasteboardWriterForRow:(NSInteger)row {
     if (_app.busy || _app.loading) return nil;
-    MHLibRow *r = [self rowsFor:t][row];
+    NSArray<MHLibRow *> *prow = [self rowsFor:t];
+    if (row < 0 || row >= (NSInteger)prow.count) return nil;
+    MHLibRow *r = prow[row];
     NSPasteboardItem *it = [[NSPasteboardItem alloc] init];
     [it setString:t == _tCases ? [NSString stringWithFormat:@"case:%ld", (long)r.param]
                                : [NSString stringWithFormat:@"disc:%d:%ld", _app.curCase, (long)r.param]
@@ -1052,10 +1055,13 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
     NSArray *parts = [s componentsSeparatedByString:@":"];
     if (!s || parts.count < 2) return NO;
     if ([parts[0] isEqualToString:@"case"]) {
+        int sl = [parts[1] intValue];
+        if (sl < 0 || sl >= MH_PROJECT_MAX_CASES) return NO;
         [self moveCaseSlot:[parts[1] intValue] toInsertion:row];
         return YES;
     }
     int fromCase = [parts[1] intValue], disc = parts.count > 2 ? [parts[2] intValue] : -1;
+    if (fromCase < 0 || fromCase >= MH_PROJECT_MAX_CASES || disc < 0 || disc > 255) return NO;
     if (t == _tDiscs) [self moveDisc:disc ofCase:fromCase toCase:fromCase insertion:row];
     else if (row >= 0 && row < (NSInteger)_caseRows.count)
         [self moveDisc:disc ofCase:fromCase toCase:(int)_caseRows[row].param insertion:-1];
@@ -1109,7 +1115,10 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
 - (void)discArt:(id)s { [self makeCustomArtForCase:NO]; }
 - (void)cmdCheatsAction:(id)s { [self cmdCheats]; }
 - (void)refreshSDAction:(id)s { if (!_app.busy && !_app.loading) [self refreshSD]; }
-- (void)sdChanged:(id)s { if (!_app.loading) [self loadSelectedV2:YES]; }
+- (void)sdChanged:(id)s {
+    _popSD.toolTip = _popSD.titleOfSelectedItem;
+    if (!_app.loading) [self loadSelectedV2:YES];
+}
 - (void)toggleSidebar:(id)s { [self toggleSidebarAction:s]; }
 
 - (void)verifyDiscAction:(id)s {
@@ -1206,8 +1215,7 @@ static void hook_attach(void *ctx, MhDisc *d) { mh_v2_auto_attach_cheats(MHApp.s
                                         target < 0 ? 0x100u : (unsigned)target, &hooks, &res, err, sizeof err);
     switch (st) {
         case MH_ADD_OK:
-            _app.curCase = res.cas->slot;
-            _app.curDisc = res.disc_index;
+            { int sl = res.cas->slot, di = res.disc_index; MHMain(^{ self->_app.curCase = sl; self->_app.curDisc = di; }); }
             return YES;
         case MH_ADD_PARSE_FAILED:
             MHMessage(@"Couldn't Read Disc", err[0] ? MHStr(err) : @"A CUE file could not be parsed.", MHIconError);
@@ -1325,7 +1333,7 @@ static void hook_attach(void *ctx, MhDisc *d) { mh_v2_auto_attach_cheats(MHApp.s
     NSArray<NSURL *> *urls = [s.draggingPasteboard readObjectsForClasses:@[ NSURL.class ]
                                                                   options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
     NSMutableArray *paths = [NSMutableArray array];
-    for (NSURL *u in urls) [paths addObject:u.path];
+    for (NSURL *u in urls) if (u.path) [paths addObject:u.path];
     [self importPaths:paths target:target];
     return YES;
 }
@@ -1420,6 +1428,7 @@ static NSString *image_cache_dir(NSString *leaf) {
 }
 
 - (void)loadImageAtPath:(NSString *)path {
+    if (!path.length) return;
     NSString *cache = image_cache_dir(@"PicoStationV2ImageCache");
     __block MhMsg msg = {{0}};
     __block BOOL ok = NO;
@@ -1456,6 +1465,7 @@ static NSString *image_cache_dir(NSString *leaf) {
 
 /* orig: write_image_direct_to.isra.0 */
 - (void)writeImageTo:(NSString *)path {
+    if (!path.length) return;
     const char *blocked = mh_v2_blocked_text(_app.dbOK, _app.cheatOK);
     if (blocked) { MHMessage(@"Can't Write Image", MHStr(blocked), MHIconError); return; }
     if (![self allReady]) return;
@@ -1556,6 +1566,7 @@ static NSString *image_cache_dir(NSString *leaf) {
         MHMessage(@"Can't Write", prep.msg[0] ? MHStr(prep.msg) : @MH_V2W_NOT_PREPARED, MHIconError);
         return;
     }
+    if (di < 0) return;
     [self confirmAndWrite:_disks[di] needBytes:need];
 }
 
@@ -1692,6 +1703,7 @@ static void device_changed(DADiskRef disk, void *ctx) {
     _popSD.enabled = !_app.busy;
     int idx = pick >= 0 ? pick : 0;
     [_popSD selectItemAtIndex:idx];
+    _popSD.toolTip = _popSD.titleOfSelectedItem;
     MhDiskInfo *d = &_disks[idx];
     if (d->has_v2 && d->v2_state == 2 && _app.project->disc_count == 0) {
         [self loadSelectedV2:NO];
@@ -1847,14 +1859,19 @@ static void device_changed(DADiskRef disk, void *ctx) {
 
 /* orig: recode_disc + manager_recode_dialog */
 - (void)recodeDisc {
-    MhDisc *d = _app.currentDisc;
-    if (!d || d->kind != 1 || (d->verify_issues & 0xc0) == 0 || _app.busy) return;
+    MhDisc *d0 = _app.currentDisc;
+    if (!d0 || d0->kind != 1 || (d0->verify_issues & 0xc0) == 0 || _app.busy) return;
+    int rcase = _app.curCase, rdisc = _app.curDisc;
     NSSavePanel *sp = [NSSavePanel savePanel];
     sp.title = @"Create EDC/ECC Copy";
     sp.message = @"Creates a new CUE/BIN copy with recalculated EDC/ECC. The game content stays the same.";
     sp.allowedFileTypes = @[ @"cue" ];
     [sp beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
-        if (r != NSModalResponseOK) return;
+        if (r != NSModalResponseOK || !sp.URL.path) return;
+        /* re-resolve: the project may have changed while the sheet was open */
+        MhCase *rc = [self->_app caseAt:rcase];
+        MhDisc *d = (rc && rdisc >= 0 && rdisc < rc->disc_count) ? rc->discs[rdisc] : NULL;
+        if (!d || d->kind != 1 || self->_app.busy) return;
         NSString *dst = sp.URL.path;
         __block MhMsg err = {{0}};
         __block BOOL ok = NO;
@@ -1874,9 +1891,10 @@ static void device_changed(DADiskRef disk, void *ctx) {
 
 /* orig: make_custom_art.isra.0 (the file picker and the project update; the art is the core's) */
 - (void)makeCustomArtForCase:(BOOL)isCase {
-    MhCase *c = _app.currentCase;
-    MhDisc *d = _app.currentDisc;
-    if (!c || (!isCase && !d) || _app.busy) return;
+    MhCase *c0 = _app.currentCase;
+    MhDisc *d0 = _app.currentDisc;
+    if (!c0 || (!isCase && !d0) || _app.busy) return;
+    int cslot = c0->slot, ddisc = _app.curDisc;
     NSOpenPanel *op = [NSOpenPanel openPanel];
     op.title = isCase ? @"Choose Case Art" : @"Choose Disc Art";
     op.message = @"Choose an image (PNG, JPEG, BMP, GIF, TIFF) or a .art file.";
@@ -1885,6 +1903,9 @@ static void device_changed(DADiskRef disk, void *ctx) {
     op.canChooseDirectories = NO;
     [op beginSheetModalForWindow:_window completionHandler:^(NSModalResponse r) {
         if (r != NSModalResponseOK) return;
+        MhCase *c = [self->_app caseAt:cslot];
+        MhDisc *d = (c && ddisc >= 0 && ddisc < c->disc_count) ? c->discs[ddisc] : NULL;
+        if (!c || (!isCase && !d) || self->_app.busy) return;
         char dir[MH_PATH_MAX], name[128], dst[MH_PATH_MAX], err[MH_ERR_MSG_MAX] = "";
         mh_path_join(self->_app.dataDir.fileSystemRepresentation, "custom/art", dir, sizeof dir);
         mh_ensure_dir(dir);
@@ -2002,22 +2023,23 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
 - (void)testCommand:(NSString *)cmd {
     NSArray *a = [cmd componentsSeparatedByString:@" "];
     NSString *op = a[0];
+#define ARG(n) (a.count > (n) ? a[n] : @"")
     NSString *rest = a.count > 1 ? [[a subarrayWithRange:NSMakeRange(1, a.count - 1)] componentsJoinedByString:@" "] : @"";
     if ([op isEqualToString:@"report"]) {
         printf("%s", self.snapshotReport.UTF8String);
     } else if ([op isEqualToString:@"select-case"]) {
-        _app.curCase = [a[1] intValue];
+        _app.curCase = [ARG(1) intValue];
         _app.curDisc = -1;
         [self refreshCases];
         [self refreshFields];
     } else if ([op isEqualToString:@"select-disc"]) {
-        _app.curDisc = [a[1] intValue];
+        _app.curDisc = [ARG(1) intValue];
         [self refreshDiscs];
         [self refreshFields];
     } else if ([op isEqualToString:@"drag-case"]) { /* from row, to row, after */
-        [self dragProgrammaticKind:1 fromRow:[a[1] integerValue] toCases:YES row:[a[2] integerValue] after:[a[3] intValue]];
+        [self dragProgrammaticKind:1 fromRow:[ARG(1) integerValue] toCases:YES row:[ARG(2) integerValue] after:[ARG(3) intValue]];
     } else if ([op isEqualToString:@"drag-disc"]) { /* from disc row, "d"/"c", row, after */
-        [self dragProgrammaticKind:2 fromRow:[a[1] integerValue] toCases:[a[2] isEqualToString:@"c"] row:[a[3] integerValue] after:[a[4] intValue]];
+        [self dragProgrammaticKind:2 fromRow:[ARG(1) integerValue] toCases:[ARG(2) isEqualToString:@"c"] row:[ARG(3) integerValue] after:[ARG(4) intValue]];
     } else if ([op isEqualToString:@"remove-disc"]) {
         [self cmdRemoveDisc];
     } else if ([op isEqualToString:@"remove-case"]) {
@@ -2030,9 +2052,9 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
         _fDisc.stringValue = rest;
         [self applyDiscName:rest];
     } else if ([op isEqualToString:@"busy"]) {
-        [self setBusy:[a[1] boolValue]];
+        [self setBusy:[ARG(1) boolValue]];
     } else if ([op isEqualToString:@"shot"]) {
-        [self writeShot:a[1]];
+        [self writeShot:ARG(1)];
     } else if ([op isEqualToString:@"add-folder"]) {
         [self importPaths:@[ rest ]];
     } else if ([op isEqualToString:@"save-image"]) {
@@ -2049,11 +2071,12 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
     } else if ([op isEqualToString:@"write-device"]) {
         /* Only a disk that mh_disk_enumerate offered (eligible) can be picked, and never the
          * system disks of the dev machine. */
-        NSString *bsd = a[1];
+        NSString *bsd = ARG(1);
         int idx = -1;
-        for (int i = 0; i < _diskCount; i++) if (!strcmp(_disks[i].bsd_name, bsd.UTF8String)) idx = i;
-        if (idx < 0 || [@[ @"disk0", @"disk3", @"disk6" ] containsObject:bsd]) {
-            printf("write-device refused: %s not an eligible target\n", bsd.UTF8String);
+        for (int i = 0; i < _diskCount; i++) if (!strcmp(_disks[i].bsd_name, bsd.UTF8String ?: "")) idx = i;
+        BOOL realOK = getenv("MH_TEST_ALLOW_REAL_DEVICE") && !strcmp(getenv("MH_TEST_ALLOW_REAL_DEVICE"), "1");
+        if (idx < 0 || [@[ @"disk0", @"disk3", @"disk6" ] containsObject:bsd] || (!_disks[idx].is_image && !realOK)) {
+            printf("write-device refused: %s not an eligible target (only disk images are allowed in tests)\n", bsd.UTF8String);
         } else {
             [_popSD selectItemAtIndex:idx];
             [self doWrite];
@@ -2061,15 +2084,15 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
     } else if ([op isEqualToString:@"sd-list"]) {
         for (int i = 0; i < _diskCount; i++) printf("sd %s has_v2=%d state=%d size=%llu\n", _disks[i].bsd_name, _disks[i].has_v2, _disks[i].v2_state, _disks[i].size);
     } else if ([op isEqualToString:@"select-sd"]) {
-        for (int i = 0; i < _diskCount; i++) if (!strcmp(_disks[i].bsd_name, [a[1] UTF8String])) [_popSD selectItemAtIndex:i];
+        for (int i = 0; i < _diskCount; i++) if (!strcmp(_disks[i].bsd_name, [ARG(1) UTF8String] ?: "")) [_popSD selectItemAtIndex:i];
     } else if ([op isEqualToString:@"load-sd"]) {
         [self loadSelectedV2:NO];
     } else if ([op isEqualToString:@"context"]) {
         printf("context menu for disc %d\n", _app.curDisc);
     } else if ([op isEqualToString:@"progress"]) {
-        [self queueProgress:[a[1] longLongValue] total:100 text:"Progress test"];
+        [self queueProgress:[ARG(1) longLongValue] total:100 text:"Progress test"];
     } else if ([op isEqualToString:@"appearance"]) {
-        NSString *m = a.count > 1 ? a[1] : @"system";
+        NSString *m = a.count > 1 ? ARG(1) : @"system";
         NSApp.appearance = [m isEqualToString:@"dark"] ? [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua]
                          : [m isEqualToString:@"light"] ? [NSAppearance appearanceNamed:NSAppearanceNameAqua] : nil;
         printf("appearance %s\n", m.UTF8String);
@@ -2090,16 +2113,25 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
         }
         printf("%s", out.UTF8String);
     } else if ([op isEqualToString:@"demo-sheet"]) {
-        [self demoSheet:a.count > 1 ? a[1] : @""];
+        [self demoSheet:a.count > 1 ? ARG(1) : @""];
     } else if ([op isEqualToString:@"demo-sheet-close"]) {
         [self dismissSheet];
     } else if ([op isEqualToString:@"focus"]) { /* focus cases|discs|case-name|disc-name */
-        NSString *w = a.count > 1 ? a[1] : @"";
+        NSString *w = a.count > 1 ? ARG(1) : @"";
         NSView *v = [w isEqualToString:@"cases"] ? _tCases : [w isEqualToString:@"discs"] ? _tDiscs
                   : [w isEqualToString:@"case-name"] ? _fCase : [w isEqualToString:@"disc-name"] ? _fDisc : _btnWrite;
         [_window makeFirstResponder:v];
+    } else if ([op isEqualToString:@"drop-overlay"]) { /* drop-overlay on|off: the Finder drag highlight */
+        BOOL on = a.count > 1 && [ARG(1) isEqualToString:@"on"];
+        _content.overlay.detail = @"Folders become cases, .cue files become discs";
+        [_content.overlay setActive:on];
+    } else if ([op isEqualToString:@"resize"]) { /* resize W H (content size) */
+        [_window setContentSize:NSMakeSize([ARG(1) doubleValue], [ARG(2) doubleValue])];
+        printf("window content size %.0fx%.0f\n", _window.contentView.frame.size.width, _window.contentView.frame.size.height);
+    } else if ([op isEqualToString:@"about"]) {
+        [self showAbout];
     } else if ([op isEqualToString:@"verify-on-add"]) {
-        BOOL on = a.count > 1 && [a[1] boolValue];
+        BOOL on = a.count > 1 && [ARG(1) boolValue];
         _content.chkVerify.state = on ? NSControlStateValueOn : NSControlStateValueOff;
         _app.verifyOnAdd = on;
     } else if ([op isEqualToString:@"move-up"]) {
@@ -2151,7 +2183,7 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
 - (void)dragProgrammaticKind:(int)kind fromRow:(NSInteger)from toCases:(BOOL)toCases row:(NSInteger)to after:(int)after {
     MHListTable *src = kind == 1 ? _tCases : _tDiscs;
     NSArray<MHLibRow *> *rows = [self rowsFor:src];
-    if (from < 0 || from >= (NSInteger)rows.count) return;
+    if (from < 0 || from >= (NSInteger)rows.count || to < 0) return;
     MHLibRow *r = rows[from];
     int dragCase = kind == 1 ? (int)r.param : _app.curCase, dragDisc = kind == 1 ? -1 : (int)r.param;
     NSArray<MHLibRow *> *trows = toCases ? _caseRows : _discRows;

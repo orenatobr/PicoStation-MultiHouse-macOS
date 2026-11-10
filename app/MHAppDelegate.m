@@ -191,7 +191,7 @@ static NSString *fkey(unichar c) { return [NSString stringWithCharacters:&c leng
 /* Finder "Open With" and drops on the Dock icon behave like a drop on the case list. */
 - (void)application:(NSApplication *)a openURLs:(NSArray<NSURL *> *)urls {
     NSMutableArray *p = [NSMutableArray array];
-    for (NSURL *u in urls) if (u.isFileURL) [p addObject:u.path];
+    for (NSURL *u in urls) if (u.isFileURL && u.path) [p addObject:u.path];
     [_main importPaths:p];
 }
 @end

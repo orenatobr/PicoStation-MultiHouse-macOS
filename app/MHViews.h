@@ -82,6 +82,7 @@
 
 /* ---- the big default button ---- */
 @interface MHPrimaryButton : NSButton
+@property(nonatomic, strong) NSColor *fillColor; /* default MHTheme.brandFill */
 @end
 
 /* ---- bottom bar (52 pt, material) ---- */

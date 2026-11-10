@@ -146,7 +146,7 @@ BOOL MHAsk(NSString *text) {
 static NSString *find_data_dir(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
     const char *env = getenv("MH_DATA_DIR");
-    if (env && *env) return @(env);
+    if (env && *env) { NSString *e = @(env); if (e.length) return e; }
     NSString *cands[] = {NSBundle.mainBundle.bundlePath.stringByDeletingLastPathComponent,
                          NSBundle.mainBundle.resourcePath ?: @""};
     for (int i = 0; i < 2; i++)

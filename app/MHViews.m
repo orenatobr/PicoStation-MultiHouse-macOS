@@ -261,15 +261,9 @@ static NSString *plural(NSUInteger n, NSString *one, NSString *many) {
         _messageLabel.textColor = MHTheme.textSecondary;
         _messageLabel.alignment = NSTextAlignmentCenter;
         _messageLabel.selectable = NO;
-        _addGame = [NSButton buttonWithTitle:@"Add Game…" target:nil action:nil];
-        _addGame.controlSize = NSControlSizeLarge;
-        _addGame.bezelStyle = NSBezelStyleRounded;
-        _addGame.bezelColor = MHTheme.brandFill;
+        _addGame = [[MHPrimaryButton alloc] initWithFrame:NSZeroRect];
+        _addGame.title = @"Add Game\u2026";
         _addGame.image = [MHTheme symbol:@"plus.rectangle.on.folder" size:14 description:nil];
-        _addGame.imagePosition = NSImageLeft;
-        _addGame.contentTintColor = NSColor.whiteColor;
-        _addGame.attributedTitle = [[NSAttributedString alloc] initWithString:@"Add Game…" attributes:@{
-            NSForegroundColorAttributeName : NSColor.whiteColor, NSFontAttributeName : MHTheme.headlineFont }];
         _addGame.toolTip = @"Add game folders or .cue files";
         _addGame.accessibilityLabel = @"Add Game";
         _addDisc = [NSButton buttonWithTitle:@"Add Disc…" target:nil action:nil];
@@ -381,22 +375,60 @@ static NSString *plural(NSUInteger n, NSString *one, NSString *many) {
 @implementation MHPrimaryButton
 - (instancetype)initWithFrame:(NSRect)f {
     if ((self = [super initWithFrame:f])) {
-        self.bezelStyle = NSBezelStyleRounded;
-        self.controlSize = NSControlSizeLarge;
-        self.bezelColor = MHTheme.brandFill;
+        self.bordered = NO;
+        self.buttonType = NSButtonTypeMomentaryPushIn;
         self.font = MHTheme.headlineFont;
+        self.focusRingType = NSFocusRingTypeDefault;
+        _fillColor = MHTheme.brandFill;
+        self.imagePosition = NSImageLeft;
     }
     return self;
 }
-- (void)restyle {
-    NSColor *c = self.isEnabled ? NSColor.whiteColor : NSColor.disabledControlTextColor;
-    NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
-    ps.alignment = NSTextAlignmentCenter;
-    self.attributedTitle = [[NSAttributedString alloc] initWithString:self.title attributes:@{
-        NSForegroundColorAttributeName : c, NSFontAttributeName : MHTheme.headlineFont, NSParagraphStyleAttributeName : ps }];
+- (BOOL)isOpaque { return NO; }
+- (void)setTitle:(NSString *)t { [super setTitle:t]; [self invalidateIntrinsicContentSize]; self.needsDisplay = YES; }
+- (void)setEnabled:(BOOL)e { [super setEnabled:e]; self.needsDisplay = YES; }
+- (void)setFillColor:(NSColor *)c { _fillColor = c; self.needsDisplay = YES; }
+- (NSDictionary *)attrs {
+    return @{ NSFontAttributeName : MHTheme.headlineFont,
+              NSForegroundColorAttributeName : self.isEnabled ? NSColor.whiteColor : NSColor.disabledControlTextColor };
 }
-- (void)setTitle:(NSString *)t { [super setTitle:t]; [self restyle]; }
-- (void)setEnabled:(BOOL)e { [super setEnabled:e]; [self restyle]; }
+- (NSSize)intrinsicContentSize {
+    CGFloat w = ceil([self.title sizeWithAttributes:[self attrs]].width) + 2 * MHSpace16;
+    if (self.image) w += self.image.size.width + MHSpace4 + 2;
+    return NSMakeSize(MAX(w, 72), 28);
+}
+- (NSBezierPath *)shape { return [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(self.bounds, 0.5, 0.5) xRadius:8 yRadius:8]; }
+- (void)drawRect:(NSRect)r {
+    NSBezierPath *p = [self shape];
+    NSColor *fill = !self.isEnabled ? [NSColor.labelColor colorWithAlphaComponent:0.12]
+                  : self.isHighlighted ? [_fillColor blendedColorWithFraction:0.25 ofColor:NSColor.blackColor] : _fillColor;
+    [fill setFill];
+    [p fill];
+    if (MHTheme.increaseContrast) { [NSColor.labelColor setStroke]; [p stroke]; }
+    NSDictionary *at = [self attrs];
+    NSSize ts = [self.title sizeWithAttributes:at];
+    CGFloat iw = 0;
+    NSImage *img = nil;
+    if (self.image) {
+        NSColor *c = at[NSForegroundColorAttributeName];
+        NSImage *base = self.image;
+        img = [NSImage imageWithSize:base.size flipped:NO drawingHandler:^BOOL(NSRect rr) {
+            [base drawInRect:rr];
+            [c set];
+            NSRectFillUsingOperation(rr, NSCompositingOperationSourceIn);
+            return YES;
+        }];
+        iw = img.size.width + MHSpace4 + 2;
+    }
+    CGFloat x = round((self.bounds.size.width - ts.width - iw) / 2);
+    if (img) {
+        [img drawInRect:NSMakeRect(x, round((self.bounds.size.height - img.size.height) / 2), img.size.width, img.size.height)];
+        x += iw;
+    }
+    [self.title drawAtPoint:NSMakePoint(x, round((self.bounds.size.height - ts.height) / 2)) withAttributes:at];
+}
+- (NSRect)focusRingMaskBounds { return self.bounds; }
+- (void)drawFocusRingMask { [[self shape] fill]; }
 @end
 
 /* ---------------------------------------------------------------- bottom bar */
@@ -468,8 +500,8 @@ static NSString *plural(NSUInteger n, NSString *one, NSString *many) {
             [_cardIcon.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
             [_popCard.leadingAnchor constraintEqualToAnchor:_cardIcon.trailingAnchor constant:MHSpace8],
             [_popCard.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-            [_popCard.widthAnchor constraintGreaterThanOrEqualToConstant:160],
-            [_popCard.widthAnchor constraintLessThanOrEqualToConstant:300],
+            [_popCard.widthAnchor constraintGreaterThanOrEqualToConstant:200],
+            [_popCard.widthAnchor constraintLessThanOrEqualToConstant:440],
             [_btnRefresh.leadingAnchor constraintEqualToAnchor:_popCard.trailingAnchor constant:MHSpace8],
             [_btnRefresh.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
             [_btnRefresh.widthAnchor constraintEqualToConstant:36],

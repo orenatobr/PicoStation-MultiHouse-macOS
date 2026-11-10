@@ -238,7 +238,15 @@ static NSView *hairline(void) {
 
 @implementation MHInspectorViewController {
     NSButton *_disclosure;
-    NSScrollView *_detailsScroll;
+    NSScrollView *_detailsScroll, *_mainScroll;
+    NSStackView *_placeholder;
+}
+
+- (void)setHasSelection:(BOOL)h {
+    [self view];
+    _hasSelection = h;
+    _mainScroll.hidden = !h;
+    _placeholder.hidden = h;
 }
 
 - (NSStackView *)vstack:(NSArray *)views spacing:(CGFloat)s {
@@ -277,7 +285,7 @@ static NSView *hairline(void) {
     MHAppearanceView *root = [[MHAppearanceView alloc] initWithFrame:NSMakeRect(0, 0, 320, 600)];
     self.view = root;
     __weak typeof(self) weak = self;
-    root.onAppearance = ^{ typeof(self) s = weak; s->_detailsScroll.layer.borderColor = MHTheme.cardStroke.CGColor; };
+    root.onAppearance = ^{ typeof(self) s = weak; if (!s) return; s->_detailsScroll.layer.borderColor = MHTheme.cardStroke.CGColor; };
 
     _pvCase = [[MHThumbnailView alloc] initWithFrame:NSMakeRect(0, 0, 96, 96)];
     _pvCase.cornerRadius = MHRadiusCard;
@@ -374,6 +382,27 @@ static NSView *hairline(void) {
     sc.translatesAutoresizingMaskIntoConstraints = NO;
     doc.translatesAutoresizingMaskIntoConstraints = NO;
     [root addSubview:sc];
+    _mainScroll = sc;
+    NSImageView *pi = [NSImageView imageViewWithImage:[MHTheme symbol:@"sidebar.right" size:34 weight:NSFontWeightLight description:nil]];
+    pi.contentTintColor = MHTheme.textSecondary;
+    pi.accessibilityElement = NO;
+    NSTextField *pt = [NSTextField labelWithString:@"Select a case"];
+    pt.font = MHTheme.headlineFont;
+    NSTextField *pm = [NSTextField wrappingLabelWithString:@"Its art, names, cheats and verification details appear here."];
+    pm.font = MHTheme.bodyFont;
+    pm.textColor = MHTheme.textSecondary;
+    pm.alignment = NSTextAlignmentCenter;
+    _placeholder = [NSStackView stackViewWithViews:@[ pi, pt, pm ]];
+    _placeholder.orientation = NSUserInterfaceLayoutOrientationVertical;
+    _placeholder.spacing = MHSpace8;
+    _placeholder.translatesAutoresizingMaskIntoConstraints = NO;
+    _placeholder.accessibilityLabel = @"No case selected";
+    [root addSubview:_placeholder];
+    [NSLayoutConstraint activateConstraints:@[
+        [_placeholder.centerXAnchor constraintEqualToAnchor:root.centerXAnchor],
+        [_placeholder.centerYAnchor constraintEqualToAnchor:root.centerYAnchor],
+        [_placeholder.widthAnchor constraintLessThanOrEqualToAnchor:root.widthAnchor constant:-2 * MHSpace24] ]];
+    _placeholder.hidden = YES;
     root.onAppearance();
     NSLayoutGuide *safe = root.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
