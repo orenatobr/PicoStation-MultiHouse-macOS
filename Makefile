@@ -49,6 +49,7 @@ app:
 	@cp resources/AppIcon.icns "$(APPDIR)/Contents/Resources/AppIcon.icns"
 	@cp resources/embedded/* "$(APPDIR)/Contents/Resources/embedded/"
 	@xattr -cr "$(APPDIR)" 2>/dev/null || true
+	@rm -rf "$(APPDIR)"/Contents/MacOS/*.dSYM
 	codesign --force --deep --sign - "$(APPDIR)"
 	@echo "built $(APPDIR)"
 

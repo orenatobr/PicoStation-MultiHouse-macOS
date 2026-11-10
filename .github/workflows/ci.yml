@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: make lint-dash
+      - name: Core tests
+        run: make test
+      - name: Build app
+        run: make app VERSION=0.0.0-ci
+      - name: Check bundle
+        run: |
+          APP="$HOME/.cache/picostation-mh-build/PicoStation Multi House V3.app"
+          lipo -info "$APP/Contents/MacOS/PicoStationMultiHouse"
+          codesign --verify --deep --strict "$APP"
