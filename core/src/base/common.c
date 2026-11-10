@@ -19,6 +19,9 @@ void mh_progress_init(MhProgress *p, void (*cb)(void *, uint64_t, uint64_t, cons
     p->cb = cb;
     p->user = user;
     atomic_init(&p->cancel, 0);
+    atomic_init(&p->phase, 0);
+    atomic_init(&p->step, 0);
+    atomic_init(&p->steps, 0);
 }
 
 void mh_progress_request_cancel(MhProgress *p)

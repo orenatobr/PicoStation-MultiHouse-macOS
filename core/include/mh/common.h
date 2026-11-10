@@ -38,6 +38,14 @@ typedef struct MhProgress {
     void (*cb)(void *user, uint64_t done, uint64_t total, const char *text);
     void *user;
     _Atomic int cancel;
+    /* Machine-readable phase, set by the operation BEFORE it calls cb, so the UI can read it
+     * from its MhProgress inside cb instead of parsing `text`. phase is a module defined code
+     * (0 = none; for the V2 writer see MhV2Phase in mh/v2write.h). step/steps: position and
+     * count of the item being processed within the phase (for example disc 2 of 5), 0 when the
+     * phase has no items. Zeroed by mh_progress_init. */
+    _Atomic int phase;
+    _Atomic int step;
+    _Atomic int steps;
 } MhProgress;
 
 void mh_progress_init(MhProgress *p, void (*cb)(void *, uint64_t, uint64_t, const char *),
