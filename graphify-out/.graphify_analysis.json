@@ -1,0 +1,41 @@
+{
+  "communities": {
+    "0": [
+      "tools_extract_embedded",
+      "tools_extract_embedded_main",
+      "tools_extract_embedded_rationale_2",
+      "tools_extract_embedded_sections",
+      "tools_extract_embedded_va_to_off"
+    ]
+  },
+  "cohesion": {
+    "0": 0.6
+  },
+  "gods": [
+    {
+      "id": "tools_extract_embedded_main",
+      "label": "main()",
+      "degree": 3
+    },
+    {
+      "id": "tools_extract_embedded_sections",
+      "label": "sections()",
+      "degree": 2
+    },
+    {
+      "id": "tools_extract_embedded_va_to_off",
+      "label": "va_to_off()",
+      "degree": 2
+    },
+    {
+      "id": "tools_extract_embedded_rationale_2",
+      "label": "Carve the data blobs embedded in 'PicoStation Multi House V3 (x64).exe'. The\u2026",
+      "degree": 1
+    }
+  ],
+  "surprises": [],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}
