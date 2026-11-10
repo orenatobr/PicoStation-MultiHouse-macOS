@@ -262,6 +262,146 @@ static void test_audit_track_map(void)
     CHECK(mh_track_sector_valid(out, d.total_sectors));
 }
 
+/* ---- 2b. property test: the track map against a model written from the decompilation ------------ */
+
+/* Model of the loop of build_package_metadata.constprop.0 @0x140002a70 plus the first-track test.
+ * Returns false when the original refuses; otherwise fills the 0x930 byte sector without the SBI
+ * block and without the CRC. */
+static bool model_track_map(const MhDisc *d, uint8_t trk[0x930])
+{
+    unsigned i, n = d->ntracks;
+    memset(trk, 0, 0x930);
+    memcpy(trk, "PSTTRK1", 7);
+    trk[9] = 0x10;
+    trk[8] = (uint8_t)n;
+    for (i = 0; i < n; i++) {
+        const MhTrack *t = &d->tracks[i];
+        uint32_t begin = t->start < t->pregap ? 0 : t->start - t->pregap, nb;
+        uint8_t type, kb;
+        if (i + 1 < n) {
+            const MhTrack *u = &d->tracks[i + 1];
+            if (u->start < u->pregap) return false;
+            nb = u->start - u->pregap;
+            if (t->start < begin || nb <= begin || t->number != (uint8_t)(i + 1) || d->total_sectors < nb) return false;
+        } else {
+            nb = d->total_sectors;
+            if (t->start < begin || nb <= begin || t->number != (uint8_t)(i + 1)) return false;
+        }
+        if (t->kind == 1) {
+            type = 0;
+            kb = 0;
+        } else {
+            type = t->mode;
+            if (type != 1 && type != 2) return false;
+            kb = (uint8_t)((t->kind == 2) << 2);
+        }
+        {
+            uint8_t *e = trk + 0x10 + 16 * i;
+            e[0] = (uint8_t)begin; e[1] = (uint8_t)(begin >> 8); e[2] = (uint8_t)(begin >> 16); e[3] = (uint8_t)(begin >> 24);
+            e[4] = (uint8_t)t->start; e[5] = (uint8_t)(t->start >> 8); e[6] = (uint8_t)(t->start >> 16); e[7] = (uint8_t)(t->start >> 24);
+            nb -= begin;
+            e[8] = (uint8_t)nb; e[9] = (uint8_t)(nb >> 8); e[10] = (uint8_t)(nb >> 16); e[11] = (uint8_t)(nb >> 24);
+            e[12] = type;
+            e[13] = (uint8_t)(((t->flags * 2) & 2) | kb);
+            e[14] = (uint8_t)(((t->flags * 2) & 6) | ((t->flags >> 2) & 1));
+        }
+    }
+    return !(trk[0x10] | trk[0x11] | trk[0x12] | trk[0x13] | trk[0x14] | trk[0x15] | trk[0x16] | trk[0x17]) && trk[0x1c] != 0;
+}
+
+static void test_audit_track_map_property(void)
+{
+    static MhDisc d;
+    uint8_t rec[MH_V2_DISC_SIZE], out[MH_V2_PKG_META_BYTES], model[0x930];
+    char err[256];
+    unsigned it, accepted = 0, refused = 0;
+
+    g_rng = 99;
+    for (it = 0; it < 30000; it++) {
+        unsigned i, n = 1 + rnd() % 6;
+        uint32_t pos = 0;
+        bool model_ok;
+        memset(&d, 0, sizeof d);
+        d.ntracks = (uint16_t)n;
+        for (i = 0; i < n; i++) {
+            MhTrack *t = &d.tracks[i];
+            uint32_t pre = (i && rnd() % 3 == 0) ? rnd() % 200 : 0;
+            pos += 100 + rnd() % 500;
+            t->number = (uint8_t)(i + 1);
+            t->kind = i == 0 ? 2 : (uint8_t)(rnd() % 3);
+            t->mode = t->kind == 1 ? 0 : (uint8_t)(1 + rnd() % 2);
+            t->flags = (uint8_t)(rnd() % 8);
+            t->pregap = pre > pos ? 0 : pre;
+            t->start = i == 0 ? 0 : pos;
+            if (rnd() % 8 == 0) t->start += (uint32_t)(rnd() % 7) - 3;      /* perturb */
+            if (rnd() % 12 == 0) t->number = (uint8_t)(rnd() % 8);
+            if (rnd() % 12 == 0) t->mode = (uint8_t)(rnd() % 4);
+            if (rnd() % 20 == 0) t->kind = (uint8_t)(rnd() % 4);
+            if (rnd() % 20 == 0) t->pregap = rnd() % 900;
+        }
+        d.total_sectors = pos + 100 + rnd() % 400;
+        if (rnd() % 10 == 0) d.total_sectors = rnd() % 2000;
+        model_ok = model_track_map(&d, model);
+        if (model_ok) {
+            /* the audit added a stricter rule (the firmware refuses a map whose INDEX 01 is outside its
+             * track): apply it on the model's output the same way */
+            uint32_t crc;
+            memset(model + 0xc, 0, 4);
+            crc = mh_crc32(model, 0x930);
+            model[0xc] = (uint8_t)crc; model[0xd] = (uint8_t)(crc >> 8); model[0xe] = (uint8_t)(crc >> 16); model[0xf] = (uint8_t)(crc >> 24);
+            model_ok = mh_track_sector_valid(model, d.total_sectors);
+        }
+        memset(rec, 0, sizeof rec);
+        if (mh_v2_build_package_metadata(&d, rec, out, err, sizeof err)) {
+            accepted++;
+            CHECK(model_ok);
+            if (model_ok) CHECK(memcmp(out, model, 0x930) == 0);
+        } else {
+            refused++;
+            CHECK(!model_ok);
+        }
+    }
+    CHECK(accepted > 500 && refused > 500);
+}
+
+/* ---- 2c. extent allocation against a brute force first fit ------------------------------------ */
+
+static void test_audit_extent_property(void)
+{
+    MhV2Extent e[MH_V2_EXTENTS_MAX];
+    uint32_t n, it;
+
+    g_rng = 7;
+    for (it = 0; it < 3000; it++) {
+        unsigned k, m = rnd() % 12;
+        n = 0;
+        for (k = 0; k < m; k++) {
+            uint64_t st = 0x2800 + 0x100 * (uint64_t)(rnd() % 60), en = st + 1 + rnd() % 0x500;
+            (void)mh_v2_extent_insert(e, &n, st, en);        /* overlaps are refused, fine */
+        }
+        for (k = 0; k < 6; k++) {
+            uint64_t size = 1 + rnd() % 0x700, lba = 0, cand, want = 0;
+            uint32_t i, before = n;
+            bool found = false;
+            MhV2Extent copy[MH_V2_EXTENTS_MAX];
+            memcpy(copy, e, sizeof e);
+            for (cand = 0x2800; !found; cand += 0x100) {
+                bool clash = false;
+                for (i = 0; i < n; i++)
+                    if (cand < copy[i].end && copy[i].start < cand + size) clash = true;
+                if (!clash) { found = true; want = cand; break; }
+            }
+            if (mh_v2_extent_allocate(e, &n, size, 0, &lba)) {
+                CHECK(lba == want && n == before + 1);
+                for (i = 1; i < n; i++) CHECK(e[i - 1].end <= e[i].start && (e[i].start & 0xff) == 0);
+            } else {
+                CHECK(n == before);
+            }
+            if (n >= MH_V2_EXTENTS_MAX - 1) break;
+        }
+    }
+}
+
 /* ---- 3. edit a library in place: kept packages are not touched, a new disc takes the hole ------- */
 
 static void test_audit_edit_inplace(void)
@@ -509,6 +649,8 @@ int main(void)
 #define RUN(name, fn) do { if (!only || strstr(only, name)) fn(); } while (0)
         RUN("golden", test_audit_golden_zone);
         RUN("track", test_audit_track_map);
+        RUN("model", test_audit_track_map_property);
+        RUN("extent", test_audit_extent_property);
         RUN("edit", test_audit_edit_inplace);
         RUN("alias", test_audit_alias_clash);
         RUN("source", test_audit_source_is_target);
