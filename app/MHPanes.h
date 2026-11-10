@@ -38,6 +38,8 @@ typedef NS_ENUM(NSInteger, MHContentMode) {
 @property(strong, readonly) NSButton *btnCaseArt, *btnDiscArt, *btnCheats;
 @property(strong, readonly) NSTextField *fCase, *fDisc;
 @property(strong, readonly) NSTextView *details;
+/* NO shows the "Select a case" placeholder instead of the controls. */
+@property(nonatomic) BOOL hasSelection;
 @end
 
 #endif
