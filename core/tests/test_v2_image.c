@@ -253,43 +253,43 @@ int main(void)
         mh_sha1(g_img, g_size, sha);
         assert(memcmp(sha, r.sha1, 20) == 0 && r.crc32 == mh_crc32(g_img, g_size));
     }
-    assert(strstr(r.msg, "PSXRAW V2 valido") == r.msg);
+    assert(strstr(r.msg, "Valid PSXRAW V2") == r.msg);
     assert(mh_v2_validate_image(g_path, NULL, NULL));
     {
         MhProgress p;
         mh_progress_init(&p, cancel_cb, NULL);
         assert(mh_v2_validate_image(g_path, &p, &r) && cancel_cb_hits >= 3);
         mh_progress_request_cancel(&p);
-        assert(!mh_v2_validate_image(g_path, &p, &r) && strcmp(r.msg, "Validacao cancelada.") == 0);
+        assert(!mh_v2_validate_image(g_path, &p, &r) && strcmp(r.msg, "Validation cancelled.") == 0);
     }
-    assert(strcmp(validate_msg("/nonexistent/x"), "Imagem V2 ausente ou pequena demais.") == 0);
+    assert(strcmp(validate_msg("/nonexistent/x"), "V2 image is missing or too small.") == 0);
 
-    EXPECT(m_hdr, false, "Header V2 invalido ou divergente do backup.");
-    EXPECT(m_hdrb, false, "Header V2 invalido ou divergente do backup.");
-    EXPECT(m_tab_nofix, false, "CRC das tabelas/arts V2 nao confere.");
-    EXPECT(m_case_magic, true, "Registro de Case V2 invalido.");
-    EXPECT(m_case_idx, true, "Registro de Case V2 invalido.");
-    EXPECT(m_case_cnt, true, "Registro de Case V2 invalido.");
-    EXPECT(m_case_art, true, "ID de arte da Case invalido.");
-    EXPECT(m_case_dup, true, "Referencia de disco duplicada/invalida em uma Case.");
-    EXPECT(m_case_junk, true, "Case possui lixo apos o ultimo disco.");
-    EXPECT(m_case_count, true, "case_count nao confere.");
-    EXPECT(m_disc_empty, true, "Case referencia DiscRecord vazio.");
-    EXPECT(m_disc_slot, true, "DiscRecord V2 invalido.");
-    EXPECT(m_disc_unref, true, "DiscRecord V2 invalido.");
-    EXPECT(m_disc_layout, true, "DiscRecord V2 invalido.");
-    EXPECT(m_disc_crc, true, "DiscRecord V2 invalido.");
-    EXPECT(m_trk, true, "Track Table V2 invalida.");
-    EXPECT(m_trk_pad, true, "Padding da Track Table nao esta zerado.");
-    EXPECT(m_cheat, true, "Bloco de cheats V2 invalido.");
-    EXPECT(m_dart, true, "disc_art_id invalido.");
-    EXPECT(m_raw_pad, true, "Padding dos dados RAW nao esta zerado.");
-    EXPECT(m_raw_data, true, "Hash de um disco V2 nao confere.");
-    EXPECT(m_disc_count, true, "disc_count nao confere.");
-    EXPECT(m_menu_pad, true, "Padding do menu V2 nao esta zerado.");
-    EXPECT(m_menu_data, true, "Menu V2 nao confere.");
-    EXPECT(m_cfg, true, "Configuracao global do menu V2 invalida.");
-    EXPECT(m_music, true, "Musica global do menu V2 invalida.");
+    EXPECT(m_hdr, false, "V2 header is invalid or differs from its backup.");
+    EXPECT(m_hdrb, false, "V2 header is invalid or differs from its backup.");
+    EXPECT(m_tab_nofix, false, "CRC of the V2 tables and art does not match.");
+    EXPECT(m_case_magic, true, "Invalid V2 Case record.");
+    EXPECT(m_case_idx, true, "Invalid V2 Case record.");
+    EXPECT(m_case_cnt, true, "Invalid V2 Case record.");
+    EXPECT(m_case_art, true, "Invalid Case art ID.");
+    EXPECT(m_case_dup, true, "A Case has a duplicate or invalid Disc reference.");
+    EXPECT(m_case_junk, true, "A Case has stray data after its last Disc.");
+    EXPECT(m_case_count, true, "case_count does not match.");
+    EXPECT(m_disc_empty, true, "A Case references an empty DiscRecord.");
+    EXPECT(m_disc_slot, true, "Invalid V2 DiscRecord.");
+    EXPECT(m_disc_unref, true, "Invalid V2 DiscRecord.");
+    EXPECT(m_disc_layout, true, "Invalid V2 DiscRecord.");
+    EXPECT(m_disc_crc, true, "Invalid V2 DiscRecord.");
+    EXPECT(m_trk, true, "Invalid V2 Track Table.");
+    EXPECT(m_trk_pad, true, "Track Table padding is not zeroed.");
+    EXPECT(m_cheat, true, "Invalid V2 cheats block.");
+    EXPECT(m_dart, true, "Invalid disc_art_id.");
+    EXPECT(m_raw_pad, true, "RAW data padding is not zeroed.");
+    EXPECT(m_raw_data, true, "Hash of a V2 Disc does not match.");
+    EXPECT(m_disc_count, true, "disc_count does not match.");
+    EXPECT(m_menu_pad, true, "V2 menu padding is not zeroed.");
+    EXPECT(m_menu_data, true, "V2 menu does not match.");
+    EXPECT(m_cfg, true, "Invalid V2 menu global configuration.");
+    EXPECT(m_music, true, "Invalid V2 menu global music.");
 
     /* the loader */
     save(g_path, g_img, g_size);
@@ -305,7 +305,7 @@ int main(void)
         mh_project_init(p);
         assert(mh_v2_load_image(g_path, cache, &env, p, &r));
         assert(r.ok && r.cases == 2 && r.discs == 3 && r.size == g_size);
-        assert(strcmp(r.msg, "Imagem PSXRAW V2 carregada para edicao.") == 0);
+        assert(strcmp(r.msg, "PSXRAW V2 image loaded for editing.") == 0);
         assert(p->case_count == 2 && p->disc_count == 3 && p->image_loaded && !p->card_loaded && !p->dirty);
         assert(p->reserved_c == 4 && strcmp(p->image_path, g_path) == 0);
         assert(p->cases[0].disc_count == 2 && p->cases[1].disc_count == 1 && p->cases[0].pad5 == 3);
@@ -348,7 +348,7 @@ int main(void)
             free(c);
         }
         assert(!mh_v2_load_image(g_path, cache, &env, p, &r) && p->dirty == 7);
-        assert(strcmp(r.msg, "Existe um registro de Case invalido no cartao.") == 0);
+        assert(strcmp(r.msg, "The card has an invalid Case record.") == 0);
 
         /* both headers gone: recovered from the body */
         {
@@ -357,21 +357,21 @@ int main(void)
             memset(c, 0, 0x1400);
             save(g_path, c, g_size);
             assert(mh_v2_load_image(g_path, cache, &env, p, &r));
-            assert(strstr(r.msg, "Biblioteca V2 recuperada pelas tabelas fixas") == r.msg && p->dirty == 1);
+            assert(strstr(r.msg, "V2 library recovered from the fixed tables") == r.msg && p->dirty == 1);
             mh_project_clear(p);
             /* an interrupted write marker refuses the recovery */
             memcpy(c, "PSTWIP1", 7);
             save(g_path, c, g_size);
             assert(!mh_v2_load_image(g_path, cache, &env, p, &r));
-            assert(strstr(r.msg, "Biblioteca sem commit valido.") == r.msg);
+            assert(strstr(r.msg, "Library has no valid commit.") == r.msg);
             /* damaged single-track map: rebuilt from the first RAW sector */
             memcpy(c, g_img, g_size);
             c[BASE[1] * 512 + 0x40] ^= 1;
             save(g_path, c, g_size);
             assert(mh_v2_load_image(g_path, cache, &env, p, &r));
-            assert(strstr(r.msg, "PSXRAW V2 recuperado sem alterar o layout: 1 Track Table") == r.msg);
+            assert(strstr(r.msg, "PSXRAW V2 recovered without changing the layout: 1 single-track Track Table") == r.msg);
             assert(p->dirty == 1 && p->cases[0].discs[1]->ntracks == 1 && p->cases[0].discs[1]->tracks[0].mode == 2);
-            assert(strstr(p->cases[0].discs[1]->notes, "foi reconstruida exatamente") != NULL);
+            assert(strstr(p->cases[0].discs[1]->notes, "rebuilt exactly") != NULL);
             mh_project_clear(p);
             free(c);
         }

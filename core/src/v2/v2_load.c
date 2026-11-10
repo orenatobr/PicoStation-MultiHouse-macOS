@@ -136,15 +136,15 @@ static void issue_text(MhDisc *d)
     uint32_t v = d->verify_issues;
     mh_wbuf_init(&w);
     if (v & 0xc0)
-        mh_wbuf_puts(&w, "Alguns setores estao inconsistentes. Videos ou audio podem falhar. Ha uma opcao para criar "
-                         "uma copia com EDC/ECC recalculados.\r\n");
-    if (v & 1) mh_wbuf_puts(&w, "Nao foi possivel confirmar o ID do jogo.\r\n");
-    if (v & 2) mh_wbuf_puts(&w, "O disco difere da versao conhecida; pode ser uma modificacao.\r\n");
-    if (v & 4) mh_wbuf_puts(&w, "O tamanho informado pelo jogo excede o arquivo.\r\n");
-    if (v & 8) mh_wbuf_puts(&w, "O formato de alguns setores nao combina com o CUE.\r\n");
-    if (v & 0x10) mh_wbuf_puts(&w, "Os dados no cartao nao conferem com o registro do disco.\r\n");
-    if (v & 0x20) mh_wbuf_puts(&w, "Ha dados extras invalidos no cartao. Restaure este disco.\r\n");
-    if (v == 0) mh_wbuf_puts(&w, "Disco verificado: leitura e estrutura OK.");
+        mh_wbuf_puts(&w, "Some sectors are inconsistent. Videos or audio may fail. You can create "
+                         "a copy with recalculated EDC/ECC.\r\n");
+    if (v & 1) mh_wbuf_puts(&w, "Could not confirm the game ID.\r\n");
+    if (v & 2) mh_wbuf_puts(&w, "The Disc differs from the known version; it may be a modification.\r\n");
+    if (v & 4) mh_wbuf_puts(&w, "The size reported by the game exceeds the file.\r\n");
+    if (v & 8) mh_wbuf_puts(&w, "The format of some sectors does not match the CUE.\r\n");
+    if (v & 0x10) mh_wbuf_puts(&w, "The data on the card does not match the Disc record.\r\n");
+    if (v & 0x20) mh_wbuf_puts(&w, "The card has invalid extra data. Restore this Disc.\r\n");
+    if (v == 0) mh_wbuf_puts(&w, "Disc verified: read and structure OK.");
     mh_str_copy(d->verify_text, sizeof d->verify_text, mh_wbuf_cstr(&w));
     mh_wbuf_free(&w);
 }
@@ -248,7 +248,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
     mh_v2_disc_decode(drec, &r, NULL);
     base = r.base_lba;
     if (c->used_disc[id] || !c->discs[(size_t)id * MH_V2_DISC_SIZE + 4]) {
-        lfail(c, "Existe um registro de Disco invalido no cartao.");
+        lfail(c, "The card has an invalid Disc record.");
         return NULL;
     }
     if (!mh_v2_disc_magic(drec) || r.id != id || r.case_index != ci || r.slot != slot ||
@@ -256,7 +256,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
         (base & 0xff) != 0 || base != r.track_lba || r.raw_lba != base + 0x100 ||
         c->size / 512 < r.raw_blocks + r.raw_lba || !mh_disc_layout_valid(drec) ||
         mh_crc_record(drec, MH_V2_DISC_SIZE) != r.crc) {
-        lfail(c, "Existe um registro de Disco invalido no cartao.");
+        lfail(c, "The card has an invalid Disc record.");
         return NULL;
     }
     c->used_disc[id] = 1;
@@ -297,7 +297,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
 
     d = mh_calloc(sizeof *d);
     if (!d) {
-        lfail(c, "Memoria insuficiente ao carregar o cartao.");
+        lfail(c, "Not enough memory to load the card.");
         return NULL;
     }
     d->kind = (uint32_t)c->kind;
@@ -327,7 +327,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
     /* session marker of an earlier write in this very session (resume / verification) */
     if (!mh_io_read(c->io, (r.raw_lba - 1) * 512, marker, sizeof marker)) {
         mh_disc_free(d);
-        lfail(c, "Falha ao ler o estado do disco. Confira a conexao do SD.");
+        lfail(c, "Could not read the Disc state. Check the card connection.");
         return NULL;
     }
     {
@@ -357,7 +357,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
     if (track_ok) {
         if (!mh_track_sector_valid(trk, d->total_sectors) || !tracks_from_sector(d, trk)) {
             mh_disc_free(d);
-            lfail(c, "Falha ao converter uma tabela de tracks.");
+            lfail(c, "Could not convert a track table.");
             return NULL;
         }
         if (trk[10] & MH_V2_TRK_F_SBI) {
@@ -368,7 +368,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
                 d->flags |= MH_DF_SBI;
             } else {
                 mh_disc_free(d);
-                lfail(c, "Falha ao extrair um SBI do cartao.");
+                lfail(c, "Could not extract an SBI file from the card.");
                 return NULL;
             }
         }
@@ -382,14 +382,14 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
         uint64_t art_lba;
         if (r.art_id != id) {
             mh_disc_free(d);
-            lfail(c, "ID da arte de um Disco e invalido.");
+            lfail(c, "A Disc has an invalid art ID.");
             return NULL;
         }
         cache_name(path, sizeof path, c->cache_dir, "DISC-", id, ".art");
         art_lba = base + ((r.flags & MH_V2_DF_EXT) ? 0x1e : 0x14);
         if (!cache_region(c->io, art_lba * 512, path)) {
             mh_disc_free(d);
-            lfail(c, "Falha ao carregar uma arte de Disco do SD.");
+            lfail(c, "Could not load a Disc art from the card.");
             return NULL;
         }
         mh_str_copy(d->cd_art_path, sizeof d->cd_art_path, path);
@@ -403,7 +403,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
         char e[256];
         if (!blob) {
             mh_disc_free(d);
-            lfail(c, "Memoria insuficiente para carregar cheats.");
+            lfail(c, "Not enough memory to load cheats.");
             return NULL;
         }
         e[0] = 0;
@@ -411,7 +411,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
             int code = c->io->err->code;
             mh_free(blob);
             mh_disc_free(d);
-            mh_v2_result_fail_code(c->res, "Falha de leitura do catalogo de cheats; biblioteca anterior preservada", code);
+            mh_v2_result_fail_code(c->res, "Could not read the cheat catalog; the previous library was preserved", code);
             return NULL;
         }
         if (!mh_cheat_profile_deserialize(blob, r.cheat_size, &d->cheats, e, sizeof e)) {
@@ -419,8 +419,8 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
             mh_str_copy(d->cheat_note, sizeof d->cheat_note, e);
             if (r.cheat_size > 0x3f && memcmp(blob, "PSTCHT1", 7) == 0 && blob[8] == 1 && blob[9] == 0)
                 mh_str_copy(d->cheat_note, sizeof d->cheat_note,
-                            "Perfil anterior: os codigos nao serao reinterpretados. O Manager preparara um catalogo "
-                            "validado pelo serial, com as escolhas desativadas.");
+                            "Old profile: the codes will not be reinterpreted. The Manager will prepare a catalog "
+                            "validated by serial, with all choices turned off.");
             c->cheat_fail = 1;
         }
         if (d->cheats) {
@@ -429,8 +429,8 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
                 MhWbuf w;
                 mh_wbuf_init(&w);
                 mh_wbuf_u32(&w, d->cheats->removed);
-                mh_wbuf_puts(&w, " cheat(s) removido(s) por incompatibilidade documentada. Os demais foram preservados. "
-                                 "Aplique as alteracoes para atualizar o SD.");
+                mh_wbuf_puts(&w, " cheat(s) removed because of a documented incompatibility. The others were preserved. "
+                                 "Apply Changes to update the card.");
                 mh_str_copy(d->cheat_note, sizeof d->cheat_note, mh_wbuf_cstr(&w));
                 mh_wbuf_free(&w);
                 c->cheat_removed = 1;
@@ -444,17 +444,17 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
         if (!rebuilt)
             mh_str_copy(d->notes, sizeof d->notes,
                         c->kind == MH_V2_SRC_IMAGE
-                            ? "Carregado de uma imagem PSXRAW V2 existente. Os dados RAW serao preservados."
-                            : "Carregado de um cartao PSXRAW V2 existente. Os dados RAW serao preservados.");
+                            ? "Loaded from an existing PSXRAW V2 image. The RAW data will be preserved."
+                            : "Loaded from an existing PSXRAW V2 card. The RAW data will be preserved.");
         else
             mh_str_copy(d->notes, sizeof d->notes,
-                        "A Track Table de faixa unica estava danificada e foi reconstruida exatamente como "
-                        "MODE1/2352 ou MODE2/2352 a partir do DiscRecord protegido e do primeiro setor RAW. Os dados "
-                        "do jogo permaneceram no mesmo LBA.");
+                        "The single-track Track Table was damaged and was rebuilt exactly as "
+                        "MODE1/2352 or MODE2/2352 from the protected DiscRecord and the first RAW sector. The game data "
+                        "stayed at the same LBA.");
     } else {
         mh_str_copy(d->notes, sizeof d->notes,
-                    "A Track Table deste disco esta danificada e possui varias faixas. Os dados RAW foram preservados, "
-                    "mas e necessario fornecer o CUE original antes de aplicar alteracoes.");
+                    "This Disc's Track Table is damaged and has several tracks. The RAW data was preserved, "
+                    "but you must provide the original CUE before applying changes.");
     }
     return d;
 }
@@ -475,11 +475,11 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
 
     if (res) memset(res, 0, sizeof *res);
     if (!cache_dir || !project || !io || (kind == MH_V2_SRC_IMAGE && !image_path)) {
-        mh_v2_result_fail(res, "Destino de carga V2 invalido.");
+        mh_v2_result_fail(res, "Invalid V2 load target.");
         return false;
     }
     if (!mh_ensure_dir(cache_dir)) {
-        mh_v2_result_fail(res, "Nao foi possivel criar o cache temporario das artes.");
+        mh_v2_result_fail(res, "Could not create the temporary art cache.");
         return false;
     }
     memset(&c, 0, sizeof c);
@@ -498,7 +498,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
     hb = mh_alloc(MH_V2_HDR_SIZE);
     ctab = mh_alloc(MH_V2_CASE_TABLE);
     if (!np || !scratch || !ha || !hb || !ctab) {
-        lfail(&c, "Memoria insuficiente ao carregar o cartao.");
+        lfail(&c, "Not enough memory to load the card.");
         goto out;
     }
     dtab = scratch;
@@ -523,7 +523,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
                 if (slot[b]) bad = true;
         }
         if (bad) {
-            lfail(&c, "Nao foi possivel ler os headers V2.");
+            lfail(&c, "Could not read the V2 headers.");
             goto out;
         }
     }
@@ -536,8 +536,8 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
             B_valid = false;
             c.recovered = 1;
         } else {
-            lfail(&c, "Biblioteca sem commit valido. Se uma gravacao foi interrompida, retome na mesma sessao do "
-                      "Manager antes de usar o cartao.");
+            lfail(&c, "Library has no valid commit. If a write was interrupted, resume it in the same session of the "
+                      "Manager before using the card.");
             goto out;
         }
     }
@@ -545,7 +545,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
     /* the tables */
     if (!mh_io_read(io, MH_V2_CASE_OFF, ctab, MH_V2_CASE_TABLE) ||
         !mh_io_read(io, MH_V2_DISC_OFF, dtab, MH_V2_DISC_TABLE)) {
-        lfail(&c, "Nao foi possivel ler as tabelas V2.");
+        lfail(&c, "Could not read the V2 tables.");
         goto out;
     }
     crc_c = mh_crc32(ctab, MH_V2_CASE_TABLE);
@@ -562,7 +562,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
                 memcpy(chosen, hb, sizeof chosen);
                 c.hdr_repair = 1;
             } else {
-                lfail(&c, "Nenhum header V2 valido corresponde as tabelas gravadas.");
+                lfail(&c, "No valid V2 header matches the tables on the card.");
                 goto out;
             }
         } else if (a.crc_cases != crc_c) {
@@ -570,12 +570,12 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
                 memcpy(chosen, hb, sizeof chosen);
                 c.hdr_repair = 1;
             } else {
-                lfail(&c, "Nenhum header V2 valido corresponde as tabelas gravadas.");
+                lfail(&c, "No valid V2 header matches the tables on the card.");
                 goto out;
             }
         } else if (!B_valid) {
             if (a.crc_discs != crc_d) {
-                lfail(&c, "Nenhum header V2 valido corresponde as tabelas gravadas.");
+                lfail(&c, "No valid V2 header matches the tables on the card.");
                 goto out;
             }
             memcpy(chosen, ha, sizeof chosen);
@@ -587,7 +587,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
                     memcpy(chosen, ha, sizeof chosen);
                     c.hdr_repair = c.recovered;
                 } else if (a.generation == b.generation) {
-                    lfail(&c, "Headers V2 divergentes com a mesma geracao; selecao automatica recusada.");
+                    lfail(&c, "The V2 headers differ but have the same generation; automatic selection refused.");
                     goto out;
                 } else if ((int32_t)(b.generation - a.generation) < 1) {
                     memcpy(chosen, ha, sizeof chosen);
@@ -603,7 +603,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         } else {
             /* B does not match the tables, A does (checked below) */
             if (a.crc_discs != crc_d) {
-                lfail(&c, "Nenhum header V2 valido corresponde as tabelas gravadas.");
+                lfail(&c, "No valid V2 header matches the tables on the card.");
                 goto out;
             }
             memcpy(chosen, ha, sizeof chosen);
@@ -620,7 +620,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
 
     /* the menu */
     if (hd.menu_sectors - 1u >= 0x5d) {
-        lfail(&c, "Quantidade de setores do menu V2 invalida.");
+        lfail(&c, "Invalid V2 menu sector count.");
         goto out;
     }
     {
@@ -630,7 +630,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         char mpath[MH_PATH_MAX];
         uint32_t s;
         if (!menu) {
-            lfail(&c, "Memoria insuficiente para extrair o menu V2.");
+            lfail(&c, "Not enough memory to extract the V2 menu.");
             goto out;
         }
         if (!c.recovered) {
@@ -638,13 +638,13 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
                 unsigned b;
                 if (!mh_io_read(io, (hd.menu_lba + (uint64_t)s * 5) * 512, slot, sizeof slot)) {
                     mh_free(menu);
-                    lfail(&c, "Falha ao extrair o menu V2 apos novas tentativas.");
+                    lfail(&c, "Could not extract the V2 menu after several retries.");
                     goto out;
                 }
                 for (b = MH_V2_SECTOR; b < MH_V2_SLOT; b++)
                     if (slot[b]) {
                         mh_free(menu);
-                        lfail(&c, "Padding do menu V2 invalido.");
+                        lfail(&c, "Invalid V2 menu padding.");
                         goto out;
                     }
                 memcpy(menu + (size_t)s * MH_V2_SECTOR, slot, MH_V2_SECTOR);
@@ -652,7 +652,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         } else {
             if (!env || !env->menu || env->menu_size < msize) {
                 mh_free(menu);
-                lfail(&c, "Memoria insuficiente para extrair o menu V2.");
+                lfail(&c, "Not enough memory to extract the V2 menu.");
                 goto out;
             }
             memcpy(menu, env->menu, msize);
@@ -660,7 +660,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         mh_path_join(cache_dir, "menu.bin", mpath, sizeof mpath);
         if (!mh_write_entire_file(mpath, menu, msize)) {
             mh_free(menu);
-            lfail(&c, "Falha ao salvar o menu V2 no cache de edicao.");
+            lfail(&c, "Could not save the V2 menu to the editing cache.");
             goto out;
         }
         np->has_menu_defaults = mh_menu_defaults_read(menu, msize, np->menu_defaults, NULL) ? 1u : 0u;
@@ -676,7 +676,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         mh_v2_case_decode(cr, &r, NULL);
         if (!mh_v2_case_magic(cr) || r.index != i || (uint8_t)(r.disc_count - 1) > 4 ||
             mh_crc_record(cr, MH_V2_CASE_SIZE) != r.crc) {
-            lfail(&c, "Existe um registro de Case invalido no cartao.");
+            lfail(&c, "The card has an invalid Case record.");
             goto out;
         }
         cs->in_use = 1;
@@ -687,12 +687,12 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         if (r.art_id != MH_V2_ART_NONE) {
             char path[MH_PATH_MAX];
             if (r.art_id != r.index) {
-                lfail(&c, "ID da arte de uma Case e invalido.");
+                lfail(&c, "A Case has an invalid art ID.");
                 goto out;
             }
             cache_name(path, sizeof path, cache_dir, "CASE-", r.art_id, ".art");
             if (!cache_region(io, MH_V2_ART_OFF + (uint64_t)i * MH_V2_ART_SIZE, path)) {
-                lfail(&c, "Nao foi possivel carregar uma arte de Case do SD.");
+                lfail(&c, "Could not load a Case art from the card.");
                 goto out;
             }
             mh_str_copy(cs->art_path, sizeof cs->art_path, path);
@@ -707,7 +707,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         c.n_cases++;
     }
     if (hd.case_count != c.n_cases || hd.disc_count != c.n_discs) {
-        lfail(&c, "As contagens do header V2 nao conferem com as tabelas.");
+        lfail(&c, "The V2 header counts do not match the tables.");
         goto out;
     }
 
@@ -736,34 +736,34 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
             res->cases = (uint16_t)c.n_cases;
             res->discs = (uint16_t)c.n_discs;
             if (c.tracks_damaged == 0 && c.tracks_rebuilt != 0) {
-                mh_wbuf_puts(&w, "PSXRAW V2 recuperado sem alterar o layout: ");
+                mh_wbuf_puts(&w, "PSXRAW V2 recovered without changing the layout: ");
                 mh_wbuf_u32(&w, (uint32_t)c.tracks_rebuilt);
-                mh_wbuf_puts(&w, " Track Table(s) de faixa unica foram reconstruidas exatamente. Clique em APLICAR "
-                                 "ALTERACOES para publicar os metadados com escrita segura de 512 bytes.");
+                mh_wbuf_puts(&w, " single-track Track Table(s) were rebuilt exactly. Click Apply Changes "
+                                 "to publish the metadata with safe 512-byte writes.");
                 msg = mh_wbuf_cstr(&w);
             } else if (c.tracks_damaged != 0) {
-                mh_wbuf_puts(&w, "PSXRAW V2 reconhecido pelas tabelas fixas. ");
+                mh_wbuf_puts(&w, "PSXRAW V2 recognized from the fixed tables. ");
                 mh_wbuf_u32(&w, (uint32_t)c.tracks_damaged);
-                mh_wbuf_puts(&w, " disco(s) possuem Track Table multifaixa danificada; os jogos foram listados e "
-                                 "preservados, mas APLICAR permanece bloqueado ate informar os CUEs originais.");
+                mh_wbuf_puts(&w, " Disc(s) have a damaged multi-track Track Table; the games were listed and "
+                                 "preserved, but Apply Changes stays blocked until you provide the original CUEs.");
                 msg = mh_wbuf_cstr(&w);
             } else {
                 int flag = clean ? c.recovered : c.cheat_fail;
-                msg = "Biblioteca V2 recuperada pelas tabelas fixas: os dois headers estavam ausentes. Clique em "
-                      "APLICAR ALTERACOES para publicar primeiro o backup B e depois o principal A.";
+                msg = "V2 library recovered from the fixed tables: both headers were missing. Click Apply "
+                      "Changes to publish backup header B first, then main header A.";
                 if (!clean && !c.recovered) {
-                    msg = "V2 carregado com catalogo de cheats anterior ou invalido. A atualizacao sera informada por "
-                          "disco.";
+                    msg = "V2 loaded with an old or invalid cheat catalog. The update will be reported per "
+                          "Disc.";
                 }
                 if (clean || !c.recovered) {
                     if (flag == 0) {
-                        msg = "V2 recuperado por um dos headers. Salve/aplique para reparar o par principal/backup.";
+                        msg = "V2 recovered from one of the headers. Save or apply to repair the main/backup pair.";
                         if (c.hdr_repair == 0) {
-                            msg = "V2 antigo carregado. Aplique as alteracoes para atualizar a apresentacao do cartao "
-                                  "no Windows.";
+                            msg = "Older V2 loaded. Apply Changes to update how the card appears "
+                                  "in Finder.";
                             if (chosen[7] & 2) {
-                                msg = "Cartao PSXRAW V2 carregado para edicao.";
-                                if (kind == MH_V2_SRC_IMAGE) msg = "Imagem PSXRAW V2 carregada para edicao.";
+                                msg = "PSXRAW V2 card loaded for editing.";
+                                if (kind == MH_V2_SRC_IMAGE) msg = "PSXRAW V2 image loaded for editing.";
                             }
                         }
                     }
@@ -797,14 +797,14 @@ bool mh_v2_load_image(const char *path, const char *cache_dir, const MhV2Env *en
     if (!path || !mh_file_size64(path, &size)) {
         if (res) {
             res->ok = 0;
-            mh_str_copy(res->msg, sizeof res->msg, "Imagem V2 nao encontrada.");
+            mh_str_copy(res->msg, sizeof res->msg, "V2 image not found.");
         }
         return false;
     }
     if (!mh_io_open(&io, path, MH_IO_READ, false, NULL)) {
         if (res) {
             memset(res, 0, sizeof *res);
-            mh_str_copy(res->msg, sizeof res->msg, "Nao foi possivel abrir o cartao V2 para leitura.");
+            mh_str_copy(res->msg, sizeof res->msg, "Could not open the V2 card for reading.");
         }
         return false;
     }
@@ -822,13 +822,13 @@ bool mh_v2_load_physical(const MhDiskInfo *disk, const MhDiskOpts *opts, const c
     bool ok;
     if (res) memset(res, 0, sizeof *res);
     if (!disk) {
-        mh_v2_result_fail(res, "Destino de carga V2 invalido.");
+        mh_v2_result_fail(res, "Invalid V2 load target.");
         return false;
     }
     err[0] = 0;
     dev = mh_blockdev_open_read(disk, opts, err, sizeof err);
     if (!dev) {
-        mh_v2_result_fail(res, err[0] ? err : "Nao foi possivel abrir o cartao V2 para leitura.");
+        mh_v2_result_fail(res, err[0] ? err : "Could not open the V2 card for reading.");
         return false;
     }
     ok = mh_v2_load_io(&dev->io, MH_V2_SRC_CARD, disk->number, dev->size, NULL, cache_dir, env, project, res);

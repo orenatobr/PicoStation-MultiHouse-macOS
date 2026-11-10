@@ -18,7 +18,7 @@ static inline void mh_v2w_msg(MhV2Result *res, const char *msg)
     mh_str_copy(res->msg, MH_V2W_MSG_MAX, msg);
 }
 
-/* orig: result_io_msg.part.0: ok = 0, code, text + " (erro Win32 N)" when code != 0. */
+/* orig: result_io_msg.part.0: ok = 0, code, text + " (error N)" when code != 0. */
 static inline void mh_v2w_io_msg(MhV2Result *res, const char *msg, int code)
 {
     MhWbuf w;
@@ -28,7 +28,7 @@ static inline void mh_v2w_io_msg(MhV2Result *res, const char *msg, int code)
     mh_wbuf_init(&w);
     mh_wbuf_puts(&w, msg);
     if (code != 0) {
-        mh_wbuf_puts(&w, " (erro Win32 ");
+        mh_wbuf_puts(&w, " (error ");
         mh_wbuf_u32(&w, (uint32_t)code);
         mh_wbuf_putc(&w, ')');
     }
@@ -36,7 +36,7 @@ static inline void mh_v2w_io_msg(MhV2Result *res, const char *msg, int code)
     mh_wbuf_free(&w);
 }
 
-/* Win32 style error numbers for the "(Win32 N)" texts. */
+/* Win32 style error numbers for the "(error N)" texts. */
 int mh_v2w_win32_code(int err);
 
 /* How a disc relates to the write target (orig: the nest of tests in v2_write_handle_direct):

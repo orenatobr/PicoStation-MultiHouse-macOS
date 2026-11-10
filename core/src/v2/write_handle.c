@@ -6,7 +6,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define MENU_BAD "O arquivo menu\\menu.bin e invalido ou excede a area reservada."
+#define MENU_BAD "The built-in menu is invalid or exceeds the reserved area."
 
 typedef struct Item {
     MhDisc *d;
@@ -50,7 +50,7 @@ static void augment(Ctx *c)
     mh_wbuf_init(&w);
     mh_wbuf_puts(&w, c->res->msg);
     if (c->cur_no != 0) {
-        mh_wbuf_puts(&w, "\r\nDisco ");
+        mh_wbuf_puts(&w, "\r\nDisc ");
         mh_wbuf_u32(&w, (uint32_t)c->cur_no);
         mh_wbuf_puts(&w, ": ");
         mh_wbuf_puts(&w, c->cur_name);
@@ -179,17 +179,17 @@ static bool resume_point_ok(Ctx *c, const MhDisc *d)
 static bool validate_project(Ctx *c)
 {
     unsigned ci, j;
-    static const char incomplete[] = "Existe disco com estrutura incompleta.";
+    static const char incomplete[] = "A Disc has an incomplete structure.";
     c->max_end1 = MH_V2_FIXED_BLOCKS;
     for (ci = 0; ci < MH_PROJECT_MAX_CASES; ci++) {
         const MhCase *cs = &c->p->cases[ci];
         if (!cs->in_use) continue;
-        if (cs->disc_count - 1u > 4u) return fail(c, "Quantidade de discos invalida.");
+        if (cs->disc_count - 1u > 4u) return fail(c, "Invalid number of Discs.");
         c->cases++;
         if (cs->art_path[0]) {
             uint64_t sz;
             if (!mh_file_size64(cs->art_path, &sz) || sz != MH_V2_ART_SIZE)
-                return fail(c, "Case Art invalida.");
+                return fail(c, "Invalid Case art.");
         }
         for (j = 0; j < cs->disc_count; j++) {
             const MhDisc *d = cs->discs[j];
@@ -205,22 +205,22 @@ static bool validate_project(Ctx *c)
             if (d->cd_art_path[0]) {
                 uint64_t sz;
                 if (!mh_file_size64(d->cd_art_path, &sz) || sz != MH_V2_ART_SIZE)
-                    return fail(c, "Disc Art invalida.");
+                    return fail(c, "Invalid Disc art.");
             }
             if (d->cheats && d->cheats->count != 0 &&
                 mh_cheat_profile_serialized_size(d->cheats) > MH_V2_PKG_CHEAT_BYTES)
-                return fail(c, "Cheats excedem a area do disco.");
+                return fail(c, "Cheats exceed the Disc area.");
             if (!resume_point_ok(c, d))
-                return fail(c, "O destino nao corresponde ao ponto de retomada. Reconecte o mesmo SD ou restaure a imagem usada nesta sessao.");
+                return fail(c, "The target does not match the resume point. Reconnect the same card or restore the image used in this session.");
             kept = mh_kept_package(d, c->phys, c->path);
             if (kept != 0) {
                 uint64_t end = (uint64_t)d->total_sectors * 5 + 0x100 + kept;
                 if (end > c->cap / MH_V2_BLOCK || !mh_v2_extent_insert(c->ext, &c->next, kept, end))
-                    return fail(c, "Endereco preservado invalido ou sobreposto.");
+                    return fail(c, "Preserved address is invalid or overlaps another.");
                 if (end > c->max_end1) c->max_end1 = end;
             }
             c->discs++;
-            if (c->discs > MH_V2_MAX_DISCS) return fail(c, "A V2 aceita no maximo 256 discos.");
+            if (c->discs > MH_V2_MAX_DISCS) return fail(c, "V2 supports at most 256 Discs.");
         }
     }
     return true;
@@ -259,7 +259,7 @@ static bool build_tables(Ctx *c)
             if (lba == 0) {
                 uint64_t size = (uint64_t)d->total_sectors * 5 + 0x100;
                 if (!mh_v2_extent_allocate(c->ext, &c->next, size, c->cap / MH_V2_BLOCK, &lba))
-                    return fail(c, "Nao existe espaco alinhado suficiente para um jogo novo.");
+                    return fail(c, "There is not enough aligned space for a new game.");
                 if (lba + size > c->max_end2) c->max_end2 = lba + size;
             }
             memcpy(drec, MH_V2_DISC_MAGIC, 4);
@@ -313,7 +313,7 @@ static bool build_tables(Ctx *c)
             uint64_t sz = 0;
             if (!mh_read_entire_file(cs->art_path, &art, &sz) || sz != MH_V2_ART_SIZE) {
                 mh_free(art);
-                return fail(c, "Falha ao ler Case Art.");
+                return fail(c, "Could not read the Case art.");
             }
             memcpy(c->zone + MH_V2_ART_OFF + (size_t)ci * MH_V2_ART_SIZE, art, MH_V2_ART_SIZE);
             mh_free(art);
@@ -383,7 +383,7 @@ static bool confirm_disc(Ctx *c, Item *it, uint64_t *vdone, bool *marker_failed)
     buf = mh_alloc(0x500000);
     if (!buf) return false;
     mh_wbuf_init(&text);
-    mh_wbuf_puts(&text, "Confirmando gravacao: ");
+    mh_wbuf_puts(&text, "Confirming write: ");
     mh_wbuf_putn(&text, (const char *)it->rec + 0x1c, strnlen((const char *)it->rec + 0x1c, 0x20));
     mh_sha1_init(&sha);
     while (n) {
@@ -445,35 +445,36 @@ static bool write_discs(Ctx *c)
         uint64_t lba = mh_v2_rd64(rec + 0x3c), lba_out = 0;
         bool written;
         c->cur_no = (int)i + 1;
+        mh_v2_set_phase(c->w->prog, MH_V2_PHASE_WRITING_DISCS, (int)i + 1, (int)c->nitems);
         mh_str_copy(c->cur_name, sizeof c->cur_name, (const char *)rec + 0x1c);
         if (!it->in_place && !it->resumed) {
-            if (c->w->prog && !disc_progress(c, done, "Gravando: ", d))
-                return fail(c, "Gravacao cancelada. Mantenha o Manager aberto para retomar.");
+            if (c->w->prog && !disc_progress(c, done, "Writing: ", d))
+                return fail(c, "Write cancelled. Keep the app open to resume.");
             d->flags &= ~(uint32_t)MH_DF_KEEP_PACKAGE;
-            if (!zero_gap(c, rec)) return fail(c, "Falha ao alinhar um disco.");
+            if (!zero_gap(c, rec)) return fail(c, "Could not align a Disc.");
             if (!mh_v2_stream_disc(c->w, c->io, d, rec, &done, c->to_write, MH_V2_STREAM_WRITE))
-                return fail_io(c, "Gravacao interrompida. O disco atual ficou pendente; os concluidos podem ser retomados.");
+                return fail_io(c, "Write interrupted. The current Disc is pending; finished Discs can be resumed.");
             written = true;
         } else {
-            if (c->w->prog && !disc_progress(c, done, "Ja gravado: ", d))
-                return fail(c, "Gravacao cancelada. Mantenha o Manager aberto para retomar.");
+            if (c->w->prog && !disc_progress(c, done, "Already written: ", d))
+                return fail(c, "Write cancelled. Keep the app open to resume.");
             written = false;
         }
         char berr[0x100];
         if (!mh_v2_build_package_metadata(d, rec, c->tbl, berr, sizeof berr) ||
             !mh_io_sync_blocks_verified(c->io, lba << 9, c->tbl, MH_V2_PKG_META_BYTES, NULL, "", &lba_out))
-            return fail_io(c, "Falha ao sincronizar os metadados do disco. Mantenha o Manager aberto para retomar.");
+            return fail_io(c, "Could not sync the Disc metadata. Keep the app open to resume.");
         mh_v2_wr32(rec + 0xfc, mh_crc_record(rec, MH_V2_DISC_SIZE));
         if (written) {
             bool marker_failed;
             if (!confirm_disc(c, it, &vdone, &marker_failed)) {
                 if (marker_failed)
-                    return fail_io(c, "Falha ao registrar a conclusao do disco. Ele permanece pendente.");
-                return fail_io(c, "Nao foi possivel confirmar o disco gravado. Ele permanece pendente para a proxima tentativa.");
+                    return fail_io(c, "Could not record that the Disc finished. It stays pending.");
+                return fail_io(c, "Could not confirm the written Disc. It stays pending for the next attempt.");
             }
         }
-        if (c->w->prog && !disc_progress(c, done, "Concluido: ", d))
-            return fail(c, "Gravacao cancelada. Discos concluidos serao aproveitados ao retomar nesta sessao.");
+        if (c->w->prog && !disc_progress(c, done, "Done: ", d))
+            return fail(c, "Write cancelled. Finished Discs will be reused when you resume in this session.");
     }
     return true;
 }
@@ -494,7 +495,7 @@ static bool commit(Ctx *c, uint64_t need)
     uint8_t cfg[MH_V2_SLOT], hdr[MH_V2_HDR_SLOT];
     uint64_t lba_out = 0, music = c->w->music_size;
 
-    if (!mh_io_flush(c->io, 0)) return fail(c, "Falha ao confirmar os metadados do SD.");
+    if (!mh_io_flush(c->io, 0)) return fail(c, "Could not confirm the card metadata.");
     mh_sha1_init(&msha);
     for (i = 0; i < c->menu_sectors; i++) {
         const uint8_t *sec = c->menu + (size_t)i * MH_V2_SECTOR;
@@ -503,7 +504,7 @@ static bool commit(Ctx *c, uint64_t need)
         mh_sha1_update(&msha, sec, MH_V2_SECTOR);
     }
     if (!c->w->music || music < 1 || music > MH_V2_MUSIC_MAX)
-        return fail(c, "Musica Umbrella incorporada invalida.");
+        return fail(c, "The built-in Umbrella music is invalid.");
     mh_v2_cfg_encode((uint32_t)music, mh_crc32(c->w->music, (size_t)music), cfg);
     memcpy(c->zone + MH_V2_CFG_OFF, cfg, MH_V2_CFG_SIZE);
     memcpy(c->zone + MH_V2_MUSIC_OFF, c->w->music, (size_t)music);
@@ -525,33 +526,35 @@ static bool commit(Ctx *c, uint64_t need)
     memcpy(c->zone + MH_V2_HDR_B_OFF, hdr, MH_V2_HDR_SLOT);
     memcpy(c->zone + MH_V2_HDR_A_OFF, hdr, MH_V2_HDR_SLOT);
 
-    if (c->w->prog && !progress(c, 0, MH_V2_FIXED_ZONE, "Atualizando tabelas e artes do V2"))
+    mh_v2_set_phase(c->w->prog, MH_V2_PHASE_UPDATING_TABLES, 0, 0);
+    if (c->w->prog && !progress(c, 0, MH_V2_FIXED_ZONE, "Updating V2 tables and art"))
         return fail(c, NULL);
     if (!mh_io_sync_blocks_verified(c->io, MH_V2_BODY_OFF, c->zone + MH_V2_BODY_OFF, MH_V2_BODY_SIZE,
-                                    c->w->prog, "Sincronizando tabelas, menu e artes", &lba_out)) {
+                                    c->w->prog, "Syncing tables, menu and art", &lba_out)) {
         MhWbuf t;
         mh_wbuf_init(&t);
-        mh_wbuf_puts(&t, "Falha persistente ao sincronizar a zona fixa V2 no bloco SD LBA ");
+        mh_wbuf_puts(&t, "Persistent failure syncing the V2 fixed zone at card LBA ");
         mh_wbuf_u64(&t, lba_out);
-        mh_wbuf_puts(&t, ". Nenhuma escrita de controle excedeu 512 bytes; troque o leitor USB se a falha se repetir.");
+        mh_wbuf_puts(&t, ". No control write exceeded 512 bytes; replace the USB reader if the failure repeats.");
         fail(c, mh_wbuf_cstr(&t));
         mh_wbuf_free(&t);
         return false;
     }
     if (!mh_io_compare_bytes(c->io, MH_V2_BODY_OFF, c->zone + MH_V2_BODY_OFF, MH_V2_BODY_SIZE, c->w->prog,
-                             "Verificando tabelas e artes"))
-        return fail(c, "A verificacao da zona fixa V2 divergiu.");
-    if (c->w->prog && !progress(c, 0, 1, "Finalizando biblioteca do SD"))
-        return fail(c, "Finalizacao cancelada. Reaplique nesta sessao para concluir.");
+                             "Verifying tables and art"))
+        return fail(c, "Verification of the V2 fixed zone found a mismatch.");
+    mh_v2_set_phase(c->w->prog, MH_V2_PHASE_COMMITTING_HEADER, 0, 0);
+    if (c->w->prog && !progress(c, 0, 1, "Finalizing the card library"))
+        return fail(c, "Finalization cancelled. Apply again in this session to finish.");
     if (!mh_v2_publish_header_slot(c->io, MH_V2_HDR_B_OFF, c->zone + MH_V2_HDR_B_OFF))
-        return fail(c, "O corpo V2 foi relido, mas o leitor USB nao confirmou a publicacao setorial do header B. O cartao permanece sem commit para impedir boot inconsistente.");
+        return fail(c, "The V2 body was read back, but the USB reader did not confirm the sector-level publication of header B. The card stays uncommitted to prevent an inconsistent boot.");
     if (!mh_v2_publish_header_slot(c->io, MH_V2_HDR_A_OFF, c->zone))
-        return fail(c, "O header B foi publicado e relido, mas o header A falhou. O cartao permanece recuperavel pelo backup B; troque o leitor USB e reaplique.");
+        return fail(c, "Header B was published and read back, but header A failed. The card can still be recovered from backup B; replace the USB reader and apply again.");
     if (!mh_io_compare_bytes(c->io, 0, c->zone, MH_V2_BODY_OFF, NULL, ""))
-        return fail(c, "Readback dos headers V2 divergiu.");
+        return fail(c, "Read-back of the V2 headers found a mismatch.");
     if (path_nonempty(c->path)) {
         if (ftruncate(c->io->fd, (off_t)need) != 0 || !mh_io_flush(c->io, 0))
-            return fail(c, "Falha ao finalizar o tamanho da imagem V2.");
+            return fail(c, "Could not finalize the size of the V2 image.");
     }
     if (c->res) {
         c->res->ok = 1;
@@ -560,7 +563,12 @@ static bool commit(Ctx *c, uint64_t need)
         c->res->discs = (uint16_t)c->discs;
         c->res->size = need;
         mh_str_copy(c->res->msg, MH_V2W_MSG_MAX,
-                    "PSXRAW V2 concluido. Novos discos gravados e confirmados; discos existentes preservados.");
+                    "PSXRAW V2 finished. New Discs written and confirmed; existing Discs preserved.");
+    }
+    /* A card write is not over yet: the SD front end verifies it and reports DONE itself. */
+    if (c->w->prog && path_nonempty(c->path)) {
+        mh_v2_set_phase(c->w->prog, MH_V2_PHASE_DONE, 0, 0);
+        progress(c, 1, 1, "Done");
     }
     return true;
 }
@@ -578,14 +586,14 @@ bool mh_v2_write_handle_direct(const MhV2Writer *w, MhProject *p, MhIo *io, int3
 
     if (res) memset(res, 0, sizeof *res);
     if (!io || io->fd < 0 || !p || !w) {
-        if (res) mh_str_copy(res->msg, MH_V2W_MSG_MAX, "Destino direto V2 invalido.");
+        if (res) mh_str_copy(res->msg, MH_V2W_MSG_MAX, "Invalid direct V2 target.");
         return false;
     }
     mh_ioerr_clear(io->err);
     if (!mh_v2_preflight_serials(p, res)) return false;
     c = mh_calloc(sizeof *c);
     if (!c) {
-        if (res) mh_str_copy(res->msg, MH_V2W_MSG_MAX, "Memoria insuficiente para preparar a gravacao V2.");
+        if (res) mh_str_copy(res->msg, MH_V2W_MSG_MAX, "Not enough memory to prepare the V2 write.");
         return false;
     }
     c->w = w;
@@ -598,7 +606,7 @@ bool mh_v2_write_handle_direct(const MhV2Writer *w, MhProject *p, MhIo *io, int3
     c->zone = mh_calloc(MH_V2_FIXED_ZONE);
     c->tbl = mh_alloc(MH_V2_PKG_META_BYTES);
     if (!c->zone || !c->tbl) {
-        if (res) mh_str_copy(res->msg, MH_V2W_MSG_MAX, "Memoria insuficiente para preparar a gravacao V2.");
+        if (res) mh_str_copy(res->msg, MH_V2W_MSG_MAX, "Not enough memory to prepare the V2 write.");
         goto out;
     }
     if (!prepare_menu(c)) {
@@ -618,14 +626,15 @@ bool mh_v2_write_handle_direct(const MhV2Writer *w, MhProject *p, MhIo *io, int3
                 goto out;
             }
     }
-    if (w->prog && !progress(c, 0, c->to_write, "Iniciando gravacao dos discos pendentes")) {
-        fail(c, "Operacao cancelada antes de gravar.");
+    mh_v2_set_phase(w->prog, MH_V2_PHASE_PREPARING, 0, 0);
+    if (w->prog && !progress(c, 0, c->to_write, "Starting to write the pending Discs")) {
+        fail(c, "Operation cancelled before writing.");
         goto out;
     }
     need = (c->max_end1 > c->max_end2 ? c->max_end1 : c->max_end2) << 9;
     if (need < MH_V2_FIXED_ZONE) need = MH_V2_FIXED_ZONE;
     if (capacity < need) {
-        fail(c, "Os jogos nao cabem no destino selecionado.");
+        fail(c, "The games do not fit on the selected target.");
         goto out;
     }
 
@@ -638,14 +647,14 @@ bool mh_v2_write_handle_direct(const MhV2Writer *w, MhProject *p, MhIo *io, int3
         }
     }
     if (!mh_v2_invalidate_header_slot(io, MH_V2_HDR_A_OFF)) {
-        fail(c, "O leitor USB nao confirmou nem releu a invalidacao de 512 bytes do header A. Nenhum outro metadado foi alterado; troque o leitor USB antes de tentar novamente.");
+        fail(c, "The USB reader did not confirm or read back the 512-byte invalidation of header A. No other metadata was changed; replace the USB reader before trying again.");
         goto out;
     }
     if (!mh_v2_invalidate_header_slot(io, MH_V2_HDR_B_OFF)) {
-        const char *m = "O leitor USB falhou ao invalidar o header B. O destino ja nao possuia header recuperavel; troque o leitor antes de nova tentativa.";
+        const char *m = "The USB reader failed to invalidate header B. The target had no recoverable header already; replace the reader before trying again.";
         if (have_backup) {
             mh_v2_publish_header_slot(io, MH_V2_HDR_A_OFF, backup);
-            m = "O leitor USB falhou ao invalidar o header B; o header A anterior foi restaurado e relido. Troque o leitor USB antes de tentar novamente.";
+            m = "The USB reader failed to invalidate header B; the previous header A was restored and read back. Replace the USB reader before trying again.";
         }
         fail(c, m);
         goto out;
@@ -653,7 +662,7 @@ bool mh_v2_write_handle_direct(const MhV2Writer *w, MhProject *p, MhIo *io, int3
     memset(wip, 0, sizeof wip);
     memcpy(wip, MH_V2_WIP_MAGIC, 7);
     if (!mh_io_write_block_verified(io, 0, wip)) {
-        fail(c, "Falha ao iniciar a transacao no SD.");
+        fail(c, "Could not start the transaction on the card.");
         goto out;
     }
     if (!write_discs(c)) goto out;

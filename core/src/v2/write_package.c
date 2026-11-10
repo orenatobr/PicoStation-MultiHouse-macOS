@@ -6,7 +6,7 @@
 /* The 0x6400 byte head of a package: track map "PSTTRK1" (+0), cheat blob (+0xA00, up to
  * 0x2800 bytes, blocks 5..0x18), the reserved 0xA00 "extra" slot (blocks 0x19..0x1D, zero,
  * record field extra_lba) and the Disc art (+0x3C00 = block 0x1E, exactly 0x2800 bytes). */
-#define TRK_FAIL "Nao foi possivel montar a Track Table deste disco."
+#define TRK_FAIL "Could not build this Disc's Track Table."
 
 static bool sbi_ok(const uint8_t *p, uint64_t len)
 {
@@ -26,7 +26,7 @@ bool mh_v2_build_package_metadata(const MhDisc *d, uint8_t rec[MH_V2_DISC_SIZE],
 
     if (err && errn) err[0] = 0;
     if (!out || !rec || !d) {
-        mh_str_copy(err, errn, "Metadados de package invalidos.");
+        mh_str_copy(err, errn, "Invalid package metadata.");
         return false;
     }
     memset(out, 0, MH_V2_PKG_META_BYTES);
@@ -109,7 +109,7 @@ bool mh_v2_build_package_metadata(const MhDisc *d, uint8_t rec[MH_V2_DISC_SIZE],
         if (!mh_cheat_profile_serialize(d->cheats, 2, &blob, &len, err, errn) ||
             len > MH_V2_PKG_CHEAT_BYTES) {
             mh_free(blob);
-            if (!err || err[0] == 0) mh_str_copy(err, errn, "Os cheats deste disco excedem a area fixa.");
+            if (!err || err[0] == 0) mh_str_copy(err, errn, "This Disc's cheats exceed the fixed area.");
             return false;
         }
         if (blob && len) memcpy(out + 0xa00, blob, len);
@@ -121,7 +121,7 @@ bool mh_v2_build_package_metadata(const MhDisc *d, uint8_t rec[MH_V2_DISC_SIZE],
         uint64_t asz = 0;
         if (!mh_read_entire_file(d->cd_art_path, &art, &asz) || asz != MH_V2_ART_SIZE) {
             free(art);
-            mh_str_copy(err, errn, "A Disc Art nao possui exatamente 10.240 bytes.");
+            mh_str_copy(err, errn, "The Disc art is not exactly 10,240 bytes.");
             return false;
         }
         memcpy(out + 0x3c00, art, MH_V2_ART_SIZE);

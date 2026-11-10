@@ -8,9 +8,9 @@ bool mh_v2_serial_preflight_error(MhV2Result *res, const MhCase *c, int disc_ind
 {
     MhWbuf w;
     mh_wbuf_init(&w);
-    mh_wbuf_puts(&w, "Gravacao nao iniciada. Case: ");
+    mh_wbuf_puts(&w, "Write not started. Case: ");
     mh_wbuf_puts(&w, c->title);
-    mh_wbuf_puts(&w, "\r\nDisco ");
+    mh_wbuf_puts(&w, "\r\nDisc ");
     mh_wbuf_u32(&w, (uint32_t)(disc_index + 1));
     mh_wbuf_puts(&w, ": ");
     if (!d) {
@@ -22,13 +22,13 @@ bool mh_v2_serial_preflight_error(MhV2Result *res, const MhCase *c, int disc_ind
         mh_wbuf_puts(&w, "\r\n");
         mh_wbuf_puts(&w, msg);
         mh_path_basename(d->nfiles != 0 ? d->files[0].path : d->source_path, base, sizeof base);
-        mh_wbuf_puts(&w, "\r\nArquivo: ");
+        mh_wbuf_puts(&w, "\r\nFile: ");
         mh_wbuf_puts(&w, base);
     }
     if (res) {
         res->ok = 0;
         mh_str_copy(res->msg, MH_V2W_MSG_MAX,
-                    w.data ? w.data : "Identificacao nao resolvida; gravacao nao iniciada.");
+                    w.data ? w.data : "Identification not resolved; write not started.");
     }
     mh_wbuf_free(&w);
     return false;
@@ -42,22 +42,22 @@ bool mh_v2_preflight_serials(const MhProject *p, MhV2Result *res)
         const MhCase *c = &p->cases[ci];
         if (!c->in_use) continue;
         if (c->disc_count - 1u > 4u)
-            return mh_v2_serial_preflight_error(res, c, 0, NULL, "Quantidade de discos invalida.");
+            return mh_v2_serial_preflight_error(res, c, 0, NULL, "Invalid number of Discs.");
         for (j = 0; j < c->disc_count; j++) {
             const MhDisc *d = c->discs[j];
-            if (!d) return mh_v2_serial_preflight_error(res, c, (int)j, NULL, "Disco ausente.");
+            if (!d) return mh_v2_serial_preflight_error(res, c, (int)j, NULL, "Disc is missing.");
             if (d->kind == MH_DISC_KIND_CUE && d->verified == 0 && d->verified_aux == 0)
                 return mh_v2_serial_preflight_error(res, c, (int)j, d,
-                                                    "Este CUE/BIN ainda nao foi preparado ao ser adicionado.");
+                                                    "This CUE/BIN was not prepared when it was added.");
             if (d->verified != 0) {
                 if (d->verify_issues & 0x20)
                     return mh_v2_serial_preflight_error(
                         res, c, (int)j, d,
-                        "Padding RAW invalido; restaure a partir do CUE/BIN para manter o formato RAW.");
+                        "Invalid RAW padding; restore it from the CUE/BIN to keep the RAW format.");
                 if ((~d->verify_accepted & d->verify_issues) != 0)
                     return mh_v2_serial_preflight_error(
                         res, c, (int)j, d,
-                        "As observacoes deste disco ainda nao foram aceitas na inclusao ou verificacao manual.");
+                        "The review notes for this Disc were not accepted when adding it or in manual verification.");
             }
         }
     }
@@ -88,23 +88,23 @@ bool mh_v2_all_ready(const MhProject *p, bool *has_observations, char *msg, size
                 if (d->status == MH_DISC_STATUS_NOTE && has_observations) *has_observations = true;
                 continue;
             }
-            mh_wbuf_puts(&w, "Gravacao nao iniciada. Case: ");
+            mh_wbuf_puts(&w, "Write not started. Case: ");
             mh_wbuf_puts(&w, c->title);
-            mh_wbuf_puts(&w, "\r\nDisco ");
+            mh_wbuf_puts(&w, "\r\nDisc ");
             mh_wbuf_u32(&w, j + 1);
             if (d) {
                 char base[MH_PATH_MAX];
                 mh_wbuf_puts(&w, "\r\n");
                 mh_wbuf_puts(&w, d->notes);
                 if (d->verify_text[0]) {
-                    mh_wbuf_puts(&w, "\r\n\r\nUltima verificacao: ");
+                    mh_wbuf_puts(&w, "\r\n\r\nLast verification: ");
                     mh_wbuf_puts(&w, d->verify_text);
                 }
                 mh_path_basename(d->cue_path, base, sizeof base);
                 mh_wbuf_puts(&w, "\r\nCUE: ");
                 mh_wbuf_puts(&w, base);
             }
-            mh_str_copy(msg, msgn, w.data ? w.data : "Estrutura do disco incompleta.");
+            mh_str_copy(msg, msgn, w.data ? w.data : "Incomplete Disc structure.");
             mh_wbuf_free(&w);
             return false;
         }
@@ -144,21 +144,21 @@ void mh_v2_write_confirm_text(const MhProject *p, const char *drive, const char 
     MhWbuf w;
     mh_wbuf_init(&w);
     mh_wbuf_puts(&w, p->card_loaded != 0
-                         ? "As alteracoes serao aplicadas diretamente no cartao PSXRAW V2. Os dados RAW dos jogos preservados permanecerao nos mesmos LBAs.\r\n\r\n"
-                         : "O cartao inteiro sera preparado diretamente como PSXRAW V2.\r\n\r\n");
+                         ? "The changes will be applied directly to the PSXRAW V2 card. The RAW data of preserved games will stay at the same LBAs.\r\n\r\n"
+                         : "The whole card will be prepared directly as PSXRAW V2.\r\n\r\n");
     mh_wbuf_puts(&w, drive);
-    mh_wbuf_puts(&w, "\r\nModelo: ");
+    mh_wbuf_puts(&w, "\r\nModel: ");
     mh_wbuf_puts(&w, model);
     mh_wbuf_puts(&w, "\r\nSerial: ");
-    mh_wbuf_puts(&w, serial && serial[0] ? serial : "nao informado");
+    mh_wbuf_puts(&w, serial && serial[0] ? serial : "not provided");
     mh_wbuf_puts(&w, "\r\nCases: ");
     mh_wbuf_u32(&w, p->case_count);
-    mh_wbuf_puts(&w, "  |  Discos: ");
+    mh_wbuf_puts(&w, "  |  Discs: ");
     mh_wbuf_u32(&w, p->disc_count);
-    mh_wbuf_puts(&w, "\r\nEspaco RAW final aproximado: ");
+    mh_wbuf_puts(&w, "\r\nApproximate final RAW size: ");
     mh_wbuf_size(&w, estimate);
-    mh_wbuf_puts(&w, "\r\nDiscos novos preparados na inclusao; discos ja gravados serao preservados.");
-    mh_wbuf_puts(&w, "\r\n\r\nATENCAO: escolher o PhysicalDrive errado pode apagar outro dispositivo.");
+    mh_wbuf_puts(&w, "\r\nNew Discs were prepared when added; Discs already written will be preserved.");
+    mh_wbuf_puts(&w, "\r\n\r\nWARNING: choosing the wrong disk can erase another device.");
     mh_str_copy(out, outn, w.data ? w.data : "");
     mh_wbuf_free(&w);
 }
@@ -167,13 +167,13 @@ void mh_v2_write_done_text(uint16_t cases, uint16_t discs, uint64_t size, char *
 {
     MhWbuf w;
     mh_wbuf_init(&w);
-    mh_wbuf_puts(&w, "Operacao concluida diretamente no SD.\r\n\r\nCases: ");
+    mh_wbuf_puts(&w, "Operation completed directly on the card.\r\n\r\nCases: ");
     mh_wbuf_u32(&w, cases);
-    mh_wbuf_puts(&w, "\r\nDiscos: ");
+    mh_wbuf_puts(&w, "\r\nDiscs: ");
     mh_wbuf_u32(&w, discs);
-    mh_wbuf_puts(&w, "\r\nTamanho RAW utilizado: ");
+    mh_wbuf_puts(&w, "\r\nRAW size used: ");
     mh_wbuf_size(&w, size);
-    mh_wbuf_puts(&w, "\r\n\r\nO cartao e PSXRAW e nao possui arquivos visiveis no Windows. Nao formate o cartao.");
+    mh_wbuf_puts(&w, "\r\n\r\nThe card is PSXRAW and has no files visible in Finder. Do not format the card.");
     mh_str_copy(out, outn, w.data ? w.data : "");
     mh_wbuf_free(&w);
 }
@@ -184,12 +184,12 @@ void mh_v2_write_failure_text(const char *msg, bool cancelled, char *out, size_t
     MhWbuf w;
     if (cancelled) {
         mh_str_copy(out, outn,
-                    "Cancelado. Mantenha o Manager aberto e reaplique para retomar os discos pendentes.");
+                    "Cancelled. Keep the app open and apply again to resume the pending Discs.");
         return;
     }
     mh_wbuf_init(&w);
     mh_wbuf_puts(&w, msg);
-    mh_wbuf_puts(&w, "\r\n\r\nMantenha o Manager aberto. Reconecte o mesmo destino e reaplique: os discos azuis ja concluidos serao aproveitados. A biblioteca precisa ser finalizada antes do uso no console.");
+    mh_wbuf_puts(&w, "\r\n\r\nKeep the app open. Reconnect the same target and apply again: Discs already finished (shown in blue) will be reused. The library must be finalized before you use the card in the console.");
     mh_str_copy(out, outn, w.data ? w.data : "");
     mh_wbuf_free(&w);
 }

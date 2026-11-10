@@ -37,7 +37,7 @@ typedef struct MhV2Result {
 /* orig: result_msg.part.0: ok = 0 and the text; the other members keep their values. res may
  * be NULL. */
 void mh_v2_result_fail(MhV2Result *res, const char *msg);
-/* orig: result_io_msg.part.0: ok = 0, code, and "<msg> (erro Win32 <code>)" when code != 0. */
+/* orig: result_io_msg.part.0: ok = 0, code, and "<msg> (error <code>)" when code != 0. */
 void mh_v2_result_fail_code(MhV2Result *res, const char *msg, int code);
 
 /* ======================================================================= environment */
@@ -49,7 +49,7 @@ typedef struct MhV2Env {
     const uint8_t *menu;       /* resources/embedded/picostation_menu.bin */
     uint64_t menu_size;        /* multiple of 0x930, 1..93 sectors */
     const MhDb *db;            /* disc database (db_apply_disc, art lookup) */
-    const MhCheatDb *cheats;   /* embedded cheat database, NULL = "banco indisponivel" */
+    const MhCheatDb *cheats;   /* embedded cheat database, NULL = "database unavailable" */
 } MhV2Env;
 
 /* ================================================================== header slot helpers */
@@ -77,8 +77,8 @@ bool mh_sd_write_block_verified(MhIo *io, uint64_t off, const void *block512);
 /* orig: clear_backup_gpt_tail @0x140010d30. dev_size: size of the card in bytes, used: bytes
  * covered by the image/library. If the last block of the card starts with "EFI PART" every
  * non zero 512-byte block of the last 1 MiB beyond `used` is zeroed (verified). Texts:
- * "Nao foi possivel verificar o ultimo setor do SD.", "Falha ao ler a area do GPT de backup.",
- * "Falha ao remover um setor do GPT de backup com readback de 512 bytes." */
+ * "Could not check the last sector of the card.", "Could not read the backup GPT area.",
+ * "Could not remove a backup GPT sector with a 512-byte read-back." */
 bool mh_clear_backup_gpt_tail(MhIo *io, uint64_t dev_size, uint64_t used, char *err, size_t errn);
 
 /* orig: compare_region @0x140012620. Compares [off, off+len) of two devices/files in 256 KiB
@@ -144,8 +144,8 @@ bool mh_v2_confirm_session_marker(MhIo *io, const MhDisc *d, uint64_t card_bytes
 /* orig: v2_confirm_resume_target @0x140035680. Before writing: every disc flagged
  * MH_DF_KEEP_PACKAGE that belongs to this target (disk number or image path) must still
  * show its marker. disk_number is -1 for an image file. path may be NULL / "" for a card.
- * Failure text: "O destino nao corresponde ao ponto de retomada. Reconecte o mesmo SD usado
- * nesta sessao." */
+ * Failure text: "The target does not match the resume point. Reconnect the same card used
+ * in this session." */
 bool mh_v2_confirm_resume_target(const MhProject *project, MhIo *io, int32_t disk_number,
                                  const char *path, uint64_t card_bytes, MhV2Result *res);
 
@@ -187,8 +187,8 @@ bool mh_sd_quick_health(const MhDiskInfo *disk, const MhDiskOpts *opts, MhProgre
 /* orig: sd_write_project_direct @0x14002fae0. Writes a project to a card with the writer of
  * v2write.h: identity check, size check, unmount + open, mh_v2_prepare_write, resume target
  * check, backup GPT tail, mh_v2_write_handle_direct, header A check, close, reopen and verify
- * the headers. verify_full only selects the final text ("... verificado integralmente." or
- * "... modo rapido ..."). err gets the message of success or failure. */
+ * the headers. verify_full only selects the final text ("... fully verified." or
+ * "... quick mode ..."). err gets the message of success or failure. */
 typedef struct MhV2Writer MhV2Writer;
 bool mh_sd_write_project_direct(const MhDiskInfo *disk, const MhDiskOpts *opts, MhProject *project,
                                 bool verify_full, const MhV2Writer *w, char *err, size_t errn,
@@ -200,8 +200,8 @@ bool mh_sd_write_project_direct(const MhDiskInfo *disk, const MhDiskOpts *opts, 
  * "<dst stem>_BIN_EDC_ECC/BIN_<n>.bin" with the EDC/ECC of every data sector recomputed, and
  * a CUE at dst_cue that points at the copies. The source is never modified. Returns false
  * with err set (and nothing left on disk) when the copy fails, is cancelled, the source
- * changed since verification, or no sector needed a change ("Nenhum codigo EDC/ECC precisou
- * ser alterado."). Needs d->verified, d->verify_sha1 and the verify_issues bits 0x40/0x80. */
+ * changed since verification, or no sector needed a change ("No EDC/ECC code needed to
+ * change."). Needs d->verified, d->verify_sha1 and the verify_issues bits 0x40/0x80. */
 bool mh_manager_recode_copy(const MhDisc *d, const char *dst_cue, MhProgress *prog, char *err,
                             size_t errn);
 
