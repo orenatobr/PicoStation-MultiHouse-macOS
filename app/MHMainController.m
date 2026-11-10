@@ -500,6 +500,14 @@ static NSString *case_sidebar_title(const MhCase *c) {
     return stem.length ? stem : stored;
 }
 
+/* Disc name shown in the UI: the .cue name as written, unless the user typed a name. */
+static NSString *disc_display_name(const MhDisc *d) {
+    NSString *stored = MHStr(d->name);
+    if ((d->flags & MH_DF_USER_NAMED) || !d->cue_path[0]) return stored;
+    NSString *stem = MHStr(d->cue_path).lastPathComponent.stringByDeletingPathExtension;
+    return stem.length ? stem : stored;
+}
+
 /* Widen the sidebar so the longest title shows in full (cell = thumbnail + text + status chip + insets). */
 - (void)fitSidebarToTitles {
     /* the selected row draws heavier text, so measure semibold to never truncate */
@@ -561,7 +569,7 @@ static NSString *case_sidebar_title(const MhCase *c) {
             MHLibRow *r = [[MHLibRow alloc] init];
             r.param = i;
             r.position = i + 1;
-            r.title = MHStr(d ? d->name : "");
+            r.title = d ? disc_display_name(d) : @"";
             r.serial = MHStr(d ? d->serial : "");
             r.artPath = MHStr(d ? d->cd_art_path : "");
             r.count = d ? d->ntracks : 0;
@@ -593,10 +601,10 @@ static NSString *case_sidebar_title(const MhCase *c) {
     MhDisc *d = _app.currentDisc;
     BOOL enAddDisc = NO, enCase = NO, enDisc = NO;
     _suppressEdit = YES;
-    NSString *ct = c ? MHStr(c->title) : @"";
+    NSString *ct = c ? case_sidebar_title(c) : @"";
     if (![_fCase.stringValue isEqualToString:ct] && _window.firstResponder != _fCase.currentEditor) _fCase.stringValue = ct;
     if (![_fCaseInsp.stringValue isEqualToString:ct] && _window.firstResponder != _fCaseInsp.currentEditor) _fCaseInsp.stringValue = ct;
-    NSString *dn = d ? MHStr(d->name) : @"";
+    NSString *dn = d ? disc_display_name(d) : @"";
     if (![_fDisc.stringValue isEqualToString:dn] && _window.firstResponder != _fDisc.currentEditor) _fDisc.stringValue = dn;
     _insp.btnCheats.title = [NSString stringWithFormat:@"Cheats (%u)…", d && d->cheats ? d->cheats->count : 0];
     _insp.btnCheats.accessibilityLabel = [NSString stringWithFormat:@"Cheats, %u", d && d->cheats ? d->cheats->count : 0];
@@ -825,8 +833,16 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
         [self refreshFields];
         return;
     }
-    if (f == _fCase || f == _fCaseInsp) [self applyCaseName:f.stringValue];
-    else if (f == _fDisc) [self applyDiscName:f.stringValue];
+    /* untouched fields show the .cue name; do not write its normalised form back */
+    MhCase *c = _app.currentCase;
+    MhDisc *d = _app.currentDisc;
+    if (f == _fCase || f == _fCaseInsp) {
+        if (c && [f.stringValue isEqualToString:case_sidebar_title(c)]) return;
+        [self applyCaseName:f.stringValue];
+    } else if (f == _fDisc) {
+        if (d && [f.stringValue isEqualToString:disc_display_name(d)]) return;
+        [self applyDiscName:f.stringValue];
+    }
 }
 
 - (void)applyCaseName:(NSString *)text {
