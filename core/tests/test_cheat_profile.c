@@ -699,6 +699,7 @@ static void test_legacy_and_refs(void)
 
 static void test_restore_and_combined(void)
 {
+    mh_cheat_profile_active_stats(NULL, NULL, NULL, NULL, NULL); /* NULL is an empty profile */
     MhCheatProfile *fresh = NULL, *saved = NULL, *other = NULL, *cust = mh_cheat_profile_new();
     uint32_t i;
     CHECK(mh_cheat_profile_build_exact_catalog(&g_db, 0, "S", &saved, err, sizeof err));

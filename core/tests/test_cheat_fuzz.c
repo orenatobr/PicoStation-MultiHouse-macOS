@@ -29,6 +29,7 @@ static uint64_t g_blob_len;
 static MhCheatDb g_db;
 static char err[512];
 static int g_scale = 1;
+static unsigned g_imp_ok, g_imp_bad;
 static unsigned g_acc[8], g_rej[8]; /* per blob version: accepted / rejected by deserialize */
 
 static uint64_t rs = 0x9E3779B97F4A7C15ull;
@@ -417,6 +418,7 @@ static void fuzz_text(const char *dir)
         if (rn(3) == 0) CHECK(mh_cheat_profile_add_custom(p, "BASE", (const uint8_t[]){0x30, 0x80, 0x12, 0x34, 0, 1}, 1, 0));
         {
             int r = mh_cheat_profile_import_text_dialect(p, path, dialects[rn(5)], &imp, err, sizeof err);
+            (r ? &g_imp_ok : &g_imp_bad)[0]++;
             if (r) {
                 char e2[256];
                 CHECK(imp >= 1 && p->count >= 1);
@@ -445,6 +447,49 @@ static void fuzz_text(const char *dir)
         free(b);
     }
     unlink(path);
+}
+
+/* ---- 5. database queries with arbitrary indexes and strings ---------------------------------------------- */
+static void fuzz_queries(void)
+{
+    unsigned it, iters = 20000u * (unsigned)g_scale;
+    for (it = 0; it < iters; it++) {
+        uint32_t t = rn(4) ? rn(1100) : intr(), v = rn(4) ? rn(1100) : intr(), e = rn(4) ? rn(150) : intr();
+        char out[300], f[40];
+        MhCheatEntryInfo ei;
+        MhCheatVariantInfo vi;
+        MhCheatEntry ce;
+        uint32_t found;
+        size_t k, fl = rn(24);
+        for (k = 0; k < fl; k++) f[k] = (char)(rn(5) ? 0x20 + rn(0x5f) : rnd());
+        f[fl] = 0;
+        (void)mh_cheat_db_title(&g_db, t, out, 1 + rn(sizeof out));
+        (void)mh_cheat_db_title_variant_count(&g_db, t);
+        (void)mh_cheat_db_title_variant_at(&g_db, t, (unsigned)rn(4), &vi);
+        (void)mh_cheat_db_variant_info(&g_db, v, &vi);
+        (void)mh_cheat_db_entry_info(&g_db, v, e, &ei);
+        (void)mh_cheat_db_entry_text(&g_db, v, e, (int)rn(7) - 1, out, 1 + rn(sizeof out));
+        (void)mh_cheat_db_string(&g_db, rn(2) ? rn(24000) : intr(), out, 1 + rn(sizeof out));
+        (void)mh_cheat_db_title_matches(&g_db, t, f);
+        (void)mh_cheat_db_find_title_normalized(&g_db, f, &found);
+        (void)mh_cheat_db_find_title_for_disc(&g_db, f, &found);
+        (void)mh_cheat_filter_match(out, f);
+        if (mh_cheat_db_copy_entry(&g_db, v, e, &ce)) {
+            CHECK(ce.lines && ce.nlines >= 1 && ch_lines_structure_ok(ce.lines, ce.nlines));
+            mh_cheat_entry_clear(&ce);
+        }
+        if (it % 50 == 0) {
+            MhCheatProfile *p = mh_cheat_profile_new(), *q = NULL;
+            (void)mh_cheat_profile_add_audited(p, &g_db, v, e);
+            (void)mh_cheat_profile_add_catalog_entry(p, &g_db, v, e, rn(2) ? 0x1400 : 0x2800, err, sizeof err);
+            (void)mh_cheat_profile_validate(p, err, sizeof err);
+            if (mh_cheat_profile_build_exact_catalog(&g_db, t, "SLUS-00001", &q, err, sizeof err)) {
+                CHECK(mh_cheat_profile_validate(q, err, sizeof err));
+                mh_cheat_profile_free(q);
+            }
+            mh_cheat_profile_free(p);
+        }
+    }
 }
 
 /* giant inputs: lines over 511 units, files over 4 MiB, many blocks, many lines */
@@ -511,10 +556,12 @@ int main(void)
     fuzz_blob();
     fuzz_lz4();
     fuzz_db_image();
+    fuzz_queries();
     hostile_files(tmpl);
     fuzz_text(tmpl);
     rmdir(tmpl);
     printf("test_cheat_fuzz: %d checks, no crash (blobs accepted/rejected: v4 %u/%u, v5 %u/%u, v6 %u/%u)\n", g_checks,
            g_acc[4], g_rej[4], g_acc[5], g_rej[5], g_acc[6], g_rej[6]);
+    printf("test_cheat_fuzz: imports accepted %u, rejected %u\n", g_imp_ok, g_imp_bad);
     return 0;
 }
