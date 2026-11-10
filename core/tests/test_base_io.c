@@ -160,6 +160,14 @@ static void test_io(void)
     fill(b, SZ, 12);
 
     CHECK(!mh_io_open(&io, P("nonexistent"), MH_IO_READ, false, NULL) && io.fd == -1);
+    /* Writers never open a device node: a path typed as /dev/rdiskN must not reach a disk.
+     * /dev/null is a harmless character device standing in for it. */
+    CHECK(!mh_io_open(&io, "/dev/null", MH_IO_RDWR, true, NULL) && io.fd == -1);
+    CHECK(!mh_io_open(&io, "/dev/null", MH_IO_CREATE, true, NULL) && io.fd == -1);
+    CHECK(mh_io_open(&io, "/dev/null", MH_IO_READ, false, NULL));
+    mh_io_close(&io);
+    CHECK(!mh_write_entire_file("/dev/null", "x", 1));
+    CHECK(mh_write_entire_file(P("src.bin"), "x", 1) && !mh_copy_file_safe(P("src.bin"), "/dev/null"));
     CHECK(mh_io_open(&io, P("img.bin"), MH_IO_CREATE, true, NULL));
     CHECK(mh_io_write(&io, 0, a, SZ));
     CHECK(mh_io_flush(&io, 0));
