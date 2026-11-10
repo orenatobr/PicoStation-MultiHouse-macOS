@@ -1,6 +1,7 @@
 /* disc module tests: serial recovery (synthetic ISO images), CUE parsing and writing, the
  * project model, the embedded database and real fixtures (skipped when absent). The slow
  * Redump verification of full discs is in test_disc_redump.c. */
+#include <time.h>
 #include "disc_util.inc"
 
 /* ======================================================================== serial text */
@@ -357,6 +358,37 @@ static void test_recover(void)
     mh_disc_free(d);
     mh_project_clear(proj);
     free(proj);
+}
+
+/* crafted directory loops must terminate quickly */
+static void test_walk_bounds(void)
+{
+    char p[MH_PATH_MAX];
+    MhPsSerial r;
+    Iso iso;
+    IsoFile f[1] = {{"README.TXT;1", "x", 1, NULL}};
+    uint32_t pos;
+    clock_t t0;
+    iso_build(&iso, f, 1, 2352, 0x18, 2, 0);
+    /* root (17) and the sub directory (18) hold ~60 entries each, all pointing to 17 or 18 */
+    for (uint32_t dir = 17; dir <= 18; dir++) {
+        uint8_t *d = iso_user(&iso, dir);
+        pos = 0;
+        pos += dirrec(d + pos, "\0", 1, dir, 2048, 1);
+        pos += dirrec(d + pos, "\1", 1, 17, 2048, 1);
+        for (int i = 0; i < 60 && pos + 40 < 2048; i++) {
+            char nm[8];
+            snprintf(nm, sizeof nm, "D%d", i);
+            pos += dirrec(d + pos, nm, strlen(nm), (i & 1) ? 17 : 18, 2048, 1);
+        }
+    }
+    iso_write(&iso, "loop.bin");
+    tmp_path("loop.bin", p);
+    t0 = clock();
+    (void)mh_psserial_extract(&r, p);
+    CHECK(r.status != MH_PSS_STRONG);
+    CHECK((double)(clock() - t0) / CLOCKS_PER_SEC < 1.0);
+    iso_free(&iso);
 }
 
 /* ====================================================================== CUE parsing */
@@ -1467,6 +1499,7 @@ int main(void)
     test_status_texts();
     test_serial_images();
     test_recover();
+    test_walk_bounds();
     test_msf();
     test_cue_valid();
     test_cue_text();

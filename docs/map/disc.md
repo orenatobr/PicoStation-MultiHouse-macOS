@@ -174,6 +174,7 @@ The region +0x99c8 .. +0x41f47 of the original block is never referenced by any 
 
 ## Deviations and additions
 
+* ISO directory walk (`ps_walk`): the original only limited recursion depth (17), so a crafted BIN with directories pointing at the same or an ancestor extent could blow up exponentially. The port keeps a visited set of directory extents per walk (a repeated extent is skipped, never walked twice) and a budget of 200000 directory records and 50000 sector reads per walk (2048 distinct directories); exceeding it aborts like a read error. Valid discs are unaffected.
 * Paths are UTF-8, 1024 bytes. A CUE name beginning with `/` is taken as an absolute path (the corrected temporary CUE
   that `manager_parse` writes holds absolute paths, which on Windows start with a drive letter). CP1252 is assumed for
   the "ANSI" fallback of `decode_cue`.

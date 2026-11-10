@@ -262,7 +262,12 @@ typedef struct PsIso { /* orig: the 0x20 byte block on extract_mapped's stack */
     uint32_t udo;     /* offset of the 2048 user bytes inside a sector: 0x10, 0x18 or 0 */
     uint32_t volume;  /* PVD volume space size in sectors */
     uint32_t root_lba, root_len;
+    /* walk budget (deviation: the original only limited the depth) */
+    uint32_t visited[2048], nvisited, records, reads;
 } PsIso;
+
+#define WALK_MAX_RECORDS 200000
+#define WALK_MAX_READS 50000
 
 typedef struct PsEntry { /* orig: 0x30c bytes handed to the visitors */
     uint32_t lba, size, is_dir;
@@ -332,8 +337,8 @@ static uint32_t be32(const uint8_t *p) { return p[3] | p[2] << 8 | p[1] << 16 | 
 typedef bool (*Visitor)(PsIso *iso, const PsEntry *e, void *ctx);
 
 /* orig: psserial_walk_directory @0x14002a840 (recursion limit 0x11) */
-static bool ps_walk(PsIso *iso, uint32_t lba, uint32_t len, const char *prefix, int depth, Visitor v,
-                    void *ctx)
+static bool ps_walk_rec(PsIso *iso, uint32_t lba, uint32_t len, const char *prefix, int depth, Visitor v,
+                        void *ctx)
 {
     uint8_t blk[0x800];
     uint32_t off;
@@ -342,6 +347,7 @@ static bool ps_walk(PsIso *iso, uint32_t lba, uint32_t len, const char *prefix, 
         uint32_t chunk = len - off;
         uint32_t pos = 0;
         if (chunk > 0x800) chunk = 0x800;
+        if (++iso->reads > WALK_MAX_READS) return false;
         if (!ps_read_sector(iso, (off >> 11) + lba, blk)) return false;
         while (pos < chunk) {
             const uint8_t *r = blk + pos;
@@ -350,6 +356,7 @@ static bool ps_walk(PsIso *iso, uint32_t lba, uint32_t len, const char *prefix, 
             char nm[256];
             size_t nl;
             if (rl == 0) break;
+            if (++iso->records > WALK_MAX_RECORDS) return false;
             if (rl < 0x22) return false;
             if (pos + rl > chunk || rl < (uint32_t)r[0x20] + 0x21) return false;
             pos += rl;
@@ -385,10 +392,27 @@ static bool ps_walk(PsIso *iso, uint32_t lba, uint32_t len, const char *prefix, 
             }
             mh_str_cat(e.path, sizeof e.path, nm);
             v(iso, &e, ctx);
-            if (e.is_dir && sz != 0 && !ps_walk(iso, ext, sz, e.path, depth + 1, v, ctx)) return false;
+            if (e.is_dir && sz != 0) {
+                bool seen = false;
+                for (uint32_t k = 0; k < iso->nvisited; k++)
+                    if (iso->visited[k] == ext) { seen = true; break; }
+                if (seen) continue; /* same extent as an ancestor or an earlier directory: skip */
+                if (iso->nvisited >= 2048) return false;
+                iso->visited[iso->nvisited++] = ext;
+                if (!ps_walk_rec(iso, ext, sz, e.path, depth + 1, v, ctx)) return false;
+            }
         }
     }
     return true;
+}
+
+/* orig: psserial_walk_directory, with a visited set of directory extents and a budget */
+static bool ps_walk(PsIso *iso, uint32_t lba, uint32_t len, const char *prefix, int depth, Visitor v, void *ctx)
+{
+    iso->nvisited = 1;
+    iso->visited[0] = lba;
+    iso->records = iso->reads = 0;
+    return ps_walk_rec(iso, lba, len, prefix, depth, v, ctx);
 }
 
 static const char *last_component(const char *path)
