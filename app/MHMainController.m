@@ -1344,7 +1344,7 @@ static void hook_attach(void *ctx, MhDisc *d) { mh_v2_auto_attach_cheats(MHApp.s
         case MH_ADD_OK:
             { int sl = res.cas->slot, di = res.disc_index; MHMain(^{ self->_app.curCase = sl; self->_app.curDisc = di; }); }
             if (res.disc_index >= 0 && res.disc_index < res.cas->disc_count)
-                [self fetchDefaultArtForDisc:res.cas->discs[res.disc_index]];
+                [self fetchDefaultArtForDisc:res.cas->discs[res.disc_index] inCase:res.cas];
             return YES;
         case MH_ADD_PARSE_FAILED:
             MHMessage(@"Couldn't Read Disc", err[0] ? MHStr(err) : @"A CUE file could not be parsed.", MHIconError);
@@ -2090,16 +2090,21 @@ static NSString *art_base_url(void) {
     return ok;
 }
 
-/* Gives the disc its default case and disc art, downloading what the local database lacks. Worker thread. */
-- (void)fetchDefaultArtForDisc:(MhDisc *)d {
-    if (!d || !d->serial[0]) return;
+/* Gives the case and the disc their default art, downloading what the local database lacks. Worker thread. */
+- (void)fetchDefaultArtForDisc:(MhDisc *)d inCase:(MhCase *)c {
+    if (!d || !c || !d->serial[0]) return;
     char alias[16];
     NSMutableArray<NSString *> *serials = [NSMutableArray arrayWithObject:@(d->serial)];
     if (mh_db_resolve_alias(_app.db, d->serial, alias, sizeof alias)) [serials addObject:@(alias)];
     for (int isCase = 1; isCase >= 0; isCase--) {
         if (d->flags & (isCase ? MH_DF_CASE_ART : MH_DF_CD_ART)) continue;
         for (NSString *s in serials)
-            if ([self fetchArtNamed:s suffix:isCase ? @"-CASE.art" : @"-CD.art"]) { mh_db_find_art(_app.db, d, isCase); break; }
+            if ([self fetchArtNamed:s suffix:isCase ? @"-CASE.art" : @"-CD.art"]) {
+                mh_db_find_art(_app.db, d, isCase);
+                /* the add already copied the disc art to the case; a late download has to do the same */
+                if (isCase && !c->art_path[0] && d->case_art_path[0]) mh_str_copy(c->art_path, sizeof c->art_path, d->case_art_path);
+                break;
+            }
     }
 }
 
