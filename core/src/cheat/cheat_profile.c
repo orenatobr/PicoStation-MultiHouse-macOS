@@ -337,6 +337,7 @@ int mh_cheat_profile_validate_hardware(const MhCheatProfile *p, char *err, size_
 void mh_cheat_profile_active_stats(const MhCheatProfile *p, uint32_t *enabled, uint32_t *lines,
                                    uint32_t *cost, uint32_t *has_audited)
 {
+    if (!p) return;
     for (uint32_t i = 0; i < p->count; i++) {
         const MhCheatEntry *e = &p->entries[i];
         uint32_t c = 0;
