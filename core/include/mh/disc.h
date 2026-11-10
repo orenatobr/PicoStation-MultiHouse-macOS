@@ -285,7 +285,8 @@ bool mh_cue_scan_serial_file(const char *bin_path, char *out, size_t n);
 /* orig: msf. "mm:ss:ff" (ss < 60, ff < 75) to frames; trailing text is ignored. */
 bool mh_cue_msf(const char *s, uint32_t *frames);
 /* orig: decode_cue. Reads the file and returns it as NUL terminated UTF-8 text in *text (free
- * with mh_free): UTF-8 when valid, otherwise Windows-1252. False for unreadable or >= 2 GiB. */
+ * with mh_free): UTF-8 when valid, otherwise Windows-1252. False for unreadable, empty (like the original) or
+ * >= 64 MiB (deviation: the original allowed 2 GiB). */
 bool mh_cue_read_text(const char *path, char **text);
 /* orig: cue_count_files. Number of lines starting with "FILE ". */
 int mh_cue_count_files(const char *path);
@@ -295,7 +296,8 @@ int mh_cue_count_files(const char *path);
 MhDisc *mh_cue_parse(const char *cue_path);
 /* orig: cue_rewrite_files. Copies src to dst replacing the first nfiles FILE lines with
  * `FILE "<path>" BINARY` (basename when the BIN is in dst's folder). A NULL or empty
- * paths[i] keeps that line. Lines are re-written with CRLF; blank lines are dropped. */
+ * paths[i] keeps that line. Lines are re-written with CRLF; blank lines are dropped, but a source that ends
+ * with CR/LF gets one empty line (CRLF) at the end, as in the original. */
 bool mh_cue_rewrite_files(const char *src, const char *dst, const char *const *paths, unsigned nfiles);
 /* orig: cue_write_corrected. Writes a CUE built from the disc's file and track tables. */
 bool mh_cue_write_corrected(const MhDisc *d, const char *dst);

@@ -8,6 +8,8 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#define MH_CUE_MAX_BYTES (64u << 20)
+
 static bool is_ws(int c) { return c == 9 || c == 10 || c == 13 || c == 32; } /* mask 0x100002600 */
 
 /* orig: obs_add @0x1400251b0 and the open-coded "if (notes) cat CRLF; cat msg" pairs */
@@ -80,7 +82,9 @@ bool mh_cue_read_text(const char *path, char **text)
     char *out;
     *text = NULL;
     if (!mh_read_entire_file(path, &data, &size)) return false;
-    if (size >= 0x80000000ull) { free(data); return false; }
+    /* MultiByteToWideChar fails for an empty buffer, so the original rejected an empty file;
+     * the size cap is lower than the original 2 GiB (a CUE sheet is a few KB). */
+    if (size == 0 || size >= MH_CUE_MAX_BYTES) { free(data); return false; }
     if (utf8_valid(data, (size_t)size)) {
         out = mh_alloc((size_t)size + 1);
         if (!out) { free(data); return false; }
@@ -111,6 +115,7 @@ static char *next_line(char *p, char **line)
 {
     char *q = p;
     *line = p;
+    if (*q == 0) return NULL; /* empty last line (cue_rewrite_files visits it) */
     while (*q != '\r' && *q != '\n') {
         q++;
         if (*q == 0) return NULL;
@@ -504,7 +509,7 @@ bool mh_cue_rewrite_files(const char *src, const char *dst, const char *const *p
     if (!mh_cue_read_text(src, &text)) return false;
     mh_wbuf_init(&w);
     p = text;
-    while (*p) {
+    for (;;) { /* like the original: a text ending in CR/LF gets one more (empty) line, written as CRLF */
         char *content;
         bool is_file;
         next = next_line(p, &line);

@@ -264,10 +264,14 @@ typedef struct PsIso { /* orig: the 0x20 byte block on extract_mapped's stack */
     uint32_t root_lba, root_len;
     /* walk budget (deviation: the original only limited the depth) */
     uint32_t visited[2048], nvisited, records, reads;
+    uint64_t scan_left; /* bytes of executable content still allowed (deviation, see SCAN_MAX_BYTES) */
 } PsIso;
 
 #define WALK_MAX_RECORDS 200000
 #define WALK_MAX_READS 50000
+/* A hostile image can list 64 "PS-X EXE" files that each claim most of the volume; the original
+ * read all of them. A real executable is under 2 MiB. */
+#define SCAN_MAX_BYTES (256ull << 20)
 
 typedef struct PsEntry { /* orig: 0x30c bytes handed to the visitors */
     uint32_t lba, size, is_dir;
@@ -522,6 +526,8 @@ static bool scan_executable(PsIso *iso, const PsEntry *e, Cands *cands)
     while (off < total) {
         size_t n = total - off > 0x800 ? 0x800 : total - off, len, pos;
         uint32_t sector = (off >> 11) + e->lba;
+        if (iso->scan_left < 0x800) { free(buf); return false; }
+        iso->scan_left -= 0x800;
         if (sector >= iso->volume || !ps_read_sector(iso, sector, tmp)) {
             free(buf);
             return false;
@@ -717,6 +723,7 @@ static uint32_t extract_mapped(MhPsSerial *r, const char *path, uint64_t lba512,
     }
     memset(&iso, 0, sizeof iso);
     iso.f = f;
+    iso.scan_left = SCAN_MAX_BYTES;
     /* PVD: sector 16 as mode 2 form 1 (0x9318), mode 1 (0x9310) or cooked 2048 (0x8000) */
     {
         bool found = false;

@@ -544,7 +544,7 @@ static void test_cue_errors(void)
     put_zero_bin("odd.bin", 2352 * 50 + 1);
     put_zero_bin("empty.bin", 0);
 
-    put_text("e0.cue", "");
+    put_text("e0.cue", "\n");   /* an empty file fails to decode (test_disc_audit.c) */
     d = parse_tmp_cue("e0.cue");
     CHECK_STR(d->notes, "CUE sem FILE/TRACK validos."); CHECK(d->status == MH_DISC_STATUS_ERROR); mh_disc_free(d);
 
