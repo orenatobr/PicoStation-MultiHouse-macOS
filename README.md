@@ -5,8 +5,7 @@ builds the "V2" SD card layout used by the PicoStation Multi House firmware: cas
 GameShark cheats, menu and music, written straight to the SD card.
 
 The original is a Windows x64 program. This repository re-implements it in C11 (core) and AppKit (UI),
-based on reverse engineering the executable. Same data formats, same validation rules, same on-screen
-texts (Portuguese, as in the original).
+based on reverse engineering the executable. Same data formats, same validation rules, the same behavior, with a modern native Mac interface in EN-US.
 
 ## Credits
 
@@ -53,13 +52,21 @@ Everything works without these folders; covers then come from the program's own 
 
 ## Usage
 
-1. Drag game folders or `.cue` files onto the window, or use **+ Adicionar Jogo** and
-   **+ Adicionar Disco**. Each CUE is checked (structure, serial, Redump hash) when
-   "Verificar ao adicionar" is ticked.
-2. Adjust names, cover art, cheats and the menu (the **Menu** button).
-3. Pick the **Cartao SD** and press **CRIAR CARTAO V2**. macOS asks for an administrator password to open
-   the raw disk. You can also save everything as an image (**Imagem**), and open existing V2 images and
-   cards for editing.
+![Library view, light mode](docs/screenshots/library-light.png)
+
+The window has three panes: the **Library** sidebar (one row per case), the discs of the selected case
+in the middle, and an inspector with the cover art, names and cheats on the right. The bottom bar holds
+the card picker and the primary button. Dark mode is supported.
+
+1. Drag game folders or `.cue` files onto the window, or use **Add Game** and **Add Disc** in the
+   toolbar. Each CUE is checked (structure, serial, Redump hash) when "Verify on add" is ticked.
+2. Adjust names, cover art, cheats and the menu (**Menu Settings**). Reorder discs and cases by dragging,
+   or with Move Up and Move Down (option-command-up and option-command-down).
+3. Pick the card in the bottom bar and press **Create V2 Card**. A confirmation sheet asks you to
+   authorize the raw write, and macOS asks for an administrator password to open the raw disk. You can
+   also save everything as an image (**Image** menu), and open existing V2 images and cards for editing.
+
+All commands are also in the menu bar, and the whole UI works from the keyboard.
 
 ### Write safety
 
