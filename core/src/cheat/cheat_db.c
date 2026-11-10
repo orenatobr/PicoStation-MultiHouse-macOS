@@ -177,7 +177,7 @@ int mh_cheat_db_load(MhCheatDb *db, const uint8_t *blob, size_t len)
 
     if (!db) return 0;
     memset(db, 0, sizeof *db);
-    mh_str_copy(db->description, sizeof db->description, "GameShark V5 original incorporado ao Manager");
+    mh_str_copy(db->description, sizeof db->description, "GameShark V5 original embedded in the Manager");
     d = mh_alloc(MH_CHEAT_DB_RAW_SIZE);
     if (!d) {
         db->load_error = 60000;

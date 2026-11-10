@@ -46,7 +46,7 @@ static void test_load_and_integrity(void)
     CHECK(g_db.n_games == 1 && g_db.n_titles == 1004 && g_db.n_variants == 1004);
     CHECK(g_db.n_texts == 10118 && g_db.n_cheats == 10118 && g_db.n_programs == 9891);
     CHECK(mh_cheat_db_active() == &g_db);
-    CHECK_STR(g_db.description, "GameShark V5 original incorporado ao Manager");
+    CHECK_STR(g_db.description, "GameShark V5 original embedded in the Manager");
     CHECK(g_db.sha256[0] == 0x1b && g_db.sha256[31] == 0xa3);
 
     /* a truncated or tampered container is rejected with the original code 60001 */
@@ -231,7 +231,7 @@ static void test_catalogs(void)
             CHECK_STR(p->serial, "SLUS-00001");
             mh_cheat_profile_free(p);
         } else {
-            CHECK_STR(err, "Nenhuma variante auditada cabe com seguranca no PSTCHT1 estendido de 10.240 bytes.");
+            CHECK_STR(err, "No audited variant fits safely in the extended 10,240 byte PSTCHT1.");
             CHECK(p == NULL);
         }
     }

@@ -509,18 +509,18 @@ static void hostile_files(const char *dir)
     b[26 + 512] = '\n';
     write_file(path, b, 26 + 513);
     CHECK(!mh_cheat_profile_import_text(p, path, &imp, err, sizeof err));
-    CHECK(strcmp(err, "A importacao foi cancelada: existe uma linha maior que 511 caracteres.") == 0);
+    CHECK(strcmp(err, "Import canceled: a line is longer than 511 characters.") == 0);
     free(b);
     /* just over 4 MiB, and exactly 4 MiB of comments */
     b = malloc(0x400001);
     memset(b, '#', 0x400001);
     write_file(path, b, 0x400001);
     CHECK(!mh_cheat_profile_import_text(p, path, &imp, err, sizeof err));
-    CHECK(strcmp(err, "Nao foi possivel ler o TXT/CHT.") == 0);
+    CHECK(strcmp(err, "Could not read the TXT/CHT file.") == 0);
     for (size_t i = 0; i < 0x400000; i += 100) b[i] = '\n';
     write_file(path, b, 0x400000);
     CHECK(!mh_cheat_profile_import_text(p, path, &imp, err, sizeof err));
-    CHECK(strcmp(err, "O arquivo nao informa MHDialect.") == 0);
+    CHECK(strcmp(err, "The file does not set MHDialect.") == 0);
     /* a huge number of code lines under one header: the 255 line limit must stop it */
     {
         size_t cap = 0x3f0000, o = 0;
@@ -530,7 +530,7 @@ static void hostile_files(const char *dir)
         while (o + 16 < cap) o += (size_t)snprintf((char *)b + o, 16, "30801234 007F\n");
         write_file(path, b, o);
         CHECK(!mh_cheat_profile_import_text(p, path, &imp, err, sizeof err));
-        CHECK(strcmp(err, "Linha de cheat invalida. Use XXXXXXXX XXXX.") == 0);
+        CHECK(strcmp(err, "Invalid cheat line. Use XXXXXXXX XXXX.") == 0);
         /* thousands of one line blocks */
         o = (size_t)snprintf((char *)b, 64, "MHDialect=V5ORIG_BANK_V01\n");
         while (o + 40 < cap) o += (size_t)snprintf((char *)b + o, 40, "[B%u]\n30801234 007F\n", (unsigned)(o & 0xffff));

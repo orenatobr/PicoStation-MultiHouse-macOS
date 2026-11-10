@@ -173,8 +173,8 @@ int mh_cheat_profile_prepare_hardware(MhCheatProfile *p, const char *serial)
 /* orig: cheat_entry_hardware_note @0x140008fe0 */
 const char *mh_cheat_entry_hardware_note(void)
 {
-    return "Use a regiao e a revisao corretas do jogo. Consulte PT/EN e o codigo original no catalogo. "
-           "Condicoes por botao precisam do controle inicializado pelo jogo.";
+    return "Use the correct game region and revision. See the PT/EN notes and the original code in "
+           "the catalog. Button conditions need the controller to be initialized by the game.";
 }
 
 /* orig: cheat_entry_hardware_exclusion @0x140008fd0 (always 0) */
@@ -227,7 +227,7 @@ unsigned mh_cheat_profile_serialized_size(const MhCheatProfile *p)
 }
 
 /* ---- validation ------------------------------------------------------------------------- */
-#define ERR_SYNTAX "Um cheat contem nome, sintaxe ou formato de codigo nao suportado."
+#define ERR_SYNTAX "A cheat has an unsupported name, syntax or code format."
 
 /* orig: cheat_profile_validate @0x14000fc80 */
 int ch_profile_validate(const MhCheatProfile *p, char *err, size_t errn)
@@ -238,7 +238,7 @@ int ch_profile_validate(const MhCheatProfile *p, char *err, size_t errn)
     if (!p) return 1;
     n = p->count;
     if (n > 0x100) {
-        set_err(err, errn, "O catalogo excede 256 cheats.");
+        set_err(err, errn, "The catalog exceeds 256 cheats.");
         return 0;
     }
     if (n != 0) {
@@ -264,61 +264,61 @@ int ch_profile_validate(const MhCheatProfile *p, char *err, size_t errn)
             }
             fl = e->flags;
             if (fl & 0x80) {
-                set_err(err, errn, "Um cheat possui flags desconhecidas.");
+                set_err(err, errn, "A cheat has unknown flags.");
                 return 0;
             }
             if (((fl & MH_CHEAT_F_CUSTOM) != 0) != ((fl & MH_CHEAT_F_AUDITED) == 0)) {
-                set_err(err, errn, "Cada cheat precisa ser exatamente AUDITED xor CUSTOM.");
+                set_err(err, errn, "Each cheat must be exactly AUDITED xor CUSTOM.");
                 return 0;
             }
             if ((fl & MH_CHEAT_F_MANDATORY) && (fl & 9) != 9) {
-                set_err(err, errn, "Um cheat obrigatorio precisa ser auditado e permanecer ativo.");
+                set_err(err, errn, "A mandatory cheat must be audited and stay enabled.");
                 return 0;
             }
             if (fl & MH_CHEAT_F_AUDITED) {
                 if ((uint8_t)(e->game - 1) > 2 || e->game != p->game || e->variant == NONE32 ||
                     e->variant != p->variant || e->id == NONE32) {
-                    set_err(err, errn, "Um cheat auditado perdeu ou divergiu da proveniencia do header.");
+                    set_err(err, errn, "An audited cheat lost or differs from the header provenance.");
                     return 0;
                 }
                 audited++;
             }
             if ((fl & MH_CHEAT_F_CUSTOM) &&
                 ((fl & MH_CHEAT_F_DB_DEFAULT) || e->game != 0 || e->variant != NONE32 || e->id != NONE32)) {
-                set_err(err, errn, "Um cheat personalizado possui proveniencia/flags oficiais invalidas.");
+                set_err(err, errn, "A custom cheat has invalid official provenance or flags.");
                 return 0;
             }
             total += e->nlines;
             if (total > 0x1fe) {
-                set_err(err, errn, "O catalogo excede 510 linhas de codigo.");
+                set_err(err, errn, "The catalog exceeds 510 code lines.");
                 return 0;
             }
             if (fl & MH_CHEAT_F_ENABLED) {
                 active += e->nlines;
                 if (!ch_v5_program(e->lines, e->nlines, NULL)) {
-                    set_err(err, errn, "Nao foi possivel calcular o custo do programa ativo.");
+                    set_err(err, errn, "Could not compute the cost of the active program.");
                     return 0;
                 }
             }
         }
         if (active > 0x1fe) {
-            set_err(err, errn, "Os cheats ativos excedem o limite interno do perfil. Desative alguns codigos.");
+            set_err(err, errn, "The enabled cheats exceed the internal profile limit. Disable some codes.");
             return 0;
         }
     }
     if (mh_cheat_profile_serialized_size(p) > MH_CHEAT_BLOB_MAX) {
-        set_err(err, errn, "O catalogo de cheats excede a regiao reservada de 10.240 bytes.");
+        set_err(err, errn, "The cheat catalog exceeds the reserved 10,240 byte region.");
         return 0;
     }
     if (audited != 0) {
         if ((uint8_t)(p->game - 1) < 3 && p->title != NONE32 && p->variant != NONE32 &&
             p->db_crc == MH_CHEAT_DB_CRC)
             return 1;
-        set_err(err, errn, "Perfil auditado possui header de proveniencia invalido.");
+        set_err(err, errn, "The audited profile has an invalid provenance header.");
         return 0;
     }
     if (p->game == 0 && p->title == NONE32 && p->variant == NONE32 && p->db_crc == 0) return 1;
-    set_err(err, errn, "Perfil somente CUSTOM deve usar proveniencia sentinela e CRC zero.");
+    set_err(err, errn, "A CUSTOM-only profile must use the sentinel provenance and a zero CRC.");
     return 0;
 }
 
@@ -361,17 +361,17 @@ int mh_cheat_profiles_validate_combined(const MhCheatProfile *a, const MhCheatPr
     if (a) mh_cheat_profile_active_stats(a, &enabled, &lines, &cost_a, &aud_a);
     if (b) mh_cheat_profile_active_stats(b, &enabled, &lines, &cost_b, &aud_b);
     if (enabled >= 0x101) {
-        set_err(err, errn, "Case e disco somam cheats demais. Desative alguns codigos.");
+        set_err(err, errn, "Case and disc have too many cheats combined. Disable some codes.");
         return 0;
     }
     if (lines >= 0x1ff) {
-        set_err(err, errn, "Case e disco excedem o limite interno de linhas. Desative alguns codigos.");
+        set_err(err, errn, "Case and disc exceed the internal line limit. Disable some codes.");
         return 0;
     }
     if (aud_a && aud_b && a && b && (a->variant != b->variant || a->game != b->game)) {
         set_err(err, errn,
-                "Cheats auditados da Case e do disco pertencem a variantes diferentes. Use a variante oficial "
-                "no disco ou mantenha a Case apenas com cheats personalizados.");
+                "Audited cheats on the Case and on the disc belong to different variants. Use the "
+                "official variant on the disc or keep only custom cheats on the Case.");
         return 0;
     }
     return 1;
@@ -439,7 +439,7 @@ int mh_cheat_profile_add_catalog_entry(MhCheatProfile *p, const MhCheatDb *db, u
     if (err && errn) err[0] = 0;
     if (!p || !db || !db->loaded || !mh_cheat_db_variant_info(db, variant, &vi) ||
         !mh_cheat_db_copy_entry(db, variant, entry, &e)) {
-        set_err(err, errn, "Este grupo nao e suportado pelo motor atual.");
+        set_err(err, errn, "This group is not supported by the current engine.");
         return 0;
     }
     for (uint32_t i = 0; i < p->count; i++) {
@@ -453,7 +453,7 @@ int mh_cheat_profile_add_catalog_entry(MhCheatProfile *p, const MhCheatDb *db, u
     }
     if (budget < p->count * 4 + 0x44) {
         mh_cheat_entry_clear(&e);
-        set_err(err, errn, "O grupo inteiro nao cabe. Remova outro grupo da lista preparada antes de adicionar este.");
+        set_err(err, errn, "The whole group does not fit. Remove another group from the prepared list before adding this one.");
         return 0;
     }
     e.flags &= 0xfc; /* prepared, not active */
@@ -464,7 +464,7 @@ int mh_cheat_profile_add_catalog_entry(MhCheatProfile *p, const MhCheatDb *db, u
     if (any_audited) {
         if (p->variant != variant || p->game != vi.game) {
             mh_cheat_entry_clear(&e);
-            set_err(err, errn, "Remova os cheats do titulo anterior antes de adicionar outro jogo original.");
+            set_err(err, errn, "Remove the cheats of the previous title before adding another original game.");
             return 0;
         }
     } else {
@@ -480,7 +480,7 @@ int mh_cheat_profile_add_catalog_entry(MhCheatProfile *p, const MhCheatDb *db, u
         p->db_crc = sv_crc;
         p->title = sv_title;
         p->variant = sv_variant;
-        set_err(err, errn, "O grupo inteiro excede o limite da selecao. Nada foi adicionado.");
+        set_err(err, errn, "The whole group exceeds the selection limit. Nothing was added.");
         return 0;
     }
     return 1;
@@ -544,8 +544,8 @@ int mh_cheat_profile_restore_user_state(MhCheatProfile *fresh, const MhCheatProf
     if (!fresh || !saved) return 1;
     if (fresh->game != saved->game || fresh->variant != saved->variant) {
         set_err(err, errn,
-                "O perfil gravado foi preservado. Outra biblioteca pode ser consultada no editor sem alterar "
-                "suas escolhas.");
+                "The saved profile was kept. Another library can be browsed in the editor without "
+                "changing your choices.");
         return 0;
     }
     /* every audited group the user had must still exist in the new catalog */
@@ -559,7 +559,7 @@ int mh_cheat_profile_restore_user_state(MhCheatProfile *fresh, const MhCheatProf
         }
         if (!found) {
             set_err(err, errn,
-                    "O perfil gravado foi preservado: a nova selecao nao contem todos os grupos anteriores.");
+                    "The saved profile was kept: the new selection does not contain all the previous groups.");
             return 0;
         }
     }
@@ -583,8 +583,8 @@ int mh_cheat_profile_restore_user_state(MhCheatProfile *fresh, const MhCheatProf
         if (!(saved->entries[i].flags & MH_CHEAT_F_CUSTOM)) continue;
         if (!mh_cheat_profile_add_entry(fresh, &saved->entries[i])) {
             set_err(err, errn,
-                    "O catalogo completo e os cheats personalizados nao cabem juntos no bloco RAW. Nada foi "
-                    "descartado.");
+                    "The full catalog and the custom cheats do not fit together in the RAW block. Nothing was "
+                    "discarded.");
             return 0;
         }
     }
@@ -613,7 +613,7 @@ int mh_cheat_profile_restore_user_state(MhCheatProfile *fresh, const MhCheatProf
 }
 
 /* ---- building the catalog of a title ------------------------------------------------------- */
-#define ERR_NOFIT "Nenhuma variante auditada cabe com seguranca no PSTCHT1 estendido de 10.240 bytes."
+#define ERR_NOFIT "No audited variant fits safely in the extended 10,240 byte PSTCHT1."
 
 /* orig: cheat_profile_build_exact_catalog @0x14000ac80 */
 int mh_cheat_profile_build_exact_catalog(const MhCheatDb *db, uint32_t title, const char *serial,
@@ -624,7 +624,7 @@ int mh_cheat_profile_build_exact_catalog(const MhCheatDb *db, uint32_t title, co
     if (out) *out = NULL;
     if (err && errn) err[0] = 0;
     if (!db || !db->loaded || !out) {
-        set_err(err, errn, "Banco de cheats auditado indisponivel.");
+        set_err(err, errn, "The audited cheat database is unavailable.");
         return 0;
     }
     nvar = db->data && title < db->n_titles ? mh_cheat_db_title_variant_count(db, title) : 0;
@@ -697,11 +697,11 @@ int mh_cheat_profile_build_for_disc(const MhCheatDb *db, const char *serial, MhC
     uint32_t title;
     if (out) *out = NULL;
     if (!db || !db->loaded) {
-        set_err(err, errn, "Banco de cheats incorporado indisponivel.");
+        set_err(err, errn, "The embedded cheat database is unavailable.");
         return 0;
     }
     if (serial && *serial && db->crc == MH_CHEAT_DB_CRC && mh_cheat_db_find_title_for_disc(db, serial, &title))
         return mh_cheat_profile_build_exact_catalog(db, title, serial, out, err, errn);
-    set_err(err, errn, "Disco confirmado nao possui catalogo de cheats inequivoco.");
+    set_err(err, errn, "The confirmed disc has no unambiguous cheat catalog.");
     return 0;
 }
