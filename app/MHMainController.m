@@ -169,6 +169,7 @@ static NSString *status_word(unsigned s) { /* the OK / Review / Fixable / Error 
         t.delegate = self;
         t.doubleAction = @selector(rowDoubleClicked:);
         t.target = self;
+        t.allowsMultipleSelection = YES; /* Remove Game and Remove Disc act on every selected row */
         [t registerForDraggedTypes:@[ MHRowPboardType ]];
         [t setDraggingSourceOperationMask:NSDragOperationMove forLocal:YES];
         [t setDraggingSourceOperationMask:NSDragOperationNone forLocal:NO];
@@ -275,7 +276,7 @@ static NSString *status_word(unsigned s) { /* the OK / Review / Fixable / Error 
 #pragma mark - toolbar
 
 - (NSArray<NSToolbarItemIdentifier> *)toolbarDefaultItemIdentifiers:(NSToolbar *)t {
-    return @[ @"toggleSidebar", @"sidebarSep", @"addGame", @"addDisc", @"menuSettings", @"image", NSToolbarFlexibleSpaceItemIdentifier,
+    return @[ @"toggleSidebar", @"sidebarSep", @"addGame", @"addDisc", @"removeGame", @"removeDisc", @"menuSettings", @"image", NSToolbarFlexibleSpaceItemIdentifier,
               @"inspectorSep", @"toggleInspector" ];
 }
 - (NSArray<NSToolbarItemIdentifier> *)toolbarAllowedItemIdentifiers:(NSToolbar *)t {
@@ -294,6 +295,30 @@ static NSString *status_word(unsigned s) { /* the OK / Review / Fixable / Error 
     return it;
 }
 
+/* A plain item is as wide as its label, so "Remove Game" got a wider cell than "Add Disc" and the round buttons
+ * ended up unevenly spaced. (A custom view does not help: the toolbar draws its capsule around the whole view,
+ * or none at all.) Pad the shorter labels on both sides with U+2800, an invisible symbol that, unlike a space,
+ * is not trimmed, so every cell is as wide as the longest label and the text stays centred under its button. */
+- (NSString *)paddedToolbarLabel:(NSString *)label {
+    static CGFloat widest, blank;
+    static NSDictionary *attrs;
+    if (!attrs) {
+        attrs = @{NSFontAttributeName : [NSFont systemFontOfSize:NSFont.smallSystemFontSize]};
+        for (NSString *l in @[ @"Add Game", @"Add Disc", @"Remove Game", @"Remove Disc", @"Menu Settings", @"Image" ])
+            widest = MAX(widest, [l sizeWithAttributes:attrs].width);
+        blank = [@"\u2800" sizeWithAttributes:attrs].width;
+    }
+    NSUInteger pad = blank > 0 ? (NSUInteger)MAX(0, round((widest - [label sizeWithAttributes:attrs].width) / (2 * blank))) : 0;
+    NSString *gap = [@"" stringByPaddingToLength:pad withString:@"\u2800" startingAtIndex:0];
+    return [NSString stringWithFormat:@"%@%@%@", gap, label, gap];
+}
+
+- (NSToolbarItem *)tbItemFixed:(NSString *)ident label:(NSString *)label symbol:(NSString *)sym tip:(NSString *)tip action:(SEL)a {
+    NSToolbarItem *it = [self tbItem:ident label:label symbol:sym tip:tip action:a];
+    it.label = [self paddedToolbarLabel:label];
+    return it;
+}
+
 - (NSToolbarItem *)toolbar:(NSToolbar *)tb itemForItemIdentifier:(NSToolbarItemIdentifier)ident willBeInsertedIntoToolbar:(BOOL)flag {
     if ([ident isEqual:@"sidebarSep"])
         return [NSTrackingSeparatorToolbarItem trackingSeparatorToolbarItemWithIdentifier:ident splitView:_split.splitView dividerIndex:0];
@@ -304,14 +329,18 @@ static NSString *status_word(unsigned s) { /* the OK / Review / Fixable / Error 
     if ([ident isEqual:@"toggleInspector"])
         return [self tbItem:ident label:@"Inspector" symbol:@"sidebar.right" tip:@"Show or hide the inspector (⌥⌘I)" action:@selector(toggleInspectorAction:)];
     if ([ident isEqual:@"addGame"])
-        return [self tbItem:ident label:@"Add Game" symbol:@"plus.rectangle.on.folder" tip:@"Add game folders or .cue files (⌘N)" action:@selector(addGame:)];
+        return [self tbItemFixed:ident label:@"Add Game" symbol:@"plus.rectangle.on.folder" tip:@"Add game folders or .cue files (⌘N)" action:@selector(addGame:)];
     if ([ident isEqual:@"addDisc"])
-        return [self tbItem:ident label:@"Add Disc" symbol:@"opticaldisc" tip:@"Add a disc to the selected case (⇧⌘N)" action:@selector(addDisc:)];
+        return [self tbItemFixed:ident label:@"Add Disc" symbol:@"opticaldisc" tip:@"Add a disc to the selected case (⇧⌘N)" action:@selector(addDisc:)];
+    if ([ident isEqual:@"removeGame"])
+        return [self tbItemFixed:ident label:@"Remove Game" symbol:@"folder.badge.minus" tip:@"Remove the selected games from the library" action:@selector(removeGame:)];
+    if ([ident isEqual:@"removeDisc"])
+        return [self tbItemFixed:ident label:@"Remove Disc" symbol:@"minus.circle" tip:@"Remove the selected discs from the case" action:@selector(removeDisc:)];
     if ([ident isEqual:@"menuSettings"])
-        return [self tbItem:ident label:@"Menu Settings" symbol:@"slider.horizontal.3" tip:@"Menu defaults written to the card" action:@selector(cmdDefaults:)];
+        return [self tbItemFixed:ident label:@"Menu Settings" symbol:@"slider.horizontal.3" tip:@"Menu defaults written to the card" action:@selector(cmdDefaults:)];
     if ([ident isEqual:@"image"]) {
         NSMenuToolbarItem *it = [[NSMenuToolbarItem alloc] initWithItemIdentifier:ident];
-        it.label = @"Image";
+        it.label = [self paddedToolbarLabel:@"Image"];
         it.paletteLabel = @"Image";
         it.toolTip = @"Open, save or start a V2 image";
         it.image = [MHTheme symbol:@"externaldrive" size:16 weight:NSFontWeightRegular description:@"Image"];
@@ -968,26 +997,69 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
     else [self cmdRemoveDisc];
 }
 
+/* The param (case slot or disc index) of every selected row of the table, in list order. */
+- (NSArray<NSNumber *> *)selectedParamsOf:(MHListTable *)t {
+    NSArray<MHLibRow *> *rows = [self rowsFor:t];
+    NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+    [t.selectedRowIndexes enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+        if (i < rows.count) [out addObject:@(rows[i].param)];
+    }];
+    return out;
+}
+
+- (void)removeGame:(id)s { [self removeCase]; }
+- (void)removeDisc:(id)s { [self cmdRemoveDisc]; }
+
+/* Removes every selected case (the current one when nothing is selected). One confirmation for all. */
 - (void)removeCase {
-    MhCase *c = _app.currentCase;
-    if (!c) return;
-    NSString *q = [NSString stringWithFormat:@"\"%@\" and its %@ will be removed from the library. The change is only written to the card when you apply changes.",
-                   MHStr(c->title), plural(c->disc_count, @"disc", @"discs")];
-    if (!MHConfirm(@"Remove this case?", q, @"Remove", YES)) return;
-    mh_project_remove_case(_app.project, c->slot);
+    NSMutableArray<NSNumber *> *slots = [[self selectedParamsOf:_tCases] mutableCopy];
+    if (!slots.count && _app.currentCase) [slots addObject:@(_app.currentCase->slot)];
+    if (!slots.count) return;
+    MhProject *p = _app.project;
+    NSString *q, *title;
+    if (slots.count == 1) {
+        MhCase *c = &p->cases[slots[0].intValue];
+        title = @"Remove this case?";
+        q = [NSString stringWithFormat:@"\"%@\" and its %@ will be removed from the library. The change is only written to the card when you apply changes.",
+             case_sidebar_title(c), plural(c->disc_count, @"disc", @"discs")];
+    } else {
+        unsigned discs = 0;
+        for (NSNumber *n in slots) discs += p->cases[n.intValue].disc_count;
+        title = [NSString stringWithFormat:@"Remove %lu games?", (unsigned long)slots.count];
+        q = [NSString stringWithFormat:@"%lu games and their %@ will be removed from the library. The change is only written to the card when you apply changes.",
+             (unsigned long)slots.count, plural(discs, @"disc", @"discs")];
+    }
+    if (!MHConfirm(title, q, @"Remove", YES)) return;
+    for (NSNumber *n in slots) mh_project_remove_case(p, (uint8_t)n.intValue);
     _app.curCase = -1;
     _app.curDisc = -1;
     [self refreshProject];
 }
 
-- (void)cmdRemoveDisc { /* orig: cmd_remove_disc */
+/* Removes every selected disc of the current case (the current one when nothing is selected); a case left
+ * without discs goes too. One confirmation for all. orig: cmd_remove_disc, for one disc. */
+- (void)cmdRemoveDisc {
     MhCase *c = _app.currentCase;
-    MhDisc *d = _app.currentDisc;
-    if (!c || _app.curDisc < 0 || !d) return;
-    NSString *q = [NSString stringWithFormat:@"\"%@\" will be removed from \"%@\". The change is only written to the card when you apply changes.",
-                   MHStr(d->name), MHStr(c->title)];
-    if (!MHConfirm(@"Remove this disc?", q, @"Remove", YES)) return;
-    mh_case_remove_disc(_app.project, c, (uint8_t)_app.curDisc);
+    if (!c) return;
+    NSMutableArray<NSNumber *> *idx = [[self selectedParamsOf:_tDiscs] mutableCopy];
+    if (!idx.count && _app.curDisc >= 0) [idx addObject:@(_app.curDisc)];
+    if (!idx.count) return;
+    NSString *q, *title;
+    if (idx.count == 1) {
+        MhDisc *d = idx[0].intValue < c->disc_count ? c->discs[idx[0].intValue] : NULL;
+        if (!d) return;
+        title = @"Remove this disc?";
+        q = [NSString stringWithFormat:@"\"%@\" will be removed from \"%@\". The change is only written to the card when you apply changes.",
+             disc_display_name(d), case_sidebar_title(c)];
+    } else {
+        title = [NSString stringWithFormat:@"Remove %lu discs?", (unsigned long)idx.count];
+        q = [NSString stringWithFormat:@"%lu discs will be removed from \"%@\". The change is only written to the card when you apply changes.",
+             (unsigned long)idx.count, case_sidebar_title(c)];
+    }
+    if (!MHConfirm(title, q, @"Remove", YES)) return;
+    /* highest index first, so the indexes still to remove stay valid */
+    [idx sortUsingComparator:^NSComparisonResult(NSNumber *a, NSNumber *b) { return [b compare:a]; }];
+    for (NSNumber *n in idx) mh_case_remove_disc(_app.project, c, (uint8_t)n.intValue);
     _app.curDisc = -1;
     if (c->disc_count == 0) mh_project_remove_case(_app.project, c->slot);
     [self refreshProject];
@@ -2034,6 +2106,8 @@ static void device_changed(DADiskRef disk, void *ctx) {
     }
     if (a == @selector(moveItemUp:)) return [self canMoveKind:[self activeKind] delta:-1];
     if (a == @selector(moveItemDown:)) return [self canMoveKind:[self activeKind] delta:1];
+    if (a == @selector(removeGame:)) return idle && (c != NULL || _tCases.selectedRowIndexes.count > 0);
+    if (a == @selector(removeDisc:)) return idle && (_app.currentDisc != NULL || _tDiscs.selectedRowIndexes.count > 0);
     if (a == @selector(removeItem:) || a == @selector(renameItem:))
         return idle && ([self activeKind] == 1 ? c != NULL : _app.currentDisc != NULL);
     if (a == @selector(toggleVerify:)) {
@@ -2118,7 +2192,8 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
 }
 
 /* Commands: report, select-case N, select-disc N, drag-case <rowFrom> <rowTo> <after>,
- * drag-disc <discRow> <targetKind c|d> <targetRow> <after>, remove-disc, remove-case, shot <file>,
+ * drag-disc <discRow> <targetKind c|d> <targetRow> <after>, select-cases <row>..., select-discs <row>...,
+ * remove-disc, remove-case, shot <file>,
  * name-case TEXT, name-disc TEXT, busy 0|1, appearance light|dark|system, toggle-inspector,
  * toggle-sidebar, ax-dump, demo-sheet <kind>. Output goes to stdout. */
 - (void)testCommand:(NSString *)cmd {
@@ -2128,6 +2203,11 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
     NSString *rest = a.count > 1 ? [[a subarrayWithRange:NSMakeRange(1, a.count - 1)] componentsJoinedByString:@" "] : @"";
     if ([op isEqualToString:@"report"]) {
         printf("%s", self.snapshotReport.UTF8String);
+    } else if ([op isEqualToString:@"select-cases"] || [op isEqualToString:@"select-discs"]) { /* rows..., several at once */
+        MHListTable *t = [op isEqualToString:@"select-cases"] ? _tCases : _tDiscs;
+        NSMutableIndexSet *ix = [NSMutableIndexSet indexSet];
+        for (NSUInteger i = 1; i < a.count; i++) [ix addIndex:[a[i] integerValue]];
+        [t selectRowIndexes:ix byExtendingSelection:NO];
     } else if ([op isEqualToString:@"select-case"]) {
         _app.curCase = [ARG(1) intValue];
         _app.curDisc = -1;
