@@ -1822,9 +1822,29 @@ static void device_changed(DADiskRef disk, void *ctx) {
     } else {
         [h appendString:@"\r\nNo serial: you can edit a custom list, but the menu cannot link it to the game automatically."];
     }
-    if (MHCheatEditProfile(_window, _app.cheatOK ? _app.cheatDb : NULL, h, d->serial, MH_CHEAT_UI_SCOPE_DISC, &d->cheats)) {
+    MhCase *c = _app.currentCase;
+    NSUInteger others = c && c->disc_count > 1 ? c->disc_count - 1 : 0;
+    BOOL toAll = NO;
+    if (MHCheatEditProfileEx(_window, _app.cheatOK ? _app.cheatDb : NULL, h, d->serial, MH_CHEAT_UI_SCOPE_DISC, &d->cheats,
+                             others, &toAll)) {
+        if (toAll) [self copyCheatsOf:d toOtherDiscsOf:c];
         _app.project->dirty = 1;
         [self refreshFields];
+    }
+}
+
+/* Gives every other disc of the case a copy of d's cheats. The profile stores the disc serial, so each copy
+ * is re-stamped with its own disc's serial; a disc that has none yet gets it read from its image first. */
+- (void)copyCheatsOf:(MhDisc *)d toOtherDiscsOf:(MhCase *)c {
+    for (int i = 0; i < c->disc_count; i++) {
+        MhDisc *o = c->discs[i];
+        if (o == d) continue;
+        if (o->serial[0] == 0) [self recoverSerial:o silent:YES];
+        MhCheatProfile *copy = mh_cheat_profile_clone(d->cheats);
+        if (!copy) continue;
+        mh_cheat_profile_prepare_hardware(copy, o->serial);
+        mh_cheat_profile_free(o->cheats);
+        o->cheats = copy;
     }
 }
 

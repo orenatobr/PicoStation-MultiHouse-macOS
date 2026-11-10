@@ -35,6 +35,14 @@
 BOOL MHCheatEditProfile(NSWindow *parent, const MhCheatDb *db, NSString *headerText,
                         const char *serial, uint8_t scope, MhCheatProfile **profile);
 
+/* Same, for a disc of a multi-disc case. otherDiscs is how many other discs of the case could receive
+ * the list: when it is above 0 the window shows "Also apply to the other disc(s) of this case" and
+ * *applyToAll is set when the user applied with that box ticked (NO otherwise). The caller does the
+ * copy: each disc needs its own serial in its profile (mh_cheat_profile_prepare_hardware). */
+BOOL MHCheatEditProfileEx(NSWindow *parent, const MhCheatDb *db, NSString *headerText,
+                          const char *serial, uint8_t scope, MhCheatProfile **profile,
+                          NSUInteger otherDiscs, BOOL *applyToAll);
+
 /* ---- test hooks (used by app/demo/cheat_ui_demo.m; leave NULL in the product) ---------------
  * If set, every alert goes through this block instead of an NSAlert sheet. title/text are the
  * message strings, buttons the captions ("OK" for single button alerts, "Turn Off","Cancel",
