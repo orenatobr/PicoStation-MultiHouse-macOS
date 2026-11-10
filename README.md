@@ -83,7 +83,9 @@ the inspector automatically:
 | `<cue name>-DISC.art` | Disc art |
 
 For example, `Alundra (USA) (Rev 1).cue` picks up `Alundra (USA) (Rev 1)-CASE.art` and
-`Alundra (USA) (Rev 1)-DISC.art`. Either file is optional, and a file found this way replaces the
+`Alundra (USA) (Rev 1)-DISC.art`. For a multi-disc game the case art has no disc number: `Final Fantasy IX (USA, Canada) (Disc 1) (Rev 1).cue`
+picks up `Final Fantasy IX (USA, Canada) (Rev 1)-CASE.art` (the exact name is tried first), and each disc
+keeps its own `-DISC.art`. Either file is optional, and a file found this way replaces the
 default art. Both must be valid 10,240 byte `.art` files; otherwise the default art stays.
 
 ### Write safety
