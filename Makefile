@@ -51,3 +51,12 @@ app:
 	@xattr -cr "$(APPDIR)" 2>/dev/null || true
 	codesign --force --deep --sign - "$(APPDIR)"
 	@echo "built $(APPDIR)"
+
+# Standalone harness for the cheat windows (not part of the product app): make cheat-demo
+.PHONY: cheat-demo
+cheat-demo:
+	@mkdir -p $(BUILD)
+	clang -arch arm64 -O1 -g -std=gnu11 -fobjc-arc -mmacosx-version-min=12.0 -Icore/include -Iapp \
+	  app/cheat_ui.m app/demo/cheat_ui_demo.m $(wildcard core/src/base/*.c) $(wildcard core/src/cheat/*.c) \
+	  -framework Cocoa -framework UniformTypeIdentifiers -o $(BUILD)/cheat-demo
+	@echo "built $(BUILD)/cheat-demo (run from the repo root: $(BUILD)/cheat-demo [shot-dir] [serial])"
