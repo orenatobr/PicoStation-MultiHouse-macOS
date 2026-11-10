@@ -1,6 +1,6 @@
 # app/cheat_ui: the cheat windows
 
-Files: `app/cheat_ui.h` (public API), `app/cheat_ui.m` (three windows), `app/demo/cheat_ui_demo.m`
+Files: `app/cheat_ui.h` (public API), `app/cheat_ui.m` (the manager window plus the library and editor sheets), `app/demo/cheat_ui_demo.m`
 (standalone harness, `make cheat-demo`, kept out of `app/*.m` so the product target does not pick up its `main`).
 Logic is all in `core/include/mh/cheat.h`; the UI only calls it.
 
@@ -18,10 +18,10 @@ Mirrors `cheat_ui_edit @0x140010300` (called by `cmd_cheats @0x140010f80`):
 |---|---|---|
 | hwnd, hinst, font | `parent` | modal: runs `[NSApp runModalForWindow:]`, blocks until closed, centred on `parent` |
 | param_4 db | `db` | the loaded embedded database (global `&DAT_140e7cc40` there). nil or `!db->loaded` makes "Escolher jogo / cheats" say "O banco GameShark V5 incorporado nao esta disponivel." |
-| param_5 text | `headerText` | the 2 line label above the list; nil or "" gives "Cheats do Disco". `cmd_cheats` builds it as `<disc name>  |  Serial: <serial>` + newline + "Vinculo por serial. Use o botao ao lado para escolher outro perfil." (or "Serial ausente: e possivel editar uma lista personalizada, mas o menu nao podera fazer vinculo automatico por serial.") |
+| param_5 text | `headerText` | the 2 line label above the list; nil or "" gives "Cheats". `cmd_cheats` builds it as `<disc name>  |  Serial: <serial>` + newline + "Vinculo por serial. Use o botao ao lado para escolher outro perfil." (or "Serial ausente: e possivel editar uma lista personalizada, mas o menu nao podera fazer vinculo automatico por serial.") |
 | param_6 serial | `serial` | ASCII "SCUS-94221" style; looks up the title (`mh_cheat_db_find_title_for_disc`, first variant), stored in the profile (`mh_cheat_profile_prepare_hardware`). nil or "" is fine |
 | param_7 scope | `scope` | `MH_CHEAT_UI_SCOPE_DISC` (2): budget 0x2800 bytes; anything else (Case): 0x1400 |
-| param_8 `profile**` | `profile` | in/out. `*profile` may be NULL. The window edits a clone (`mh_cheat_profile_clone`). On "Aplicar" the old `*profile` is freed and replaced by the clone. On Cancelar/close it is untouched |
+| param_8 `profile**` | `profile` | in/out. `*profile` may be NULL. The window edits a clone (`mh_cheat_profile_clone`). On "Apply" the old `*profile` is freed and replaced by the clone. On Cancel/close it is untouched |
 | return int | `BOOL` | YES when applied (orig 1: caller then sets the disc dirty and calls `refresh_fields`), NO otherwise (also when the clone fails) |
 
 If the original variant stored in the profile (`profile->variant`) is the only hint (serial not bound), it is used as the
@@ -77,3 +77,17 @@ catalog's current game. The header text of the original (`cmd_cheats`) needs the
 @"catalog" | @"editor")` with `-testAction:argument:`. `make cheat-demo` builds `$(BUILD)/cheat-demo`; run it from the repo root
 as `cheat-demo <shot-dir> [serial] [title substring]` for a scripted session that writes PNGs (via cacheDisplay, since
 `screencapture -l` needs the Screen Recording permission), or without arguments to use the window by hand.
+
+## UI (EN-US, MHTheme)
+
+The windows follow docs/UI_DESIGN.md with `MHTheme` tokens. Window "Cheats" (modal, Auto Layout): header (disc title, serial in
+monospace, caption), two capacity meters ("Active lines" n of 31, "Disc space" bytes of the budget; color plus an icon and a
+word near the limit), search field, view-based table (Active switch, Name with a lock for required groups, Source chip
+Library / User V5 / User Classic, Lines), button row (Edit..., Enable/Disable, Delete, Import..., Export..., Move Up, Move Down;
+also in the context menu; Space toggles, Delete deletes, option-command-up/down move, drag still moves by dropping on a row),
+details card (notes and codes), Cancel and Apply. Empty states: "No cheats yet" (Add from Library... prominent, New Cheat...)
+and "No matching cheats" (Clear Search). "Cheat Library" and "Cheat Editor" are sheets of that window; alerts and the
+import/export panels are sheets too. The editor shows validation messages inline (no alert) and validates while typing.
+Alert wording: mandatory toggle "Turn Off"/"Cancel", mandatory delete "Delete"/"Cancel" (destructive), dialect question
+"Yes" (classic, convert) / "No" (native V5 or Xploder V4) / "Cancel". Test hooks are unchanged except that `MHCheatUITestable`
+gained `testProfile` and the manager accepts the actions `up` and `down`.
