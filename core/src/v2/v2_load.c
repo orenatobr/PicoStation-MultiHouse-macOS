@@ -316,7 +316,9 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
      * source; both stop at the NUL that ends the 0x20 byte field */
     mh_str_copy(d->name, MH_DISC_NAME_MAX, (const char *)drec + 0x1c);
     mh_str_copy(d->title, MH_DISC_TITLE_MAX, (const char *)drec + 0x1c);
-    d->nfiles = r.bin_count;
+    /* bin_count is a free byte on the card; MhDisc.files holds 99 entries and the rest of the code
+     * indexes it by nfiles (the original had no such array walk for a loaded disc) */
+    d->nfiles = r.bin_count > MH_DISC_MAX_FILES ? MH_DISC_MAX_FILES : r.bin_count;
     d->total_sectors = r.sectors;
     d->total_bytes = (uint64_t)r.sectors * MH_V2_SECTOR;
     d->crc32 = r.crc32;
