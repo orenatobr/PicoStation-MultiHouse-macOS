@@ -4,9 +4,8 @@
 #include <stdlib.h>
 
 /* The 0x6400 byte head of a package: track map "PSTTRK1" (+0), cheat blob (+0xA00, up to
- * 0x2800 bytes), Disc art (+0x3C00, exactly 0x2800 bytes). Why +0x3C00 and not the +0x19
- * block (0x3200) stored in the Disc record as extra_lba: the original does exactly this, the
- * readers take the art from the cache/art files instead (see docs/map/v2.md). */
+ * 0x2800 bytes, blocks 5..0x18), the reserved 0xA00 "extra" slot (blocks 0x19..0x1D, zero,
+ * record field extra_lba) and the Disc art (+0x3C00 = block 0x1E, exactly 0x2800 bytes). */
 #define TRK_FAIL "Nao foi possivel montar a Track Table deste disco."
 
 static bool sbi_ok(const uint8_t *p, uint64_t len)

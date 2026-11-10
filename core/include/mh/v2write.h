@@ -169,8 +169,15 @@ bool mh_v2_all_ready(const MhProject *p, bool *has_observations, char *msg, size
 #define MH_V2W_IMAGE_NOT_REOPENED "A imagem foi gravada, mas nao pode ser reaberta para edicao."
 #define MH_V2W_SD_STATUS "Gravando discos pendentes e atualizando a biblioteca..."
 #define MH_V2W_SD_DONE "Concluido: discos pendentes gravados; biblioteca atualizada."
+#define MH_V2W_FAIL_STATUS "Gravacao interrompida. Reconecte o mesmo SD e reaplique sem fechar o Manager."
+#define MH_V2W_CANCEL_STATUS "Cancelado. Mantenha o Manager aberto e reaplique para retomar os discos pendentes."
 #define MH_V2W_CONFIRM_TITLE "Confirmar alteracoes no SD"
 #define MH_V2W_MSGBOX_TITLE "PicoStation Multi House V3"
+
+/* The two "GRAVACAO BLOQUEADA" texts shared by cmd_write and write_image_direct_to, in that
+ * order (NULL = both databases are fine). db_ok: embedded identification/hash/SBI database
+ * validated; cheats_ok: audited cheat database loaded. */
+const char *mh_v2_blocked_text(bool db_ok, bool cheats_ok);
 
 /* Why the user cannot start a card write, in the order cmd_write tests (NULL = may go on):
  *   db_ok       embedded database validated (DAT_140e7c3b8 and DAT_140e7c410 both set)

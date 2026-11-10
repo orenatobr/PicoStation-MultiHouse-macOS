@@ -470,6 +470,8 @@ static void test_fixture_single_disc(void)
     CHECK(p->case_count == 1 && p->disc_count == 1);
     d = p->cases[0].discs[0];
     CHECK(d != NULL && d->verified == 1 && d->status == MH_DISC_STATUS_OK);
+    printf("strider: serial %s status %u issues %x cheats %s (%u entries) title '%s'\n", d->serial, d->status, d->verify_issues,
+           d->cheats ? "yes" : "no", d->cheats ? d->cheats->count : 0, p->cases[0].title);
     est = mh_v2_estimate_project_bytes(p);
     CHECK(est > 0x500000);
     reset_progress();
@@ -546,6 +548,117 @@ static void test_fixture_single_disc(void)
     free(q);
 }
 
+
+
+/* A real multi-BIN disc with audio tracks (data + 2 audio files) and the cheat catalog binding. */
+static void test_fixture_multi_bin(void)
+{
+    MhProject *p = new_project();
+    MhV2Result res, vres;
+    char *img = tpath("tactics.img");
+    MhDisc *d;
+    char cache[MH_PATH_MAX];
+    MhProject *q = new_project();
+
+    project_add(p, TACTICS, 256);
+    d = p->cases[0].discs[0];
+    printf("tactics: serial %s status %u issues %x nfiles %u ntracks %u cheats %s (%u entries)\n", d->serial, d->status,
+           d->verify_issues, d->nfiles, d->ntracks, d->cheats ? "yes" : "no", d->cheats ? d->cheats->count : 0);
+    CHECK(d->nfiles == 3 && d->ntracks == 3 && d->verified == 1);
+    reset_progress();
+    CHECK(mh_v2_write_image_direct(&g_w, p, img, &res));
+    if (!res.ok) fprintf(stderr, "tactics: %s\n", res.msg);
+    CHECK(res.ok && file_size(img) == res.size);
+    check_image(img, p, 1);
+    snprintf(cache, sizeof cache, "%s/cache4", g_tmp);
+    mh_ensure_dir(cache);
+    CHECK(mh_v2_load_image(img, cache, &g_env, q, &vres));
+    {
+        const MhDisc *ld = q->cases[0].discs[0];
+        unsigned i;
+        CHECK(ld->ntracks == d->ntracks && ld->total_sectors == d->total_sectors);
+        for (i = 0; i < d->ntracks; i++) {
+            CHECK(ld->tracks[i].kind == d->tracks[i].kind && ld->tracks[i].mode == d->tracks[i].mode);
+            CHECK(ld->tracks[i].start == d->tracks[i].start && ld->tracks[i].pregap == d->tracks[i].pregap);
+        }
+    }
+    /* verification of the disc stored in the image (manual verification of a loaded library) */
+    {
+        char msg[256];
+        CHECK(mh_v2_verify_disc_source(&g_w, q->cases[0].discs[0], msg, sizeof msg));
+        CHECK_STR(msg, "Disco RAW verificado com sucesso.");
+    }
+    mh_project_clear(p);
+    mh_project_clear(q);
+    free(p);
+    free(q);
+}
+
+
+/* classify (the writer) and mh_kept_package (part A / estimate) are two ports of the same
+ * decision tree: they must agree on every combination. */
+#include "../src/v2/write_internal.h"
+static void test_classify_vs_kept(void)
+{
+    static MhDisc d;
+    static const unsigned kinds[] = {MH_DISC_KIND_CUE, MH_DISC_KIND_V2_DEVICE, MH_DISC_KIND_V2_IMAGE};
+    static const int32_t physs[] = {-1, 3, 4};
+    static const char *const paths[] = {NULL, "", "A", "B"};
+    static const char *const pkgs[] = {"", "A", "B"};
+    static const int slots[] = {3, 9};
+    unsigned ki, pi, hi, qi, si, sli, keep, n = 0;
+    for (ki = 0; ki < 3; ki++)
+        for (keep = 0; keep < 2; keep++)
+            for (pi = 0; pi < 3; pi++)
+                for (hi = 0; hi < 4; hi++)
+                    for (qi = 0; qi < 3; qi++)
+                        for (si = 0; si < 3; si++)
+                            for (sli = 0; sli < 2; sli++) {
+                                bool in_place, resumed;
+                                uint64_t kept;
+                                memset(&d, 0, sizeof d);
+                                d.kind = kinds[ki];
+                                d.flags = keep ? MH_DF_KEEP_PACKAGE : 0;
+                                d.v2_drive = 4;
+                                d.v2_pkg_a = 0x2800;
+                                d.v2_pkg_b = 0x2900;
+                                strcpy(d.v2_pkg_path, pkgs[qi]);
+                                strcpy(d.source_path, pkgs[si]);
+                                d.v2_slot = slots[sli];
+                                kept = mh_kept_package(&d, physs[pi], paths[hi]);
+                                mh_v2w_classify(physs[pi], paths[hi], &d, &in_place, &resumed);
+                                n++;
+                                if ((kept != 0) != (in_place || resumed) || (in_place && kept != 0x2800) ||
+                                    (resumed && !in_place && kept != 0x2900)) {
+                                    fprintf(stderr, "classify mismatch kind %u keep %u phys %d path %s pkg '%s' src '%s' slot %d: kept %llx in_place %d resumed %d\n",
+                                            kinds[ki], keep, physs[pi], paths[hi] ? paths[hi] : "(null)", pkgs[qi], pkgs[si],
+                                            slots[sli], (unsigned long long)kept, in_place, resumed);
+                                    g_fail++;
+                                }
+                                g_checks++;
+                            }
+    CHECK(n == 3 * 2 * 3 * 4 * 3 * 3 * 2);
+}
+
+
+/* A big disc (9 BIN files, 13 cheat groups bound by serial): MH_V2W_BIG=1 only, it takes a while. */
+static void test_fixture_big(void)
+{
+    MhProject *p = new_project();
+    MhV2Result res;
+    char *img = tpath("big.img");
+    MhDisc *d;
+    if (!getenv("MH_V2W_BIG")) { free(p); return; }
+    project_add(p, FIXTURES "/Twisted Metal (USA).cue", 256);
+    d = p->cases[0].discs[0];
+    CHECK(d->cheats && d->cheats->count > 0 && d->nfiles == 9);
+    reset_progress();
+    CHECK(mh_v2_write_image_direct(&g_w, p, img, &res));
+    if (!res.ok) fprintf(stderr, "big: %s\n", res.msg);
+    check_image(img, p, 1);
+    mh_project_clear(p);
+    free(p);
+}
 
 /* ---- synthetic libraries ------------------------------------------------------------------- */
 
@@ -1302,6 +1415,7 @@ int main(void)
 
     test_extents();
     test_empty_estimate();
+    test_classify_vs_kept();
 
     if (access(STRIDER, R_OK) != 0 || access(EMBEDDED "/picostation_menu.bin", R_OK) != 0) {
         printf("fixtures absent, skipping the image tests\n");
@@ -1328,6 +1442,8 @@ int main(void)
         const char *only = getenv("MH_V2W_ONLY"); /* e.g. MH_V2W_ONLY=cancel,card for a quick run */
 #define RUN(name, fn) do { if (!only || strstr(only, name)) fn(); } while (0)
         RUN("fixture", test_fixture_single_disc);
+        RUN("tactics", test_fixture_multi_bin);
+        if (only && strstr(only, "big")) test_fixture_big();
         RUN("layout", test_multi_layout);
         RUN("repro", test_reproducible);
         RUN("cancel", test_cancel_and_resume);

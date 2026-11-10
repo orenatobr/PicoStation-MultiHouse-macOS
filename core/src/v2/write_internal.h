@@ -39,6 +39,11 @@ static inline void mh_v2w_io_msg(MhV2Result *res, const char *msg, int code)
 /* Win32 style error numbers for the "(Win32 N)" texts. */
 int mh_v2w_win32_code(int err);
 
+/* How a disc relates to the write target (orig: the nest of tests in v2_write_handle_direct):
+ * in_place = its RAW slots are already on the target (loaded from it), resumed = its package was
+ * finished earlier in this session and the resume marker is there. Exposed for the tests. */
+void mh_v2w_classify(int32_t phys, const char *path, const MhDisc *d, bool *in_place, bool *resumed);
+
 /* The disc counts of a case, clamped like the original loops (it trusted the byte). */
 #define MH_V2W_CASE_USED(c) ((c)->in_use != 0)
 

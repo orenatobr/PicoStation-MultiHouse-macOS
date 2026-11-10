@@ -84,51 +84,51 @@ static bool fail_io(Ctx *c, const char *msg)
 
 /* ---- classification of a disc against the target ---------------------------------------- */
 
-static void slot_cmp(const Ctx *c, const MhDisc *d, bool *resumed)
+static void slot_cmp(int32_t phys, const MhDisc *d, bool *resumed)
 {
-    if (c->phys != -1 && d->v2_pkg_path[0] == 0) *resumed = (d->v2_slot == c->phys);
+    if (phys != -1 && d->v2_pkg_path[0] == 0) *resumed = (d->v2_slot == phys);
 }
-static void path_cmp(const Ctx *c, const MhDisc *d, bool *resumed)
+static void path_cmp(const char *path, const MhDisc *d, bool *resumed)
 {
-    if (d->v2_pkg_path[0] != 0) *resumed = mh_path_equal_full(d->v2_pkg_path, c->path);
+    if (d->v2_pkg_path[0] != 0) *resumed = mh_path_equal_full(d->v2_pkg_path, path);
 }
-static void path_nonnull(const Ctx *c, const MhDisc *d, bool *resumed)
+static void path_nonnull(int32_t phys, const char *path, const MhDisc *d, bool *resumed)
 {
-    if (c->path[0] != 0) path_cmp(c, d, resumed);
-    else slot_cmp(c, d, resumed);
+    if (path[0] != 0) path_cmp(path, d, resumed);
+    else slot_cmp(phys, d, resumed);
 }
 
 /* in_place: the raw slots are already on the target; resumed: the package was finished by an
  * earlier pass of this session. orig: the nest of tests at LAB_14003b1d5..LAB_14003b842. */
-static void classify(const Ctx *c, const MhDisc *d, bool *in_place, bool *resumed)
+void mh_v2w_classify(int32_t phys, const char *path, const MhDisc *d, bool *in_place, bool *resumed)
 {
     bool keep = (d->flags & MH_DF_KEEP_PACKAGE) != 0;
     *in_place = false;
     *resumed = false;
     if (d->kind == MH_DISC_KIND_V2_DEVICE) {
-        if (c->phys == -1) {
-            if (keep && path_nonempty(c->path)) path_cmp(c, d, resumed);
-        } else if (c->phys == (int32_t)d->v2_drive) {
+        if (phys == -1) {
+            if (keep && path_nonempty(path)) path_cmp(path, d, resumed);
+        } else if (phys == (int32_t)d->v2_drive) {
             *in_place = true;
         } else if (keep) {
-            if (c->path) path_nonnull(c, d, resumed);
-            else slot_cmp(c, d, resumed);
+            if (path) path_nonnull(phys, path, d, resumed);
+            else slot_cmp(phys, d, resumed);
         }
         return;
     }
-    if (d->kind == MH_DISC_KIND_V2_IMAGE && c->path) {
-        if (c->path[0] == 0) {
-            if (keep) slot_cmp(c, d, resumed);
-        } else if (mh_path_equal_full(d->source_path, c->path)) {
+    if (d->kind == MH_DISC_KIND_V2_IMAGE && path) {
+        if (path[0] == 0) {
+            if (keep) slot_cmp(phys, d, resumed);
+        } else if (mh_path_equal_full(d->source_path, path)) {
             *in_place = true;
         } else if (keep) {
-            path_cmp(c, d, resumed);
+            path_cmp(path, d, resumed);
         }
         return;
     }
     if (keep) {
-        if (c->path) path_nonnull(c, d, resumed);
-        else slot_cmp(c, d, resumed);
+        if (path) path_nonnull(phys, path, d, resumed);
+        else slot_cmp(phys, d, resumed);
     }
 }
 
@@ -255,7 +255,7 @@ static bool build_tables(Ctx *c)
             Item *it = &c->items[out_idx];
             bool in_place, resumed;
             uint64_t lba = mh_kept_package(d, c->phys, c->path);
-            classify(c, d, &in_place, &resumed);
+            mh_v2w_classify(c->phys, c->path, d, &in_place, &resumed);
             if (lba == 0) {
                 uint64_t size = (uint64_t)d->total_sectors * 5 + 0x100;
                 if (!mh_v2_extent_allocate(c->ext, &c->next, size, c->cap / MH_V2_BLOCK, &lba))

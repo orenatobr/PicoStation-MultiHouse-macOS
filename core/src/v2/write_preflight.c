@@ -112,14 +112,22 @@ bool mh_v2_all_ready(const MhProject *p, bool *has_observations, char *msg, size
     return true;
 }
 
+/* orig: cmd_write @0x140011980 / write_image_direct_to.isra.0 @0x14003f880: the first two tests */
+const char *mh_v2_blocked_text(bool db_ok, bool cheats_ok)
+{
+    if (!db_ok) return MH_V2W_BLOCKED_DB;
+    if (!cheats_ok) return MH_V2W_BLOCKED_CHEATS;
+    return NULL;
+}
+
 /* orig: cmd_write @0x140011980, the checks before the confirmation window */
 const char *mh_v2_write_precheck(const MhProject *p, bool db_ok, bool cheats_ok, bool has_disk,
                                  uint32_t disk_number, uint64_t disk_size, uint64_t *estimate)
 {
     uint64_t est;
+    const char *blocked = mh_v2_blocked_text(db_ok, cheats_ok);
     if (estimate) *estimate = 0;
-    if (!db_ok) return MH_V2W_BLOCKED_DB;
-    if (!cheats_ok) return MH_V2W_BLOCKED_CHEATS;
+    if (blocked) return blocked;
     if (!has_disk) return MH_V2W_NEED_SD;
     if (p->card_loaded != 0 && p->device != (int32_t)disk_number) return MH_V2W_OTHER_CARD;
     /* An estimate of 0 (overlapping preserved extents, no room) passes this test, as in the
