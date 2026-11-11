@@ -3,6 +3,7 @@
  * Redump verification of full discs is in test_disc_redump.c. */
 #include <time.h>
 #include "disc_util.inc"
+#include "../src/disc/disc_internal.h"
 
 /* ======================================================================== serial text */
 
@@ -1265,6 +1266,32 @@ static void test_db_trackset(void)
         CHECK((d->flags & MH_DF_INTEGRITY_BAD) && (d->flags & MH_DF_TRACKSET_CHECKED));
         CHECK_STR(d->ps.message, "saved text");
         CHECK(note_has(d, "\r\nComplete trackset not found; no heuristic was promoted."));
+        {   /* the note says how the disc differs from the database record of its serial */
+            const uint8_t *rec = mh_db_disc_rec(db, d->db_index);
+            uint32_t known = rec[0x58] | rec[0x59] << 8 | rec[0x5a] << 16 | (uint32_t)rec[0x5b] << 24;
+            d->notes[0] = 0;
+            d->total_sectors = known + 7;
+            CHECK(!mh_db_match_trackset(db, d, sha, n));
+            CHECK(note_has(d, "has 7 more sectors than the known disc"));
+            d->notes[0] = 0;
+            d->total_sectors = known - 3;
+            CHECK(!mh_db_match_trackset(db, d, sha, n));
+            CHECK(note_has(d, "has 3 fewer sectors than the known disc"));
+            d->notes[0] = 0;
+            d->total_sectors = known;
+            d->verify_issues = 0;
+            CHECK(!mh_db_match_trackset(db, d, sha, n));
+            CHECK(note_has(d, "same size as the known disc, but its content differs"));
+            CHECK(!note_has(d, "recalculating EDC/ECC"));
+            d->notes[0] = 0;
+            d->verify_issues = 0x80;
+            CHECK(!mh_db_match_trackset(db, d, sha, n));
+            CHECK(note_has(d, "recalculating EDC/ECC"));
+            d->flags &= ~(uint32_t)MH_DF_DB_MATCH;               /* no record to compare with: nothing added */
+            d->notes[0] = 0;
+            CHECK(!mh_db_match_trackset(db, d, sha, n));
+            CHECK(!note_has(d, "known disc"));
+        }
     }
     mh_disc_free(d);
 
