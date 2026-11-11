@@ -255,6 +255,22 @@ void mh_normalize_title(const char *src, char *dst, size_t n)
     dst[o] = 0;
 }
 
+/* Port only: the normaliser is character by character, so the prefix before "(" normalises to the
+ * prefix of the whole result. */
+size_t mh_title_base_len(const char *src)
+{
+    const char *p = src ? strchr(src, '(') : NULL;
+    char base[0x100], norm[0x60];
+    size_t k;
+    if (!p) return 0;
+    k = (size_t)(p - src);
+    if (k >= sizeof base) k = sizeof base - 1;
+    memcpy(base, src, k);
+    base[k] = 0;
+    mh_normalize_title(base, norm, sizeof norm);
+    return strlen(norm);
+}
+
 /* orig: normalize_serial @0x140024f30. The original collected up to 31 kept characters in a
  * scratch buffer and copied back the first 15. */
 void mh_normalize_serial(char *s)

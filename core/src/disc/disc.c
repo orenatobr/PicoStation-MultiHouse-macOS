@@ -185,8 +185,30 @@ bool mh_case_title_for_disc(const MhDisc *d, char *out, size_t n)
     if (pos < 0) pos = mh_str_find_i(buf, " DISC ");
     if (pos >= 0) buf[pos] = 0;
     while ((len = strlen(buf)) != 0 && buf[len - 1] == ' ') buf[len - 1] = 0;
-    mh_str_copy(out, n, buf);
+    /* a card name (small buffer) must fit the firmware; grouping compares the full text */
+    if (n <= MH_CASE_TITLE_MAX) mh_fit_name(buf, d->title[0] ? d->title_base_len : 0, out, n < MH_NAME_FIT ? n : MH_NAME_FIT);
+    else mh_str_copy(out, n, buf);
     return pos >= 0;
+}
+
+/* Port only, see disc.h. */
+void mh_fit_name(const char *norm, size_t base_len, char *out, size_t n)
+{
+    const char *tag = norm + (base_len < strlen(norm) ? base_len : strlen(norm));
+    size_t tag_len, keep;
+    if (n == 0) return;
+    while (*tag == ' ') tag++;
+    tag_len = strlen(tag);
+    if (strlen(norm) < n || base_len == 0 || tag_len == 0 || tag_len + 2 > n - 1) {
+        mh_str_copy(out, n, norm);
+        return;
+    }
+    keep = n - 2 - tag_len;
+    if (keep > base_len) keep = base_len;
+    memcpy(out, norm, keep);
+    while (keep > 0 && out[keep - 1] == ' ') keep--;
+    out[keep++] = ' ';
+    memcpy(out + keep, tag, tag_len + 1);
 }
 
 /* orig: short_disc_name @0x140030f50 */
@@ -237,7 +259,8 @@ void mh_apply_trackset_title(MhDisc *d, const char *title)
     mh_normalize_title(title, norm, sizeof norm);
     if (norm[0]) {
         mh_str_copy(d->title, sizeof d->title, norm);
-        if ((d->flags & MH_DF_USER_NAMED) == 0) mh_str_copy(d->name, sizeof d->name, norm);
+        d->title_base_len = (uint16_t)mh_title_base_len(title);
+        if ((d->flags & MH_DF_USER_NAMED) == 0) mh_fit_name(norm, d->title_base_len, d->name, MH_NAME_FIT);
     }
 }
 

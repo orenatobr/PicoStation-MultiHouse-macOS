@@ -68,6 +68,9 @@ void mh_clean_ascii(const char *src, char *dst, size_t n);
  * to their base letter (AE, eth, thorn, sharp s and the math signs become separators);
  * everything else is a single collapsed space; no leading or trailing space. */
 void mh_normalize_title(const char *src_utf8, char *dst, size_t n);
+/* Port only. Length of the game name in mh_normalize_title(src_utf8): what comes before the first "(",
+ * e.g. "Game (USA) (Rev 1)" -> 4. 0 when there is no tag or nothing before it. */
+size_t mh_title_base_len(const char *src_utf8);
 /* orig: normalize_serial. In place. Keeps A-Z (lower-case is upper-cased) 0-9 and '-', turns
  * '_' into '-', drops everything else (including '.') and keeps at most 15 characters, so the
  * buffer must hold 16 bytes. */

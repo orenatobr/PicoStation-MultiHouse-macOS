@@ -883,6 +883,34 @@ static void test_titles(void)
     mh_short_disc_name("X (DISC 2)", o, 4);
     CHECK_STR(o, "(DI");
 
+    /* The firmware shows 31 characters at most. A longer name loses the end of the game name, not
+     * the region and revision that follow it. */
+    {
+        const char *raw = "Final Fantasy Tactics Advance Special Edition (USA) (Rev 1)";
+        char norm[MH_DISC_TITLE_MAX];
+        size_t bl = mh_title_base_len(raw);
+        mh_normalize_title(raw, norm, sizeof norm);
+        CHECK(bl == strlen("FINAL FANTASY TACTICS ADVANCE SPECIAL EDITION"));
+        mh_fit_name(norm, bl, o, MH_NAME_FIT);
+        CHECK_STR(o, "FINAL FANTASY TACTICS USA REV 1");
+        mh_fit_name("SHORT NAME USA", 10, o, MH_NAME_FIT);
+        CHECK_STR(o, "SHORT NAME USA");                       /* fits: untouched */
+        mh_fit_name(norm, 0, o, MH_NAME_FIT);
+        CHECK_STR(o, "FINAL FANTASY TACTICS ADVANCE S");      /* no tag known: plain cut */
+        mh_fit_name("AAAAAAAAAA BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", 10, o, MH_NAME_FIT);
+        CHECK_STR(o, "AAAAAAAAAA BBBBBBBBBBBBBBBBBBBB");     /* tail alone does not fit: plain cut */
+        CHECK(mh_title_base_len("No Tag Here") == 0 && mh_title_base_len("(USA) Only") == 0);
+
+        snprintf(d->title, sizeof d->title, "%s", norm);
+        d->title_base_len = (uint16_t)bl;
+        snprintf(d->title + strlen(d->title), sizeof d->title - strlen(d->title), " DISC 1");
+        char c33[33];
+        CHECK(mh_case_title_for_disc(d, c33, sizeof c33));
+        CHECK_STR(c33, "FINAL FANTASY TACTICS USA REV 1");
+        mh_fit_name(d->title, d->title_base_len, d->name, MH_NAME_FIT);
+        CHECK_STR(d->name, "FINAL FANTASY USA REV 1 DISC 1");
+    }
+
     mh_apply_trackset_title(d, "Spyro 2 - Ripto's Rage! (USA)");
     CHECK_STR(d->title, "SPYRO 2 - RIPTO'S RAGE USA"); CHECK_STR(d->name, "SPYRO 2 - RIPTO'S RAGE USA");
     d->flags |= MH_DF_USER_NAMED;

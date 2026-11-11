@@ -33,6 +33,7 @@ extern "C" {
 #define MH_SECTOR_SIZE 2352        /* raw CD sector in a BIN */
 #define MH_DISC_NAME_MAX 0x21      /* MhDisc.name capacity (32 characters + NUL) */
 #define MH_DISC_TITLE_MAX 0x60     /* MhDisc.title capacity */
+#define MH_NAME_FIT 0x20           /* buffer size of a name that fits the firmware: 31 characters + NUL */
 #define MH_DISC_NOTES_MAX 0x300    /* MhDisc.notes capacity (original: 0x300 wide chars) */
 #define MH_DISC_SERIAL_MAX 16      /* serial buffers: 15 characters + NUL */
 
@@ -210,6 +211,7 @@ typedef struct MhDisc {
     uint64_t v2_pkg_b;          /* +0x42f80 value returned by kept_package for a path/slot match */
     char v2_pkg_path[MH_PATH_MAX]; /* +0x42f88 image file whose package may be reused */
     uint8_t v2_marker[512];     /* +0x43788 session marker block copy */
+    uint16_t title_base_len;    /* port only: length of title before the first "(tag)", 0 = unknown */
 } MhDisc;
 
 /* Case: up to 5 discs of one game (orig 0x868 bytes). */
@@ -348,6 +350,10 @@ uint64_t mh_kept_package(const MhDisc *d, int idx, const char *path);
 /* orig: case_title_for_disc. Game title for grouping: title (or name), cut at " (DISC " or
  * " DISC ", trailing spaces removed. Returns true when a disc marker was cut. */
 bool mh_case_title_for_disc(const MhDisc *d, char *out, size_t n);
+/* Port only. Copies the normalised title norm into out (n bytes). When it does not fit, the game name
+ * (the first base_len characters) is cut so that the tags after it (region, revision, disc) survive.
+ * Plain cut when base_len is 0 or the tags alone do not fit. */
+void mh_fit_name(const char *norm, size_t base_len, char *out, size_t n);
 /* orig: short_disc_name. Shortens a title that has " (DISC N)" to fit n-1 characters by
  * cutting the part before the marker. */
 void mh_short_disc_name(const char *title, char *out, size_t n);
