@@ -2,6 +2,7 @@
  * track map recovery and Redump verification. */
 #include "mh/disc.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -126,6 +127,32 @@ bool mh_db_apply_saved_single_track(const MhDb *db, MhDisc *d)
     return false;
 }
 
+/* Says how the disc differs from the database record of its serial. The image cannot be repaired into the known
+ * dump (only the original dump has those hashes), but the user can tell another edition from a changed file. */
+static void note_difference(const MhDb *db, MhDisc *d)
+{
+    const uint8_t *rec;
+    char text[200];
+    uint32_t known;
+    if (!(d->flags & MH_DF_DB_MATCH)) return;
+    rec = mh_db_disc_rec(db, d->db_index);
+    if (!rec) return;
+    known = mh_rd32(rec + 0x58);
+    if (known == 0) return;
+    if (d->total_sectors > known)
+        snprintf(text, sizeof text, "\r\nThe disc has %u more sectors than the known disc: another dump or edition.",
+                 d->total_sectors - known);
+    else if (d->total_sectors < known)
+        snprintf(text, sizeof text, "\r\nThe disc has %u fewer sectors than the known disc: another dump or edition.",
+                 known - d->total_sectors);
+    else
+        snprintf(text, sizeof text, "\r\nThe disc is the same size as the known disc, but its content differs "
+                 "(patched, damaged or mastered another way).");
+    cat_note(d, text);
+    if (d->verify_issues & 0xc0)
+        cat_note(d, "\r\nIf the sectors with bad EDC/ECC are the only difference, recalculating EDC/ECC may restore the match.");
+}
+
 /* orig: db_match_trackset @0x140016680 */
 bool mh_db_match_trackset(const MhDb *db, MhDisc *d, const uint8_t *sha1s, unsigned n)
 {
@@ -206,6 +233,7 @@ bool mh_db_match_trackset(const MhDb *db, MhDisc *d, const uint8_t *sha1s, unsig
     }
     d->flags |= MH_DF_TRACKSET_CHECKED | MH_DF_INTEGRITY_BAD;
     cat_note(d, "\r\nComplete trackset not found; no heuristic was promoted.");
+    note_difference(db, d);
     return false;
 }
 
