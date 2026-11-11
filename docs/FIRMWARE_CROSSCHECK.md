@@ -85,11 +85,11 @@ ranges inside them. 64 bit LBA fields are read as the low dword; the high dword 
 | disc_count (+5) | 1..5 | `(v - 1) < 5` | CONFIRMED |
 | index (+6) | equals table position | `rec[6] == idx` | CONFIRMED |
 | variant (+7) | opaque | not read | NOT FOUND |
-| name (+8, 0x20) | NUL terminated, <= 31 chars | copied by FUN_10021924(.., 0x21, rec + 8, 0x20): at most 31 characters, every byte outside 0x20..0x7E becomes a space (so UTF-8 accents display as blanks) | CONFIRMED (cosmetic caveat, see discrepancies) |
+| name (+8, 0x20) | NUL terminated, <= 31 chars (up to 71 with the long names extension, see discrepancy 3) | copied by FUN_10021924(.., 0x21, rec + 8, 0x20): at most 31 characters, every byte outside 0x20..0x7E becomes a space (so UTF-8 accents display as blanks) | CONFIRMED (cosmetic caveat, see discrepancies) |
 | code (+0x28, 0x10) | Case serial | not read | NOT FOUND |
 | art id (+0x38) | 0xFFFF or == index | `(u16)(v + 1) < 0x101`, i.e. 0xFFFF or <= 0xFF; case art is read at `art_lba + art_id * 0x14` (FUN_100228c8) | CONFIRMED (firmware looser) |
 | disc ids (+0x3A, 5) | first n distinct, rest 0 | pairwise distinct for the first n, `rec[0x3A + i] == 0` for i >= n | CONFIRMED |
-| bytes +0x3F..+0x4B | zero | `FUN_10021714(rec + 0x3f, 0xd)` must be zero | CONFIRMED (the encoder zero fills) |
+| bytes +0x3F..+0x4B | zero | `FUN_10021714(rec + 0x3f, 0xd)` must be zero | CONFIRMED (the encoder zero fills; +0x3F is the long names flag, 0 or 1, from firmware 0.2.0 on) |
 | CRC (+0x4C) | CRC-32 of 0..0x4B | `crc32(rec, 0x4c) == u32(rec + 0x4c)` | CONFIRMED |
 | Count | header case_count == used records | the listing walks used records in order and stops after case_count | CONFIRMED |
 
@@ -185,14 +185,33 @@ Anything that could make a card written by the port unreadable:
    serial is shown as a blank by the Pico. The card stays readable, but accented titles lose letters.
    The writer copies the UTF-8 bytes unchanged. Printable ASCII, parentheses included (0x28, 0x29), is
    shown as is, so the firmware has no restriction on them; the Manager's title normaliser (a port of
-   the original) is what turns "(USA)" into "USA". The display limit is 31 characters for a Case name
-   and for a Disc title: the port cuts the game name and keeps the tags after it (region, revision,
-   disc) via `mh_fit_name`.
-   The limit is 31, not 41: both fields are 0x20 bytes and the Manager keeps one for the terminator
-   (FUN_10021960 and FUN_10021d84 copy at most 0x20 bytes into a 0x21 byte buffer, so the Pico could show
-   a 32nd character, but the original writer never fills it). The 0x47 cap seen in FUN_100222e0 only bounds
-   the disc title plus the " - DISCO n" suffix the firmware appends in Cases with several discs. Example:
-   "Alundra 2 - A New Legend Begins (USA)" is stored as "Alundra 2 - A New Legend Begins" (31 characters, the region dropped).
+   the original) is what turns "(USA)" into "USA". The original firmware shows 31 characters for a Case
+   name and for a Disc title (both fields are 0x20 bytes and the Manager keeps one for the terminator;
+   FUN_10021960 and FUN_10021d84 copy at most 0x20 bytes into a 0x21 byte buffer). The 0x47 cap seen in
+   FUN_100222e0 bounds the disc title plus the " - DISCO n" suffix the firmware appends in Cases with several
+   discs, and it is the length of one library list row (`kListNameCap`, 71 characters).
+   **Long names extension (card format 2.1, firmware 0.2.0).** Names over 31 characters are now stored
+   whole, up to 71: the first 31 characters stay in the 0x20 byte field and the other 40 go in reserved
+   Disc record bytes +0x94..+0xFB (magic `LNX1`, `title_ext_len`, `case_ext_len`, `title_ext[40]`,
+   `case_ext[40]`) plus the flag byte Case +0x3F (1 = the name continues in `case_ext` of the Disc in slot 0).
+   The rules are in `docs/LONG_NAMES.md` of the firmware repository; `mh_v2_disc_ext_valid`,
+   `mh_v2_case_ext_valid` and the second oracle (`fw2_*`) in `core/tests/test_v2_firmware.c` implement them.
+   The record CRC already covers those bytes. Fit rules (`mh_fit_name`): 71 for a Case name and for the
+   Disc title of a Case with one Disc, 61 for the Disc titles of a Case with several Discs (so " - DISCO n"
+   is never cut off, `mh_card_disc_name`); when a name does not fit, the region goes first, and only
+   if it is still too long is the game name cut, keeping the revision and disc tags. A language list such as
+   "(En,Fr,De)" is always dropped. Example: "Chrono Cross (USA, Canada) (Disc 1)" is now stored whole
+   (it used to be "Chrono Cross (Disc 1)").
+   **Compatibility warning.** The original V3 firmware requires Disc +0x94..+0xFB and Case +0x3F..+0x4B to
+   be zero: a card with even one record that uses the extension cannot be mounted by it. The writer
+   therefore emits the extension ONLY for names longer than 31 characters and writes byte-identical
+   records to the previous version for everything else (checked against the previous writer on a
+   whole image). A user whose console still runs the original firmware must update to 0.2.0 before writing
+   such a card. The reader accepts cards with and without the extension; when a Case is flagged but the
+   Disc in slot 0 cannot supply `case_ext`, the 31 character base name is used instead of failing.
+   **Favorites warning.** The PS1 menu keys favorites by a case-insensitive FNV-1a hash of the row text. A name
+   that changes (it is no longer cut, or it gained parentheses) is a different key: favorites saved for that
+   game must be added again. Names of 31 characters or less keep their key.
    The PS1 menu font has a glyph for every ASCII character from 0x21 to 0x7E (FUN_800d033c, 6 pixels wide),
    so "(" and ")" are drawn. Since v0.4.5 the Manager writes the name the way the CUE file has it, with
    `mh_card_title` instead of `mh_normalize_title`: case and parentheses are kept, a language list such
@@ -207,7 +226,7 @@ Anything that could make a card written by the port unreadable:
 Where the firmware is looser than the port (safe): art ids other than the index, table and menu
 CRCs, SHA-1, MBR fields, markers, and the CRC forms of the track map. Where it is stricter than
 `mh_v2_header_valid` but the writer already complies: `(case_count == 0) == (disc_count == 0)`,
-empty records entirely zero, zero bytes at Case +0x3F..0x4B and Disc +0x94..0xFB.
+empty records entirely zero, zero bytes at Case +0x3F..0x4B and Disc +0x94..0xFB (the writer complies except for names longer than 31 characters, see discrepancy 3).
 
 Other layouts the firmware also understands (not produced by the port): PSXRAW version 1 single
 disc (first branch of FUN_10021280, header 0x130 bytes with a "DISC" record at +0x130), version 1

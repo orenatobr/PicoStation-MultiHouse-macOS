@@ -228,6 +228,24 @@ void mh_fit_name(const char *norm, size_t base_len, char *out, size_t n)
     memcpy(out + keep, tag, tag_len + 1);
 }
 
+/* Port only, see disc.h. */
+void mh_card_disc_name(const MhDisc *d, unsigned case_discs, char *out, size_t n)
+{
+    size_t lim = case_discs > 1 ? MH_NAME_MULTI : MH_NAME_LONG, len;
+    if (n == 0) return;
+    if (lim > n - 1) lim = n - 1;
+    if (strlen(d->name) <= lim) {
+        mh_str_copy(out, n, d->name);
+        return;
+    }
+    if ((d->flags & (MH_DF_USER_NAMED | MH_DF_FROM_V2)) == 0 && d->title[0]) {
+        mh_fit_name(d->title, d->title_base_len, out, lim + 1);
+        return;
+    }
+    mh_str_copy(out, lim + 1, d->name);
+    for (len = strlen(out); len > 0 && out[len - 1] == ' '; len--) out[len - 1] = 0;
+}
+
 /* orig: short_disc_name @0x140030f50 */
 void mh_short_disc_name(const char *title, char *out, size_t n)
 {

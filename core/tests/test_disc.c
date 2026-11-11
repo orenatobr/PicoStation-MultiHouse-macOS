@@ -859,6 +859,88 @@ static void test_project_limits(void)
     free(p);
 }
 
+/* Long names: the card holds 71 characters (31 + 40 of the extension), 61 for the Disc titles of a
+ * Case with several Discs. Names that fit 31 characters come out exactly as before. */
+static void test_long_card_names(void)
+{
+    char o[MH_NAME_FIT], a[MH_NAME_FIT], norm[MH_DISC_TITLE_MAX];
+    size_t bl;
+    unsigned i;
+    MhDisc *d = fake_disc("X", "");
+    static const char *const raw[] = {
+        "Alundra 2 (USA)",                                           /* short */
+        "Gran Turismo 2 - Arcade Mode (Europe) (Rev 1)",             /* 31 base + tags */
+        "Dragon Ball Z - Ultimate Battle 22 Special (USA) (En,Ja)",  /* language list is dropped */
+        "Final Fantasy Tactics Advance Special Edition (USA) (Rev 1)",
+        "Final Fantasy Tactics Advance Special Edition Of The Century (USA, Europe) (Rev 1)",
+        "Final Fantasy Tactics Advance Special Edition Of The Century And More (USA, Europe) (Rev 1)",
+    };
+
+    CHECK(MH_NAME_FIT == 72 && MH_DISC_NAME_MAX == 72 && MH_CASE_TITLE_MAX == 72);
+    for (i = 0; i < sizeof raw / sizeof *raw; i++) {
+        bl = mh_title_base_len(raw[i]);
+        mh_card_title(raw[i], norm, sizeof norm);
+        mh_fit_name(norm, bl, o, MH_NAME_FIT);
+        mh_fit_name(norm, bl, a, 0x20);
+        CHECK(strlen(o) <= 71 && strlen(a) <= 31);
+        if (strlen(norm) <= 31) CHECK_STR(o, a);            /* fits 31: identical to before */
+        if (strlen(norm) <= 71) CHECK_STR(o, norm);         /* fits 71: whole, parentheses included */
+    }
+    mh_card_title(raw[1], norm, sizeof norm);
+    CHECK(strlen(norm) == strlen("Gran Turismo 2 - Arcade Mode (Europe) (Rev 1)"));
+    mh_fit_name(norm, mh_title_base_len(raw[1]), o, 0x20);
+    CHECK_STR(o, "Gran Turismo 2 - Arcade (Rev 1)");           /* the 31 character fit is unchanged */
+    mh_fit_name(norm, mh_title_base_len(raw[1]), o, MH_NAME_FIT);
+    CHECK_STR(o, "Gran Turismo 2 - Arcade Mode (Europe) (Rev 1)");
+    /* 72 and more: the region goes first, then the game name is cut, the revision is kept */
+    mh_card_title(raw[5], norm, sizeof norm);
+    CHECK(strlen(norm) > 71);
+    mh_fit_name(norm, mh_title_base_len(raw[5]), o, MH_NAME_FIT);
+    CHECK(strlen(o) <= 71 && strstr(o, "(Rev 1)") && !strstr(o, "(USA"));
+    CHECK(strncmp(o, "Final Fantasy Tactics Advance Special Edition Of The Century ", 40) == 0);
+
+    /* exact lengths 71 and 72 */
+    {
+        char n72[80], n71[80];
+        char want[80];
+        memset(n72, 'A', 58);
+        strcpy(n72 + 58, " (USA) (Rev 1)");                   /* 72 characters */
+        CHECK(strlen(n72) == 72);
+        mh_fit_name(n72, 58, o, MH_NAME_FIT);
+        memset(want, 'A', 58);
+        strcpy(want + 58, " (Rev 1)");
+        CHECK_STR(o, want);                                  /* 72 does not fit: the region goes */
+        n72[71] = 0;                                         /* 71 characters fit whole */
+        mh_fit_name(n72, 58, o, MH_NAME_FIT);
+        CHECK_STR(o, n72);
+        memset(n71, 'B', 71); n71[71] = 0;
+        mh_fit_name(n71, 0, o, MH_NAME_FIT);
+        CHECK_STR(o, n71);
+        n71[70] = 'C'; memcpy(n72, n71, 71); n72[71] = 'D'; n72[72] = 0;
+        mh_fit_name(n72, 0, o, MH_NAME_FIT);
+        CHECK(strlen(o) == 71 && strncmp(o, n71, 71) == 0);   /* plain cut at 71 */
+    }
+
+    /* the Disc title the writer stores: 71 for a Case of one Disc, 61 for several */
+    snprintf(d->title, sizeof d->title, "%s", norm);
+    d->title_base_len = (uint16_t)mh_title_base_len(raw[5]);
+    mh_fit_name(d->title, d->title_base_len, d->name, MH_NAME_FIT);
+    mh_card_disc_name(d, 1, o, sizeof o);
+    CHECK_STR(o, d->name);
+    mh_card_disc_name(d, 2, o, sizeof o);
+    CHECK(strlen(o) <= 61 && strstr(o, "(Rev 1)") && strncmp(o, "Final Fantasy Tactics Advance", 29) == 0);
+    snprintf(d->name, sizeof d->name, "SHORT TITLE");
+    mh_card_disc_name(d, 5, o, sizeof o);
+    CHECK_STR(o, "SHORT TITLE");
+    d->flags |= MH_DF_USER_NAMED;                              /* typed by the user: plain cut, no trailing space */
+    memset(d->name, 'U', 60); d->name[60] = ' '; memset(d->name + 61, 'V', 10); d->name[71] = 0;
+    mh_card_disc_name(d, 2, o, sizeof o);
+    CHECK(strlen(o) == 60 && o[59] == 'U');
+    mh_card_disc_name(d, 1, o, sizeof o);
+    CHECK(strlen(o) == 71);
+    free(d);
+}
+
 static void test_titles(void)
 {
     char o[64];
@@ -892,29 +974,29 @@ static void test_titles(void)
         size_t bl = mh_title_base_len(raw);
         mh_card_title(raw, norm, sizeof norm);
         CHECK(bl == strlen("Final Fantasy Tactics Advance Special Edition"));
-        mh_fit_name(norm, bl, o, MH_NAME_FIT);
+        mh_fit_name(norm, bl, o, 0x20);
         CHECK_STR(o, "Final Fantasy Tactics A (Rev 1)");   /* region goes first, then the name is cut */
-        mh_fit_name("Short Name (USA)", 10, o, MH_NAME_FIT);
+        mh_fit_name("Short Name (USA)", 10, o, 0x20);
         CHECK_STR(o, "Short Name (USA)");                       /* fits: untouched */
-        mh_fit_name(norm, 0, o, MH_NAME_FIT);
+        mh_fit_name(norm, 0, o, 0x20);
         CHECK_STR(o, "Final Fantasy Tactics Advance S");      /* no tag known: plain cut */
-        mh_fit_name("AAAAAAAAAA BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", 10, o, MH_NAME_FIT);
+        mh_fit_name("AAAAAAAAAA BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", 10, o, 0x20);
         CHECK_STR(o, "AAAAAAAAAA BBBBBBBBBBBBBBBBBBBB");     /* tail alone does not fit: plain cut */
         CHECK(mh_title_base_len("No Tag Here") == 0 && mh_title_base_len("(USA) Only") == 0);
 
         snprintf(d->title, sizeof d->title, "%s", norm);
         d->title_base_len = (uint16_t)bl;
         snprintf(d->title + strlen(d->title), sizeof d->title - strlen(d->title), " (Disc 1)");
-        char c33[33];
+        char c33[32];
         CHECK(mh_case_title_for_disc(d, c33, sizeof c33));
         CHECK_STR(c33, "Final Fantasy Tactics A (Rev 1)");
-        mh_fit_name(d->title, d->title_base_len, d->name, MH_NAME_FIT);
+        mh_fit_name(d->title, d->title_base_len, d->name, 0x20);
         CHECK_STR(d->name, "Final Fantasy (Rev 1) (Disc 1)");
-        mh_fit_name("Chrono Cross (USA, Canada) (Disc 1)", mh_title_base_len("Chrono Cross (USA, Canada) (Disc 1)"), o, MH_NAME_FIT);
+        mh_fit_name("Chrono Cross (USA, Canada) (Disc 1)", mh_title_base_len("Chrono Cross (USA, Canada) (Disc 1)"), o, 0x20);
         CHECK_STR(o, "Chrono Cross (Disc 1)");              /* region dropped, name whole */
-        mh_fit_name("Alundra 2 - A New Legend Begins (USA)", mh_title_base_len("Alundra 2 - A New Legend Begins (USA)"), o, MH_NAME_FIT);
+        mh_fit_name("Alundra 2 - A New Legend Begins (USA)", mh_title_base_len("Alundra 2 - A New Legend Begins (USA)"), o, 0x20);
         CHECK_STR(o, "Alundra 2 - A New Legend Begins");   /* only the region does not fit */
-        mh_fit_name("Game (Disc 1) (Rev 1) With A Very Long Tail End", 4, o, MH_NAME_FIT);
+        mh_fit_name("Game (Disc 1) (Rev 1) With A Very Long Tail End", 4, o, 0x20);
         CHECK_STR(o, "Game (Disc 1) (Rev 1) With A Ve"); /* first tag is a disc tag, kept; tags too long: plain cut */
     }
 
@@ -1587,6 +1669,7 @@ int main(void)
     test_project_order();
     test_project_limits();
     test_titles();
+    test_long_card_names();
     test_layout_and_kept();
     test_db_load();
     test_db_apply();

@@ -31,14 +31,16 @@ extern "C" {
 #define MH_DISC_MAX_TRACKS 99
 #define MH_DISC_MAX_SECTORS 450000 /* "safe limit of 450,000 CD sectors" */
 #define MH_SECTOR_SIZE 2352        /* raw CD sector in a BIN */
-#define MH_DISC_NAME_MAX 0x21      /* MhDisc.name capacity (32 characters + NUL) */
+#define MH_NAME_LONG 71            /* longest card name: 31 characters + the 40 of the long names extension */
+#define MH_NAME_MULTI 61           /* longest Disc title of a Case with several Discs (the firmware adds " - DISCO n") */
+#define MH_DISC_NAME_MAX 0x48      /* MhDisc.name capacity (71 characters + NUL) */
 #define MH_DISC_TITLE_MAX 0x60     /* MhDisc.title capacity */
-#define MH_NAME_FIT 0x20           /* buffer size of a name that fits the firmware: 31 characters + NUL */
+#define MH_NAME_FIT 0x48           /* buffer size of a name that fits the card: 71 characters + NUL (31 on firmware without the extension) */
 #define MH_DISC_NOTES_MAX 0x300    /* MhDisc.notes capacity (original: 0x300 wide chars) */
 #define MH_DISC_SERIAL_MAX 16      /* serial buffers: 15 characters + NUL */
 
 #define MH_CASE_MAX_DISCS 5        /* discs per case */
-#define MH_CASE_TITLE_MAX 0x21
+#define MH_CASE_TITLE_MAX 0x48     /* Case name capacity (71 characters + NUL) */
 #define MH_PROJECT_MAX_CASES 256   /* case slots */
 #define MH_PROJECT_MAX_DISCS 256   /* discs in the whole project ("A V2 aceita no maximo 256 discos") */
 #define MH_NEW_CASE_TITLE "NEW GAME"
@@ -165,7 +167,7 @@ typedef struct MhDisc {
     uint32_t status;            /* +4      MH_DISC_STATUS_* (mh_disc_refresh_status) */
     uint32_t flags;             /* +8      MH_DF_* */
     char serial[16];            /* +0xc    canonical serial or "" */
-    char name[MH_DISC_NAME_MAX];   /* +0x1c   short name shown in lists (32 chars max) */
+    char name[MH_DISC_NAME_MAX];   /* +0x1c   short name shown in lists (71 chars max) */
     char title[MH_DISC_TITLE_MAX]; /* +0x3d   full title (database / Redump / file name) */
     char cue_path[MH_PATH_MAX];    /* +0x9e   CUE file */
     char source_path[MH_PATH_MAX]; /* +0x89e  kind 5: image file holding the raw slot */
@@ -355,6 +357,10 @@ bool mh_case_title_for_disc(const MhDisc *d, char *out, size_t n);
  * only if that is still too long is the game name (the first base_len characters) cut, keeping the
  * revision and disc tags. Plain cut when base_len is 0 or the tags alone do not fit. */
 void mh_fit_name(const char *norm, size_t base_len, char *out, size_t n);
+/* Port only. The Disc title the writer stores: d->name when it fits (71 characters, 61 when the Case
+ * has several Discs), otherwise refit from the full title (region tag first, then the game name cut)
+ * for a name the user did not type and the card did not supply, or plainly cut. */
+void mh_card_disc_name(const MhDisc *d, unsigned case_discs, char *out, size_t n);
 /* orig: short_disc_name. Shortens a title that has " (DISC N)" to fit n-1 characters by
  * cutting the part before the marker. */
 void mh_short_disc_name(const char *title, char *out, size_t n);

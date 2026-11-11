@@ -119,7 +119,7 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
         uint16_t art;
         if (r[4] == 0) continue;
         if (memcmp(r, MH_V2_CASE_MAGIC, 4) != 0 || r[6] != i || (uint8_t)(r[5] - 1) > 4 ||
-            mh_crc_record(r, MH_V2_CASE_SIZE) != mh_v2_rd32(r + 0x4c)) {
+            mh_crc_record(r, MH_V2_CASE_SIZE) != mh_v2_rd32(r + 0x4c) || !mh_v2_case_ext_valid(r)) {
             free(cases); free(discs);
             return fail(&io, res, "Invalid V2 Case record.");
         }
@@ -186,7 +186,8 @@ bool mh_v2_validate_image(const char *path, MhProgress *prog, MhV2Result *res)
             (base & 0xff) != 0 || base != mh_v2_rd64(r + 0x44))
             DFAIL("Invalid V2 DiscRecord.");
         if (!mh_disc_layout_valid(r) || mh_v2_rd64(r + 0x4c) != base + 0x100 ||
-            mh_crc_record(r, MH_V2_DISC_SIZE) != mh_v2_rd32(r + 0xfc))
+            mh_crc_record(r, MH_V2_DISC_SIZE) != mh_v2_rd32(r + 0xfc) ||
+            !mh_v2_disc_ext_valid(r, cases + (size_t)case_of[i] * MH_V2_CASE_SIZE))
             DFAIL("Invalid V2 DiscRecord.");
 
         /* track map + the zero padding behind it */

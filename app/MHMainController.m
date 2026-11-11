@@ -528,7 +528,7 @@ static NSString *strip_cue_tags(NSString *stem, BOOL discTag) {
 }
 
 /* Sidebar title: the .cue name as written (no extension). The stored
- * case title is the normalised 32-char card name, so it is used only when the user renamed the case. */
+ * case title is the normalised card name (71 characters at most), so it is used only when the user renamed the case. */
 static NSString *case_sidebar_title(const MhCase *c) {
     NSString *stored = MHStr(c->title);
     const MhDisc *d = c->disc_count ? c->discs[0] : NULL;
