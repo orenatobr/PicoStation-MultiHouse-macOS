@@ -188,6 +188,15 @@ Anything that could make a card written by the port unreadable:
    the original) is what turns "(USA)" into "USA". The display limit is 31 characters for a Case name
    and for a Disc title: the port cuts the game name and keeps the tags after it (region, revision,
    disc) via `mh_fit_name`.
+   The limit is 31, not 41: both fields are 0x20 bytes and the Manager keeps one for the terminator
+   (FUN_10021960 and FUN_10021d84 copy at most 0x20 bytes into a 0x21 byte buffer, so the Pico could show
+   a 32nd character, but the original writer never fills it). The 0x47 cap seen in FUN_100222e0 only bounds
+   the disc title plus the " - DISCO n" suffix the firmware appends in Cases with several discs. Example:
+   "Alundra 2 - A New Legend Begins (USA)" is stored as "ALUNDRA 2 - A NEW LEGEND BE USA" (31 characters).
+   The PS1 menu font has a glyph for every ASCII character from 0x21 to 0x7E (FUN_800d033c, 6 pixels wide),
+   so "(" and ")" would be drawn. Keeping them was measured and rejected: on the 150 games in the test
+   folder the names that need cutting go from 43 to 61, and the cut reaches the game number ("FINAL FANTASY
+   VI (USA) (DISC 1)" instead of "FINAL FANTASY VII USA DISC 1"). The tags stay separated by spaces.
 4. Music longer than 0x80030 bytes would be accepted by the Manager but never played (see table). The
    embedded resource is fine; do not replace it by a longer file.
 
