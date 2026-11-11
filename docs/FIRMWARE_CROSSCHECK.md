@@ -192,12 +192,13 @@ Anything that could make a card written by the port unreadable:
    (FUN_10021960 and FUN_10021d84 copy at most 0x20 bytes into a 0x21 byte buffer, so the Pico could show
    a 32nd character, but the original writer never fills it). The 0x47 cap seen in FUN_100222e0 only bounds
    the disc title plus the " - DISCO n" suffix the firmware appends in Cases with several discs. Example:
-   "Alundra 2 - A New Legend Begins (USA)" is stored as "Alundra 2 - A New Legend (USA)" (30 characters).
+   "Alundra 2 - A New Legend Begins (USA)" is stored as "Alundra 2 - A New Legend Begins" (31 characters, the region dropped).
    The PS1 menu font has a glyph for every ASCII character from 0x21 to 0x7E (FUN_800d033c, 6 pixels wide),
    so "(" and ")" are drawn. Since v0.4.5 the Manager writes the name the way the CUE file has it, with
    `mh_card_title` instead of `mh_normalize_title`: case and parentheses are kept, a language list such
-   as "(En,Fr,De)" is dropped. The parentheses cost 4 characters, so more names need a cut (the game name
-   is cut, never the region and revision). The lookup keys used by the cheats and the database still use
+   as "(En,Fr,De)" is dropped. The parentheses cost 4 characters, so more names need a cut: the region
+   goes first ("Chrono Cross (USA, Canada) (Disc 1)" is stored as "Chrono Cross (Disc 1)"), and only if the
+   name is still too long is the game name cut, keeping the revision and disc tags. The lookup keys used by the cheats and the database still use
    `mh_normalize_title`. Cards written before v0.4.5 keep their old upper-case names until the game is
    added again.
 4. Music longer than 0x80030 bytes would be accepted by the Manager but never played (see table). The

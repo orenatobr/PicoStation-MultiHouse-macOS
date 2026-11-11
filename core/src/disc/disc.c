@@ -199,7 +199,24 @@ void mh_fit_name(const char *norm, size_t base_len, char *out, size_t n)
     if (n == 0) return;
     while (*tag == ' ') tag++;
     tag_len = strlen(tag);
-    if (strlen(norm) < n || base_len == 0 || tag_len == 0 || tag_len + 2 > n - 1) {
+    if (strlen(norm) < n || base_len == 0 || tag_len == 0) {
+        mh_str_copy(out, n, norm);
+        return;
+    }
+    /* does not fit: the region (the first tag, unless it is a revision or disc tag) goes first */
+    if (!mh_str_starts_i(tag, "(Rev ") && !mh_str_starts_i(tag, "(Disc ") && strchr(tag, ')')) {
+        tag = strchr(tag, ')') + 1;
+        while (*tag == ' ') tag++;
+        tag_len = strlen(tag);
+    }
+    if (tag_len == 0) {
+        keep = base_len < n - 1 ? base_len : n - 1;
+        memcpy(out, norm, keep);
+        while (keep > 0 && out[keep - 1] == ' ') keep--;
+        out[keep] = 0;
+        return;
+    }
+    if (tag_len + 2 > n - 1) {
         mh_str_copy(out, n, norm);
         return;
     }

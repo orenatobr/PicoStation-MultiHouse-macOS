@@ -893,7 +893,7 @@ static void test_titles(void)
         mh_card_title(raw, norm, sizeof norm);
         CHECK(bl == strlen("Final Fantasy Tactics Advance Special Edition"));
         mh_fit_name(norm, bl, o, MH_NAME_FIT);
-        CHECK_STR(o, "Final Fantasy Tac (USA) (Rev 1)");
+        CHECK_STR(o, "Final Fantasy Tactics A (Rev 1)");   /* region goes first, then the name is cut */
         mh_fit_name("Short Name (USA)", 10, o, MH_NAME_FIT);
         CHECK_STR(o, "Short Name (USA)");                       /* fits: untouched */
         mh_fit_name(norm, 0, o, MH_NAME_FIT);
@@ -907,9 +907,15 @@ static void test_titles(void)
         snprintf(d->title + strlen(d->title), sizeof d->title - strlen(d->title), " (Disc 1)");
         char c33[33];
         CHECK(mh_case_title_for_disc(d, c33, sizeof c33));
-        CHECK_STR(c33, "Final Fantasy Tac (USA) (Rev 1)");
+        CHECK_STR(c33, "Final Fantasy Tactics A (Rev 1)");
         mh_fit_name(d->title, d->title_base_len, d->name, MH_NAME_FIT);
-        CHECK_STR(d->name, "Final Fa (USA) (Rev 1) (Disc 1)");
+        CHECK_STR(d->name, "Final Fantasy (Rev 1) (Disc 1)");
+        mh_fit_name("Chrono Cross (USA, Canada) (Disc 1)", mh_title_base_len("Chrono Cross (USA, Canada) (Disc 1)"), o, MH_NAME_FIT);
+        CHECK_STR(o, "Chrono Cross (Disc 1)");              /* region dropped, name whole */
+        mh_fit_name("Alundra 2 - A New Legend Begins (USA)", mh_title_base_len("Alundra 2 - A New Legend Begins (USA)"), o, MH_NAME_FIT);
+        CHECK_STR(o, "Alundra 2 - A New Legend Begins");   /* only the region does not fit */
+        mh_fit_name("Game (Disc 1) (Rev 1) With A Very Long Tail End", 4, o, MH_NAME_FIT);
+        CHECK_STR(o, "Game (Disc 1) (Rev 1) With A Ve"); /* first tag is a disc tag, kept; tags too long: plain cut */
     }
 
     mh_apply_trackset_title(d, "Spyro 2 - Ripto's Rage! (USA)");
