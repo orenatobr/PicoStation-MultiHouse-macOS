@@ -41,6 +41,7 @@
 - (void)verifyDiscAction:(id)sender;
 - (void)recoverSerialAction:(id)sender;
 - (void)recodeAction:(id)sender;
+- (void)fixEdcEccAction:(id)sender;
 - (void)detailsAction:(id)sender;
 - (void)toggleVerify:(id)sender;
 - (void)toggleSidebarAction:(id)sender;
