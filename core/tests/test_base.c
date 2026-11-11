@@ -200,6 +200,26 @@ static void test_str(void)
     mh_normalize_title(NULL, b, 5);
     CHECK_STR(b, "");
 
+    /* card title: case, parentheses and hyphen kept, language list dropped */
+    {
+    char b[64];
+    mh_card_title("Alundra (USA) (Rev 1)", b, sizeof b);
+    CHECK_STR(b, "Alundra (USA) (Rev 1)");
+    mh_card_title("Alundra 2 - A New Legend Begins (USA)", b, sizeof b);
+    CHECK_STR(b, "Alundra 2 - A New Legend Begins (USA)");
+    mh_card_title("Final Fantasy VII (Europe) (En,Fr,De,Es,It) (Disc 1)", b, sizeof b);
+    CHECK_STR(b, "Final Fantasy VII (Europe) (Disc 1)");
+    mh_card_title("Chrono Cross (USA, Canada)", b, sizeof b);   /* a region list is not a language list */
+    CHECK_STR(b, "Chrono Cross (USA, Canada)");
+    mh_card_title("Pok\xC3\xA9mon \xC3\x86 (Ja)", b, sizeof b);
+    CHECK_STR(b, "Pokemon");
+    mh_card_title("Abcdefgh", b, 5);
+    CHECK_STR(b, "Abcd");
+    mh_card_title(NULL, b, 5);
+    CHECK_STR(b, "");
+    CHECK(mh_title_base_len("Alundra 2 - A New Legend (USA)") == strlen("Alundra 2 - A New Legend"));
+    }
+
     mh_str_copy(b, sizeof b, "slus_005.94");
     mh_normalize_serial(b);
     CHECK_STR(b, "SLUS-00594");

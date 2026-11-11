@@ -218,7 +218,7 @@ MhDisc *mh_cue_parse(const char *cue_path)
     d->db_index = 0xFFFFFFFFu;
     mh_str_copy(d->cue_path, sizeof d->cue_path, cue_path);
     mh_path_stem(cue_path, stem, sizeof stem);
-    mh_normalize_title(stem, d->name, sizeof d->name);
+    mh_card_title(stem, d->name, sizeof d->name);
     if (!mh_cue_read_text(cue_path, &text)) {
         mh_disc_note(d, "Could not open or decode the CUE.");
         return d;
