@@ -350,9 +350,10 @@ uint64_t mh_kept_package(const MhDisc *d, int idx, const char *path);
 /* orig: case_title_for_disc. Game title for grouping: title (or name), cut at " (DISC " or
  * " DISC ", trailing spaces removed. Returns true when a disc marker was cut. */
 bool mh_case_title_for_disc(const MhDisc *d, char *out, size_t n);
-/* Port only. Copies the normalised title norm into out (n bytes). When it does not fit, the game name
- * (the first base_len characters) is cut so that the tags after it (region, revision, disc) survive.
- * Plain cut when base_len is 0 or the tags alone do not fit. */
+/* Port only. Copies the card title norm into out (n bytes). When it does not fit, the region tag goes
+ * first so the game name stays whole ("Chrono Cross (USA, Canada) (Disc 1)" -> "Chrono Cross (Disc 1)");
+ * only if that is still too long is the game name (the first base_len characters) cut, keeping the
+ * revision and disc tags. Plain cut when base_len is 0 or the tags alone do not fit. */
 void mh_fit_name(const char *norm, size_t base_len, char *out, size_t n);
 /* orig: short_disc_name. Shortens a title that has " (DISC N)" to fit n-1 characters by
  * cutting the part before the marker. */
