@@ -30,7 +30,8 @@ void mh_v2_hydrate_project(MhProject *p, const MhV2Env *env)
             if (!d || d->serial[0] == 0) continue;
             d->db_index = 0xffffffffu;
             saved = d->cheats;
-            had_case = d->case_art_path[0] != 0;
+            /* the card keeps the case art on the case, so a loaded case that has it already has its art */
+            had_case = d->case_art_path[0] != 0 || c->art_path[0] != 0;
             had_cd = d->cd_art_path[0] != 0;
             if (db && !mh_db_apply_disc(db, d)) mh_db_apply_saved_single_track(db, d);
             msg[0] = 0;
