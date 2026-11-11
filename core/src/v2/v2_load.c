@@ -135,9 +135,13 @@ static void issue_text(MhDisc *d)
     MhWbuf w;
     uint32_t v = d->verify_issues;
     mh_wbuf_init(&w);
-    if (v & 0xc0)
-        mh_wbuf_puts(&w, "Some sectors are inconsistent. Videos or audio may fail. You can create "
-                         "a copy with recalculated EDC/ECC.\r\n");
+    if (v & 0xc0) {
+        if (v & 2)
+            mh_wbuf_puts(&w, "Some sectors are inconsistent. Videos or audio may fail. You can create a copy with recalculated EDC/ECC.\r\n");
+        else
+            mh_wbuf_puts(&w, "Some sectors have EDC/ECC that does not match, but the disc is identical to the known original, "
+                             "so the real disc has the same sectors. Create an EDC/ECC copy only if videos or audio fail.\r\n");
+    }
     if (v & 1) mh_wbuf_puts(&w, "Could not confirm the game ID.\r\n");
     if (v & 2) mh_wbuf_puts(&w, "The Disc differs from the known version; it may be a modification.\r\n");
     if (v & 4) mh_wbuf_puts(&w, "The size reported by the game exceeds the file.\r\n");

@@ -980,8 +980,11 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
         [m addItem:NSMenuItem.separatorItem];
         [self addItem:@"Verify Disc" action:@selector(verifyDiscAction:) to:m];
         if (d && d->serial[0] == 0) [self addItem:@"Recover Serial…" action:@selector(recoverSerialAction:) to:m];
-        if (d && d->kind == 1 && (d->verify_issues & 0xc0) != 0 && (d->verify_issues & 8) == 0)
+        if (d && d->kind == 1 && (d->verify_issues & 0xc0) != 0 && (d->verify_issues & 8) == 0) {
+            /* a disc identical to the known original keeps its identity: only the manual copy is offered */
+            if (d->verify_issues & 2) [self addItem:@"Fix EDC/ECC and Replace" action:@selector(fixEdcEccAction:) to:m];
             [self addItem:@"Create EDC/ECC Copy…" action:@selector(recodeAction:) to:m];
+        }
         [self addItem:@"Cheats…" action:@selector(cmdCheatsAction:) to:m];
         [self addItem:@"Technical Details…" action:@selector(detailsAction:) to:m];
     }
@@ -1259,6 +1262,7 @@ static void progress_cb_c(void *user, uint64_t done, uint64_t total, const char 
 }
 - (void)recoverSerialAction:(id)s { [self recoverSerial:_app.currentDisc silent:NO]; }
 - (void)recodeAction:(id)s { [self recodeDisc]; }
+- (void)fixEdcEccAction:(id)s { [self fixEdcEccDisc]; }
 - (void)detailsAction:(id)s { [self showTechnicalDetails]; }
 
 #pragma mark - adding CUEs (orig: add_dialog_files, add_cue_path, process_drop, finish_batch)
@@ -2038,6 +2042,54 @@ static void device_changed(DADiskRef disk, void *ctx) {
     }];
 }
 
+/* Recalculates EDC/ECC into <data>/recoded/<n>/<same name>.cue and swaps the disc for that copy, keeping its place
+ * in the Case and the disc art. The source files are not touched. */
+- (void)fixEdcEccDisc {
+    MhDisc *d0 = _app.currentDisc;
+    if (!d0 || d0->kind != 1 || (d0->verify_issues & 0xc0) == 0 || (d0->verify_issues & 8) != 0 ||
+        (d0->verify_issues & 2) == 0 || _app.busy) return;
+    int rcase = _app.curCase, rdisc = _app.curDisc;
+    NSString *stem = @(d0->cue_path).lastPathComponent.stringByDeletingPathExtension;
+    NSString *base = [_app.dataDir stringByAppendingPathComponent:@"recoded"];
+    NSString *dir = nil;
+    for (int n = 1; n < 1000; n++) {
+        dir = [base stringByAppendingPathComponent:[NSString stringWithFormat:@"%d", n]];
+        if (![NSFileManager.defaultManager fileExistsAtPath:dir]) break;
+    }
+    NSString *dst = [[dir stringByAppendingPathComponent:stem] stringByAppendingPathExtension:@"cue"];
+    __block MhMsg err = {{0}};
+    __block BOOL ok = NO, added = NO;
+    [self startJob:^(MhProgress *prog) {
+        if (![NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil]) {
+            snprintf(err.s, sizeof err.s, "Could not create %s", dir.fileSystemRepresentation);
+            return;
+        }
+        ok = mh_manager_recode_copy(d0, dst.fileSystemRepresentation, prog, err.s, sizeof err.s);
+        if (ok) added = [self addCuePath:dst target:rcase];
+    } done:^{
+        BOOL cancelled = self->_app.cancelRequested;
+        [self setBusy:NO];
+        MhCase *c = [self->_app caseAt:rcase];
+        int at = -1;
+        for (int i = 0; c && i < c->disc_count; i++) if (c->discs[i] == d0) at = i;
+        if (added && c && at >= 0 && c->disc_count >= 2 && c->discs[c->disc_count - 1] != d0) {
+            int last = c->disc_count - 1;
+            MhDisc *nd = c->discs[last];
+            if (d0->cd_art_path[0] && (d0->flags & MH_DF_CD_ART)) {
+                mh_str_copy(nd->cd_art_path, sizeof nd->cd_art_path, d0->cd_art_path);
+                nd->flags |= MH_DF_CD_ART;
+            }
+            mh_case_remove_disc(self->_app.project, c, (uint8_t)at); /* frees d0; nd is now at last - 1 */
+            mh_case_move_disc(c, (uint8_t)(last - 1), (uint8_t)at);
+            self->_app.curDisc = at;
+            (void)rdisc;
+        } else if (!ok && !cancelled) {
+            MHMessage(@"Couldn't Fix EDC/ECC", MHStr(err.s), MHIconError);
+        }
+        [self refreshProject];
+    }];
+}
+
 /* Imports src into custom/art and points the case (isCase) or disc at it. Any thread. */
 - (BOOL)importArt:(const char *)src isCase:(BOOL)isCase forCase:(MhCase *)c disc:(MhDisc *)d err:(char *)err size:(size_t)n {
     char dir[MH_PATH_MAX], name[128], dst[MH_PATH_MAX];
@@ -2156,9 +2208,10 @@ static NSString *art_base_url(void) {
     if (a == @selector(discArt:) || a == @selector(cmdCheatsAction:) || a == @selector(verifyDiscAction:) || a == @selector(detailsAction:))
         return idle && _app.currentDisc != NULL;
     if (a == @selector(recoverSerialAction:)) return idle && _app.currentDisc && _app.currentDisc->serial[0] == 0;
-    if (a == @selector(recodeAction:)) {
+    if (a == @selector(recodeAction:) || a == @selector(fixEdcEccAction:)) {
         MhDisc *d = _app.currentDisc;
-        return idle && d && d->kind == 1 && (d->verify_issues & 0xc0) != 0;
+        BOOL needs = idle && d && d->kind == 1 && (d->verify_issues & 0xc0) != 0;
+        return a == @selector(fixEdcEccAction:) ? needs && (d->verify_issues & 2) != 0 : needs;
     }
     if (a == @selector(moveItemUp:)) return [self canMoveKind:[self activeKind] delta:-1];
     if (a == @selector(moveItemDown:)) return [self canMoveKind:[self activeKind] delta:1];
@@ -2292,6 +2345,8 @@ static void ax_walk(id el, int depth, NSMutableString *out, NSMutableSet *seen) 
         [self setBusy:[ARG(1) boolValue]];
     } else if ([op isEqualToString:@"shot"]) {
         [self writeShot:ARG(1)];
+    } else if ([op isEqualToString:@"fix-edc"]) {
+        [self fixEdcEccDisc];
     } else if ([op isEqualToString:@"add-folder"]) {
         [self importPaths:@[ rest ]];
     } else if ([op isEqualToString:@"save-image"]) {

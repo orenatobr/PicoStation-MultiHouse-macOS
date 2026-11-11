@@ -3,6 +3,7 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #define main image_test_main
 #include "test_v2_image.c"
+#include "mh/v2write.h"
 #undef main
 
 static int g_checks;
@@ -346,7 +347,7 @@ static void test_load_records(void)
             if (pass == 0) {
                 CHECK(d->verified == 1 && d->verify_issues == 0x40 && d->verify_accepted == 2);
                 CHECK(d->verify_crc32 == d->crc32 && memcmp(d->verify_sha1, d->sha1, 20) == 0);
-                CHECK(strstr(d->verify_text, "Some sectors are inconsistent") == d->verify_text);
+                CHECK(strstr(d->verify_text, "Some sectors have EDC/ECC") == d->verify_text);
             } else {
                 CHECK(d->verified == 0 && d->verify_issues == 0);
             }
@@ -476,6 +477,25 @@ static void test_sd_write_cancel(void)
     free(img);
 }
 
+/* An EDC/ECC mismatch on a disc identical to the known original is a property of the real disc: the
+ * warning must say so and stop suggesting the repair as a fix for videos and audio. */
+static void test_edc_wording(void)
+{
+    MhDisc *d = calloc(1, sizeof *d);
+    d->verify_issues = 0x80; /* ECC only, identity confirmed (bit 2 clear) */
+    mh_v2_verification_issue_text(d);
+    CHECK(strstr(d->verify_text, "identical to the known original") != NULL);
+    CHECK(strstr(d->verify_text, "Videos or audio may fail") == NULL);
+    d->verify_issues = 0x82; /* the disc also differs from the known version */
+    mh_v2_verification_issue_text(d);
+    CHECK(strstr(d->verify_text, "Videos or audio may fail. You can create a copy with recalculated EDC/ECC.") != NULL);
+    CHECK(strstr(d->verify_text, "it may be a modification") != NULL);
+    d->verify_issues = 0;
+    mh_v2_verification_issue_text(d);
+    CHECK(strstr(d->verify_text, "Disc verified") != NULL);
+    free(d);
+}
+
 int main(void)
 {
     MhV2Result r;
@@ -494,6 +514,7 @@ int main(void)
     memset(&g_env, 0, sizeof g_env);
     g_env.menu = g_menu;
     g_env.menu_size = g_menu_size;
+    test_edc_wording();
     test_bin_count();
     test_header_selection();
     test_load_records();

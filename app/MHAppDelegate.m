@@ -137,6 +137,7 @@ static NSString *fkey(unichar c) { return [NSString stringWithCharacters:&c leng
     [m addItem:NSMenuItem.separatorItem];
     item(m, @"Verify Disc", @selector(verifyDiscAction:), @"", 0, _main);
     item(m, @"Recover Serial…", @selector(recoverSerialAction:), @"", 0, _main);
+    item(m, @"Fix EDC/ECC and Replace", @selector(fixEdcEccAction:), @"", 0, _main);
     item(m, @"Create EDC/ECC Copy…", @selector(recodeAction:), @"", 0, _main);
     item(m, @"Technical Details…", @selector(detailsAction:), @"i", cmd | shift, _main);
     item(m, @"Verify on Add", @selector(toggleVerify:), @"", 0, _main);
