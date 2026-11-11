@@ -392,6 +392,10 @@ int mh_cheat_profile_serialize(const MhCheatProfile *src, uint8_t scope, uint8_t
                     "codes will not be serialized.");
             goto done;
         }
+        if (lines > 0x100) { /* FUN_100228c8 drops a version 4 blob with more lines than this */
+            set_err(err, errn, "The firmware only runs 256 cheat lines per disc. Remove lines before applying.");
+            goto done;
+        }
         total = MH_CHEAT_BLOB_HEADER;
         for (i = 0; i < p->count; i++) total += 0x60 + (uint32_t)p->entries[i].nlines * 6;
         if (total - 1 > 0x27ff) {

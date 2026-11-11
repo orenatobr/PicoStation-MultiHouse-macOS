@@ -102,8 +102,8 @@ the confirmation checkbox. Even so, double-check the disk name in the list.
 
 ## Known limitations (inherited from the original or the firmware)
 
-- Custom cheat profiles in the v4 format with more than 256 lines are accepted by the program, but the
-  firmware ignores them (the disc ends up without cheats).
+- Custom cheat profiles that need the v4 format are limited to 256 code lines per disc, the most the
+  firmware runs; the program refuses more.
 - Titles with accented characters show blanks in the console menu (the firmware only displays ASCII).
 - Several messages still mention "Windows" or "PhysicalDrive": the texts were kept as in the original.
 

@@ -429,6 +429,38 @@ static void test_wire_roundtrip_and_validation(void)
 
 /* ---- tests that need the database -------------------------------------------------------- */
 
+/* the firmware ignores a version 4 blob with more than 0x100 lines (FUN_100228c8), so the Manager
+ * must refuse it instead of writing cheats that never run */
+static MhCheatProfile *wire_lines(unsigned first, unsigned second)
+{
+    MhCheatProfile *p = manual(2);
+    unsigned n[2] = {first, second};
+    for (unsigned i = 0; i < 2; i++) {
+        MhCheatEntry *e = &p->entries[i];
+        free(e->lines);
+        e->nlines = (uint16_t)n[i];
+        e->lines = malloc((size_t)n[i] * 6);
+        for (unsigned j = 0; j < n[i]; j++) memcpy(e->lines + j * 6, W8, 6);
+    }
+    return p;
+}
+
+static void test_wire_firmware_line_limit(void)
+{
+    uint8_t *blob = NULL;
+    uint32_t len = 0;
+    MhCheatProfile *p = wire_lines(128, 128);
+    CHECK(mh_cheat_profile_serialize(p, 1, &blob, &len, err, sizeof err) && ch_rd32(blob + 0x18) == 0x100);
+    free(blob);
+    mh_cheat_profile_free(p);
+
+    blob = NULL;
+    p = wire_lines(129, 128);
+    CHECK(!mh_cheat_profile_serialize(p, 1, &blob, &len, err, sizeof err) && blob == NULL && len == 0);
+    CHECK_STR(err, "The firmware only runs 256 cheat lines per disc. Remove lines before applying.");
+    mh_cheat_profile_free(p);
+}
+
 static void test_audited(void)
 {
     MhCheatProfile *p = mh_cheat_profile_new(), *q = NULL, *cat = NULL;
@@ -805,6 +837,7 @@ int main(void)
     test_validate_messages();
     test_add_remove_clone();
     test_wire_roundtrip_and_validation();
+    test_wire_firmware_line_limit();
     if (!mh_read_entire_file(CDX_PATH, &g_blob, &g_blob_len)) {
         fprintf(stderr, "SKIP database tests: %s not found (run from the repository root)\n", CDX_PATH);
         printf("test_cheat_profile: %d checks passed (database tests skipped)\n", g_checks);
