@@ -68,7 +68,11 @@ void mh_clean_ascii(const char *src, char *dst, size_t n);
  * to their base letter (AE, eth, thorn, sharp s and the math signs become separators);
  * everything else is a single collapsed space; no leading or trailing space. */
 void mh_normalize_title(const char *src_utf8, char *dst, size_t n);
-/* Port only. Length of the game name in mh_normalize_title(src_utf8): what comes before the first "(",
+/* Port only. The name written to the card: "Game - Subtitle (USA) (Rev 1)". Same as mh_normalize_title but
+ * keeps the case and every printable ASCII character (so the parentheses stay), and drops a language list
+ * such as "(En,Fr,De)". Output is at most n-1 characters. */
+void mh_card_title(const char *src_utf8, char *dst, size_t n);
+/* Port only. Length of the game name in mh_card_title(src_utf8): what comes before the first "(",
  * e.g. "Game (USA) (Rev 1)" -> 4. 0 when there is no tag or nothing before it. */
 size_t mh_title_base_len(const char *src_utf8);
 /* orig: normalize_serial. In place. Keeps A-Z (lower-case is upper-cased) 0-9 and '-', turns

@@ -256,7 +256,7 @@ void mh_apply_trackset_title(MhDisc *d, const char *title)
 {
     char norm[MH_DISC_TITLE_MAX];
     if (!title || !title[0]) return;
-    mh_normalize_title(title, norm, sizeof norm);
+    mh_card_title(title, norm, sizeof norm);
     if (norm[0]) {
         mh_str_copy(d->title, sizeof d->title, norm);
         d->title_base_len = (uint16_t)mh_title_base_len(title);

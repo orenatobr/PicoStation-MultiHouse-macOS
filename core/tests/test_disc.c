@@ -434,7 +434,7 @@ static void test_cue_valid(void)
     CHECK(d->tracks[1].start == 1150 && d->tracks[1].length == 1300 - 1150);
     CHECK((d->tracks[1].flags & (MH_TRACK_DCP | MH_TRACK_ISRC | MH_TRACK_HAS_INDEX0)) == (MH_TRACK_DCP | MH_TRACK_ISRC | MH_TRACK_HAS_INDEX0));
     CHECK(d->tracks[2].pregap == 0 && d->tracks[2].start == 1300 && d->tracks[2].length == 200);
-    CHECK_STR(d->name, "OK");
+    CHECK_STR(d->name, "ok");
     /* ISO is absent: serial unknown, so a note and status Review */
     CHECK(d->serial[0] == 0 && d->status == MH_DISC_STATUS_NOTE);
     CHECK_STR(d->notes, "Serial not identified automatically.");
@@ -890,37 +890,37 @@ static void test_titles(void)
         const char *raw = "Final Fantasy Tactics Advance Special Edition (USA) (Rev 1)";
         char norm[MH_DISC_TITLE_MAX];
         size_t bl = mh_title_base_len(raw);
-        mh_normalize_title(raw, norm, sizeof norm);
-        CHECK(bl == strlen("FINAL FANTASY TACTICS ADVANCE SPECIAL EDITION"));
+        mh_card_title(raw, norm, sizeof norm);
+        CHECK(bl == strlen("Final Fantasy Tactics Advance Special Edition"));
         mh_fit_name(norm, bl, o, MH_NAME_FIT);
-        CHECK_STR(o, "FINAL FANTASY TACTICS USA REV 1");
-        mh_fit_name("SHORT NAME USA", 10, o, MH_NAME_FIT);
-        CHECK_STR(o, "SHORT NAME USA");                       /* fits: untouched */
+        CHECK_STR(o, "Final Fantasy Tac (USA) (Rev 1)");
+        mh_fit_name("Short Name (USA)", 10, o, MH_NAME_FIT);
+        CHECK_STR(o, "Short Name (USA)");                       /* fits: untouched */
         mh_fit_name(norm, 0, o, MH_NAME_FIT);
-        CHECK_STR(o, "FINAL FANTASY TACTICS ADVANCE S");      /* no tag known: plain cut */
+        CHECK_STR(o, "Final Fantasy Tactics Advance S");      /* no tag known: plain cut */
         mh_fit_name("AAAAAAAAAA BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", 10, o, MH_NAME_FIT);
         CHECK_STR(o, "AAAAAAAAAA BBBBBBBBBBBBBBBBBBBB");     /* tail alone does not fit: plain cut */
         CHECK(mh_title_base_len("No Tag Here") == 0 && mh_title_base_len("(USA) Only") == 0);
 
         snprintf(d->title, sizeof d->title, "%s", norm);
         d->title_base_len = (uint16_t)bl;
-        snprintf(d->title + strlen(d->title), sizeof d->title - strlen(d->title), " DISC 1");
+        snprintf(d->title + strlen(d->title), sizeof d->title - strlen(d->title), " (Disc 1)");
         char c33[33];
         CHECK(mh_case_title_for_disc(d, c33, sizeof c33));
-        CHECK_STR(c33, "FINAL FANTASY TACTICS USA REV 1");
+        CHECK_STR(c33, "Final Fantasy Tac (USA) (Rev 1)");
         mh_fit_name(d->title, d->title_base_len, d->name, MH_NAME_FIT);
-        CHECK_STR(d->name, "FINAL FANTASY USA REV 1 DISC 1");
+        CHECK_STR(d->name, "Final Fa (USA) (Rev 1) (Disc 1)");
     }
 
     mh_apply_trackset_title(d, "Spyro 2 - Ripto's Rage! (USA)");
-    CHECK_STR(d->title, "SPYRO 2 - RIPTO'S RAGE USA"); CHECK_STR(d->name, "SPYRO 2 - RIPTO'S RAGE USA");
+    CHECK_STR(d->title, "Spyro 2 - Ripto's Rage! (USA)"); CHECK_STR(d->name, "Spyro 2 - Ripto's Rage! (USA)");
     d->flags |= MH_DF_USER_NAMED;
     mh_apply_trackset_title(d, "Other Game");
-    CHECK_STR(d->title, "OTHER GAME"); CHECK_STR(d->name, "SPYRO 2 - RIPTO'S RAGE USA");
+    CHECK_STR(d->title, "Other Game"); CHECK_STR(d->name, "Spyro 2 - Ripto's Rage! (USA)");
     mh_apply_trackset_title(d, "");
-    CHECK_STR(d->title, "OTHER GAME");
-    mh_apply_trackset_title(d, "!!!");
-    CHECK_STR(d->title, "OTHER GAME");
+    CHECK_STR(d->title, "Other Game");
+    mh_apply_trackset_title(d, "\xE2\x98\x85\xE2\x98\x85");   /* nothing usable: unchanged */
+    CHECK_STR(d->title, "Other Game");
     mh_disc_free(d);
 }
 
@@ -1429,7 +1429,7 @@ static void test_add_cue(void)
     tmp_path("Game (Disc 1).cue", p);
     st = mh_project_add_cue(proj, NULL, p, 256, &h, &res, err, sizeof err);
     CHECK(st == MH_ADD_OK && res.cas == &proj->cases[0] && res.disc_index == 0);
-    CHECK_STR(proj->cases[0].title, "GAME");
+    CHECK_STR(proj->cases[0].title, "Game");
     CHECK(proj->case_count == 1 && proj->disc_count == 1 && proj->dirty);
     CHECK(mh_project_add_cue(proj, NULL, p, 256, &h, &res, err, sizeof err) == MH_ADD_DUPLICATE);
     tmp_path("Game (Disc 2).cue", p);
@@ -1438,7 +1438,7 @@ static void test_add_cue(void)
     tmp_path("Other.cue", p);
     st = mh_project_add_cue(proj, NULL, p, 256, &h, &res, err, sizeof err);
     CHECK(st == MH_ADD_OK && res.cas == &proj->cases[1] && res.disc_index == 0);
-    CHECK_STR(proj->cases[1].title, "OTHER");
+    CHECK_STR(proj->cases[1].title, "Other");
     /* explicit target slot */
     tmp_path("bad.cue", p);
     CHECK(mh_project_add_cue(proj, NULL, p, 1, &h, &res, err, sizeof err) == MH_ADD_REJECTED);   /* admit refuses */

@@ -1,6 +1,7 @@
 /* String helpers and the MhWbuf builder. */
 #include "internal.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -255,8 +256,49 @@ void mh_normalize_title(const char *src, char *dst, size_t n)
     dst[o] = 0;
 }
 
-/* Port only: the normaliser is character by character, so the prefix before "(" normalises to the
- * prefix of the whole result. */
+/* Port only: a "(En,Fr,De)" language list. src is just after the "(". Returns the text after the ")", or NULL. */
+static const char *lang_group_end(const char *src)
+{
+    for (;;) {
+        if (!isalpha((unsigned char)src[0]) || !isalpha((unsigned char)src[1])) return NULL;
+        src += 2;
+        if (*src == ')') return src + 1;
+        if (*src++ != ',') return NULL;
+    }
+}
+
+/* Port only, see str.h. */
+void mh_card_title(const char *src, char *dst, size_t n)
+{
+    static const char fold[65] =
+        "AAAAAA CEEEEIIII NOOOOO  UUUUY  AAAAAA CEEEEIIII NOOOOO  UUUUY Y";
+    size_t o = 0;
+    bool prev_sep = false;
+    uint32_t cp;
+    const char *e;
+    if (!dst || n == 0) return;
+    while (src && o + 1 < n && (cp = mh_utf8_next(&src)) != 0) {
+        unsigned char b = ' '; /* anything that is not kept becomes a separator */
+        if (cp == '(' && (e = lang_group_end(src)) != NULL) src = e;
+        else if (cp > 0x20 && cp < 0x7F) b = (unsigned char)cp;
+        else if (cp >= 0xC0 && cp < 0x100) {
+            b = (unsigned char)fold[cp - 0xC0];
+            if (cp >= 0xE0 && b != ' ') b += 32;
+        }
+        if (b != ' ') {
+            dst[o++] = (char)b;
+            prev_sep = false;
+        } else if (!prev_sep && o != 0) {
+            dst[o++] = ' ';
+            prev_sep = true;
+        }
+    }
+    while (o > 0 && dst[o - 1] == ' ') o--;
+    dst[o] = 0;
+}
+
+/* Port only: what comes before the first "(" is the game name; the prefix of the card title is the card
+ * title of the prefix because the conversion is character by character. */
 size_t mh_title_base_len(const char *src)
 {
     const char *p = src ? strchr(src, '(') : NULL;
@@ -267,7 +309,7 @@ size_t mh_title_base_len(const char *src)
     if (k >= sizeof base) k = sizeof base - 1;
     memcpy(base, src, k);
     base[k] = 0;
-    mh_normalize_title(base, norm, sizeof norm);
+    mh_card_title(base, norm, sizeof norm);
     return strlen(norm);
 }
 
