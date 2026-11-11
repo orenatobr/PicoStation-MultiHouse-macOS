@@ -463,6 +463,9 @@ MhCase *mh_project_group_case(MhProject *p, const MhDisc *d);
 /* orig: case_add_disc. False for NULL, a full case (5) or a full project (disc_count >= 256).
  * Takes ownership of d on success. */
 bool mh_case_add_disc(MhProject *p, MhCase *c, MhDisc *d);
+/* Gives d the disc art of the first other disc of c that has one. Many discs 2..n have no art of their own in the
+ * default art repository; the game's art is better than none. False when d already has art or nobody can lend any. */
+bool mh_disc_inherit_cd_art(const MhCase *c, MhDisc *d);
 /* orig: case_remove_disc. Frees the disc and closes the gap. */
 bool mh_case_remove_disc(MhProject *p, MhCase *c, uint8_t idx);
 /* orig: case_move_disc. */

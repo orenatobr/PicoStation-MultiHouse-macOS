@@ -1140,6 +1140,24 @@ static void test_db_apply(void)
     }
 }
 
+static void test_inherit_cd_art(void)
+{
+    MhCase c;
+    MhDisc *a = fake_disc("A", "SLUS-00001"), *b = fake_disc("B", "SLUS-00002"), *z = fake_disc("C", "SLUS-00003");
+    memset(&c, 0, sizeof c);
+    c.discs[0] = a; c.discs[1] = b; c.discs[2] = z; c.disc_count = 3;
+    CHECK(!mh_disc_inherit_cd_art(&c, b) && b->cd_art_path[0] == 0);          /* nobody has art */
+    mh_str_copy(a->cd_art_path, sizeof a->cd_art_path, "/art/A-CD.art");
+    a->flags |= MH_DF_CD_ART;
+    CHECK(mh_disc_inherit_cd_art(&c, b) && (b->flags & MH_DF_CD_ART));         /* takes the sibling's art */
+    CHECK(strcmp(b->cd_art_path, "/art/A-CD.art") == 0);
+    mh_str_copy(z->cd_art_path, sizeof z->cd_art_path, "/art/C-CD.art");
+    z->flags |= MH_DF_CD_ART;
+    CHECK(!mh_disc_inherit_cd_art(&c, z) && strcmp(z->cd_art_path, "/art/C-CD.art") == 0); /* own art stays */
+    CHECK(!mh_disc_inherit_cd_art(NULL, b) && !mh_disc_inherit_cd_art(&c, NULL));
+    mh_disc_free(a); mh_disc_free(b); mh_disc_free(z);
+}
+
 static void test_db_files(void)
 {
     MhDb db;
@@ -1540,6 +1558,7 @@ int main(void)
     test_db_load();
     test_db_apply();
     test_db_files();
+    test_inherit_cd_art();
     test_db_trackset();
     test_manager();
     test_manager_locate();

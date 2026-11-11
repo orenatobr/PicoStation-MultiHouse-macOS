@@ -275,6 +275,19 @@ bool mh_case_add_disc(MhProject *p, MhCase *c, MhDisc *d)
     return true;
 }
 
+bool mh_disc_inherit_cd_art(const MhCase *c, MhDisc *d)
+{
+    if (!c || !d || (d->flags & MH_DF_CD_ART)) return false;
+    for (unsigned i = 0; i < c->disc_count; i++) {
+        const MhDisc *s = c->discs[i];
+        if (!s || s == d || !(s->flags & MH_DF_CD_ART) || !s->cd_art_path[0]) continue;
+        mh_str_copy(d->cd_art_path, sizeof d->cd_art_path, s->cd_art_path);
+        d->flags |= MH_DF_CD_ART;
+        return true;
+    }
+    return false;
+}
+
 /* orig: case_remove_disc @0x1400039a0 */
 bool mh_case_remove_disc(MhProject *p, MhCase *c, uint8_t idx)
 {
