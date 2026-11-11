@@ -406,6 +406,37 @@ static void test_firmware_reads_writer_output(void)
     free(p);
 }
 
+/* The same walk on real games: audio tracks in a second BIN and a two disc Case. Skipped when the
+ * fixture games are absent. */
+static void test_firmware_reads_real_games(void)
+{
+    static const char *const g[] = {FIXTURES "/Breath of Fire III (USA).cue",
+                                    FIXTURES "/Chrono Cross (USA, Canada) (Disc 1).cue",
+                                    FIXTURES "/Chrono Cross (USA, Canada) (Disc 2).cue"};
+    MhProject *p;
+    MhV2Result res;
+    char *img = tpath("fw_real.img");
+    unsigned nc = 0, nd = 0, i;
+
+    for (i = 0; i < 3; i++)
+        if (access(g[i], R_OK) != 0) {
+            printf("real games absent, skipping the real game walk\n");
+            return;
+        }
+    p = new_project();
+    project_add(p, g[0], 256);
+    project_add(p, g[1], 256);
+    project_add(p, g[2], 1); /* joins the Case of Disc 1 */
+    reset_progress();
+    CHECK(mh_v2_write_image_direct(&g_w, p, img, &res));
+    CHECK(res.ok);
+    CHECK(fw_walk(img, &nc, &nd));
+    CHECK(nc == 2 && nd == 3);
+    printf("real games: %u cases, %u discs accepted by the firmware oracle\n", nc, nd);
+    mh_project_clear(p);
+    free(p);
+}
+
 /* Firmware rule of FUN_10022084: INDEX 01 of a track must lie before the end of the track, that
  * is before the INDEX 00 of the next one. The writer used to emit such a map without noticing. */
 static void test_trackmap_index_inside_track(void)
@@ -474,6 +505,7 @@ int main(void)
     g_w.stamp = fixed_stamp;
     reset_progress();
     test_firmware_reads_writer_output();
+    test_firmware_reads_real_games();
 
 done:
     rm_rf(g_tmp);
