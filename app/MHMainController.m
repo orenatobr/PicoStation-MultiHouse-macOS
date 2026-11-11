@@ -2106,6 +2106,9 @@ static NSString *art_base_url(void) {
                 break;
             }
     }
+    /* only a disc with no art under its own serial borrows the art of a sibling (the repository has none for many
+     * discs 2..n); a sibling added before this disc's art arrived gets it too */
+    for (unsigned i = 0; i < c->disc_count; i++) mh_disc_inherit_cd_art(c, c->discs[i]);
 }
 
 /* orig: make_custom_art.isra.0 (the file picker and the project update; the art is the core's) */
