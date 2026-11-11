@@ -173,13 +173,14 @@ Anything that could make a card written by the port unreadable:
    the old `test_v2_write` case "the last track is not checked against the end of the disc (original
    behaviour)" (INDEX 01 of the last track beyond the disc) now expects a refusal, because the
    firmware refuses that map too; this deliberately departs from the original Manager.
-2. **Version 4 cheat blob with more than 256 lines (REFUTED, not fixed).** The profile limit is 510
-   lines and `mh_cheat_blob_validate` accepts `< 0x1FF`, but FUN_100228c8 rejects `+0x18 > 0x100`.
-   The card mounts and plays, but the cheats of that disc are silently ignored by the firmware.
-   Only custom profiles need the v4 (wire) format; compact v6 blobs are accepted up to 0x1FE lines.
-   Suggested fix (the cheat module is under concurrent audit, so left alone): in the wire branch of
-   `mh_cheat_profile_serialize` fail with a clear message when `lines > 0x100`, and make the v4 branch
-   of `mh_cheat_blob_validate` check `u32(+0x18) <= 0x100`.
+2. **Version 4 cheat blob with more than 256 lines (REFUTED, fixed).** The profile limit is 510
+   lines and `mh_cheat_blob_validate` accepts `< 0x1FF`, but FUN_100228c8 rejects `+0x18 > 0x100`
+   (re-read in a second decompile of the same UF2, same build of Feb 5 2026). The card mounted and
+   played, but the cheats of that disc were silently ignored by the firmware. Only custom profiles need
+   the v4 (wire) format; compact v6 blobs are accepted up to 0x1FE lines. Fix: the wire branch of
+   `mh_cheat_profile_serialize` now refuses more than 256 lines with a clear message. The validator is
+   left as is, so cards written by the original Manager still open. Test:
+   `test_wire_firmware_line_limit` in `core/tests/test_cheat_profile.c`.
 3. Non-ASCII names (informational): every byte outside 0x20..0x7E of a Case name, Disc title or
    serial is shown as a blank by the Pico. The card stays readable, but accented titles lose letters.
    The writer copies the UTF-8 bytes unchanged. Printable ASCII, parentheses included (0x28, 0x29), is
