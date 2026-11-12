@@ -90,30 +90,40 @@ defaults with `menu_defaults_patch`, and for the Umbrella theme appends a `PSTCF
 `umbrella_music.vag` (config text `theme=umbrella\nmusic=embedded:umbrella.vag\nmusic_loop=true\nmusic_volume=68\n`).
 This module does not use the VAG file itself.
 
-## Memory Card compatibility patch (Manager 0.5.1, deliberate deviation from the original)
+## Memory Card compatibility patch (Manager 0.5.1 and 0.5.2, deliberate deviation from the original)
 
-The embedded menu differs from the original in two instruction words, applied by `tools/patch_menu.py` (idempotent,
-with an EDC/ECC self test over the 89 Form 1 sectors) and pinned by `test_memcard_ack_window` in `core/tests/test_menu.c`.
-The menu reads and writes the Memory Card through SIO0 itself. Its detection routine (text address `0x800d480c`) waits for
-the card's ACK after every byte for 0x78 units (about 180 microseconds); the frame read and write routines wait up to
-2000 units (about 2.4 ms measured). A device that acknowledges slower than 180 us (emulators, adapters) passed the transfers but was
-reported as "no Memory Card found". `addiu $a0, $zero, 0x78` at `0x800d48b4` and `0x800d48fc` is now `0x7d0`, the same
-budget. Quick devices are unaffected (the wait ends at the first ACK). The third `addiu $a0, $zero, 0x78` in the program
-(`0x800dece0`) belongs to the pad routine and is not touched. Not tested on a console or a real Memory Card device.
+The embedded menu differs from the original in five instruction words, applied by `tools/patch_menu.py` (idempotent,
+with an EDC/ECC self test over the 89 Form 1 sectors) and pinned by `test_memcard_timing_patch` in `core/tests/test_menu.c`.
+The menu reads and writes the Memory Card through SIO0 itself, with two kinds of bounded waits that assume a card as
+fast as an original one.
+
+1. **ACK wait of the detection routine** (text address `0x800d480c`): 0x78 units (about 180 microseconds) per byte, while the
+   frame routines wait 2000 units (about 2.4 ms). A device that acknowledges slower passed the transfers but was reported
+   as "no Memory Card found". `addiu $a0, $zero, 0x78` at `0x800d48b4` and `0x800d48fc` is now `0x7d0` (0.5.1).
+2. **Settle time after /CS goes low** (minimum waits, 0.5.2): the first byte is sent 0x96 (detection, `0x800d484c`), 0x64
+   (frame read, `0x800dea94`) or 0x50 (frame write, `0x800d4b94`) units after the device is selected (about 1 microsecond
+   per unit). A device that is not listening yet (a microcontroller waking up) loses the byte. All three are now 1000
+   (about 1 ms). Every frame operation takes about 0.9 ms longer.
+
+The third `addiu $a0, $zero, 0x78` in the program (`0x800dece0`) belongs to the pad routine and is not touched. Not tested
+on a console or a real Memory Card device.
 
 `tools/sim_menu_memcard.py` runs the real MIPS code of the blob (Unicorn emulator, `pip install unicorn`) against a modelled
-card with a configurable ACK latency (the same frame protocol as a PS1 card; read and write routines are byte exact on it).
-Measured with this model, time to the ACK counted from the start of the byte:
+card (the same frame protocol as a PS1 card; the read and write routines are byte exact on it). `--sweep` tries device
+profiles (CPU time is one cycle per instruction, so figures are approximate):
 
-| Card (first ACK after the byte) | original menu | patched menu |
+| Device profile | original menu | patched menu |
 |---|---|---|
-| 8 us (normal card) | found, 554 us | found, 554 us |
-| 150 us | not found | found |
-| 400 us / 1 ms | not found | found |
-| 2.5 ms and more | not found | not found (budget about 2.4 ms) |
+| normal card | detect, read, write ok | detect, read, write ok |
+| not listening for the first 100 us after /CS | write fails | ok |
+| not listening for 200 us to 1 ms after /CS | detect, read, write fail | ok |
+| not listening for 2 ms | fail | fail |
+| ACK 100 us to 1.5 ms on every byte | detect fails (read, write ok) | ok |
+| first ACK 150 us to 1 ms | detect fails | ok |
+| first ACK 2.5 ms and more | detect fails | detect fails |
 
-Frame read and write give correct data on both blobs. This shows the mechanism on the real instructions; it is a model,
-not a device.
+Time on a normal card: detection 0.55 to 1.4 ms, frame read 14.7 to 15.6 ms, frame write 56.6 to 57.5 ms (before and after).
+This is a model, not a device.
 
 ## Deviations
 

@@ -7,7 +7,12 @@ already use a budget of 2000 units (about 3 ms). A device that acknowledges more
 emulators and adapters) is therefore "not found" although it would serve frames. The patch raises the two
 detection budgets to 2000: `addiu $a0, $zero, 0x78` at 0x800d48b4 and 0x800d48fc becomes `addiu $a0, $zero, 0x7d0`.
 Devices that answer quickly are unaffected (the wait ends at the first ACK); a missing card costs a few more
-milliseconds. Nothing else changes.
+milliseconds.
+
+Second part: the menu starts the first byte only 0x96 (detection), 0x64 (frame read) or 0x50 (frame write) delay units
+(about 1 microsecond each) after /CS goes low. A device that is not listening yet at that moment (a microcontroller
+waking up) loses the byte and is not found. These are minimum waits, so the three `addiu $a0, $zero, N` become 1000
+(about 1 ms): every frame operation takes about 1 ms longer, nothing else changes. Nothing else is touched.
 
 The raw sectors that contain the instructions get fresh EDC and ECC (ECMA-130 Mode 2 Form 1), so the
 sector check done by the Manager (`mh_menu_validate_blob`) and by CD hardware keeps passing.
@@ -26,8 +31,14 @@ EXE_LBA = 24            # PS-X EXE (SCES_313.37) starts at sector 24, 2048 byte 
 EXE_HEADER = 0x800      # PS-X EXE header size; the text segment follows
 # (text address of the instruction, original word, patched word): addiu $a0, $zero, imm
 PATCHES = [
+    # ACK wait of the card detection (0x78 -> 2000 units)
     (0x800D48B4, 0x24040078, 0x240407D0),
     (0x800D48FC, 0x24040078, 0x240407D0),
+    # settle time between /CS going low and the first byte, in detection, frame read and frame write
+    # (0x96, 0x64 and 0x50 units -> 1000 units, about 1 ms)
+    (0x800D484C, 0x24040096, 0x240403E8),
+    (0x800DEA94, 0x24040064, 0x240403E8),
+    (0x800D4B94, 0x24040050, 0x240403E8),
 ]
 
 

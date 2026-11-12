@@ -38,7 +38,8 @@ def carve_text(path):
 class Card:
     """PS1 Memory Card protocol (psx-spx): replies are one byte behind the host bytes."""
 
-    def __init__(self, first_ack_us, ack_us):
+    def __init__(self, first_ack_us, ack_us, ready_us=0.0):
+        self.ready_us = ready_us          # bytes sent earlier than this after /CS goes low are lost
         self.mem = bytearray(0x20000)
         for i in range(len(self.mem)):
             self.mem[i] = (i * 7 + 3) & 0xFF
@@ -120,6 +121,7 @@ class Machine:
         self.ack_cycle = None
         self.tx_done = 0
         self.selected = False
+        self.sel_cycle = 0
         self.uc.hook_add(UC_HOOK_CODE, self._tick)
         self.uc.hook_add(UC_HOOK_MEM_READ, self._io_read, begin=0x1F801000, end=0x1F801FFF)
         self.uc.hook_add(UC_HOOK_MEM_WRITE, self._io_write, begin=0x1F801000, end=0x1F801FFF)
@@ -160,6 +162,11 @@ class Machine:
         if a == 0x040:
             if self.selected:
                 first = self.card.idx == 0
+                if self.cycles < self.sel_cycle + int(self.card.ready_us * CPU_HZ / 1e6):
+                    # the device is not listening yet: nothing answers, no ACK
+                    self.tx_done = self.cycles + int(BYTE_US * CPU_HZ / 1e6)
+                    self.rx.append((self.tx_done, 0xFF))
+                    return
                 reply, acks = self.card.exchange(value & 0xFF)
                 done = self.cycles + int(BYTE_US * CPU_HZ / 1e6)
                 self.tx_done = done
@@ -172,7 +179,7 @@ class Machine:
             self.ctrl = value & 0xFFFF
             self.selected = bool(self.ctrl & 0x2) and not (self.ctrl & 0x2000)   # DTR on, slot 1
             if self.selected and not was:
-                self.card.reset(); self.rx.clear()
+                self.card.reset(); self.rx.clear(); self.sel_cycle = self.cycles
             if not self.selected and was:
                 self.card.reset(); self.rx.clear(); self.ack_cycle = None
         elif a == 0x070:
@@ -195,21 +202,21 @@ class Machine:
         return struct.unpack("<i", struct.pack("<I", u.reg_read(UC_MIPS_REG_V0) & 0xFFFFFFFF))[0]
 
 
-def detect(text, first_ack_us, ack_us):
-    m = Machine(text, Card(first_ack_us, ack_us))
+def detect(text, first_ack_us, ack_us, ready_us=0.0):
+    m = Machine(text, Card(first_ack_us, ack_us, ready_us))
     m.uc.mem_write(0x100000, bytes([0x52, 0x00]))            # command bytes after the select byte
     n = m.call(0x800D480C, (0x81, 0x80100000, 0x80100100, 2), (4,))
     return n, m.us()
 
 
-def frame_read(text, frame):
-    m = Machine(text, Card(8, 8))
+def frame_read(text, frame, first_ack_us=8, ack_us=8, ready_us=0.0):
+    m = Machine(text, Card(first_ack_us, ack_us, ready_us))
     ok = m.call(0x800DEA3C, (0, frame))
     return ok, bytes(m.uc.mem_read(0x800E7860 & 0x1FFFFFFF, 128)), m.card
 
 
-def frame_write(text, frame, data):
-    m = Machine(text, Card(8, 8))
+def frame_write(text, frame, data, first_ack_us=8, ack_us=8, ready_us=0.0):
+    m = Machine(text, Card(first_ack_us, ack_us, ready_us))
     m.uc.mem_write(0x100000, data)
     ok = m.call(0x800D4B00, (0, frame, 0x80100000))
     return ok, bytes(m.card.mem[frame * 128:frame * 128 + 128])
@@ -234,5 +241,25 @@ def main(paths):
         print(f"  frame write : ok={ok} card holds the data = {stored == pat}")
 
 
+def sweep(paths):
+    """Which device profiles does each blob handle? (detect / frame read / frame write)"""
+    pat = bytes((i * 3 + 1) & 0xFF for i in range(128))
+    profiles = [("normal", 8, 8, 0)] + [(f"settle {r} us", 8, 8, r) for r in (100, 200, 300, 500, 1000, 2000)] + \
+        [(f"ACK {a} us on every byte", a, a, 0) for a in (100, 200, 400, 800, 1500)]
+    for path in paths:
+        text = carve_text(path)
+        print(f"== {path}")
+        for name, f, a, r in profiles:
+            n, _ = detect(text, f, a, r)
+            ok_r, got, card = frame_read(text, 5, f, a, r)
+            ok_w, stored = frame_write(text, 9, pat, f, a, r)
+            want = bytes(card.mem[5 * 128:6 * 128])
+            print(f"  {name:26} detect={'yes' if n > 0 else 'NO ':3}  read={'yes' if ok_r and got == want else 'NO '}  "
+                  f"write={'yes' if ok_w and stored == pat else 'NO '}")
+
+
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    if sys.argv[1:2] == ["--sweep"]:
+        sweep(sys.argv[2:])
+    else:
+        main(sys.argv[1:])
