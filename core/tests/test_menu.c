@@ -340,6 +340,29 @@ static uint32_t cd_edc(const uint8_t *p, size_t n) {
     return e;
 }
 
+/* byte at menu text address `addr`, read through the cooked 2048 byte sectors of the PS-X EXE (header 0x800) */
+static uint8_t text_byte(uint32_t addr) {
+    uint32_t cooked = 24 * 2048 + 0x800 + (addr - 0x800d0000u);
+    return emb[(uint64_t)(cooked / 2048) * MH_MENU_SECTOR + 24 + cooked % 2048];
+}
+
+static uint32_t crc32_zlib(uint32_t addr, uint32_t n) {
+    uint32_t c = 0xffffffffu;
+    for (uint32_t i = 0; i < n; i++) {
+        c ^= text_byte(addr + i);
+        for (int k = 0; k < 8; k++) c = (c >> 1) ^ (-(c & 1) & 0xedb88320u);
+    }
+    return ~c;
+}
+
+/* The menu's own Game ID routine (tools/menu_gameid_asm.py) replaces the unreferenced function at 0x800d42e8. */
+static void test_menu_game_id_routine(void) {
+    assert(rd_le32(&(uint8_t[]){ text_byte(0x800d42e8u), text_byte(0x800d42e9u), text_byte(0x800d42eau),
+                                 text_byte(0x800d42ebu) }[0]) == 0x27bdff98u);       /* addiu $sp, $sp, -0x68 */
+    assert(crc32_zlib(0x800d42e8u, 564) == 0x0ef2f4b9u);                                /* the 564 byte routine */
+    for (uint32_t a = 0x800d42e8u + 564; a < 0x800d42e8u + 996; a++) assert(text_byte(a) == 0);   /* rest zeroed */
+}
+
 static void test_memcard_timing_patch(void) {
     const uint32_t exe_lba = 24, header = 0x800, text_base = 0x800d0000u;
     static const struct { uint32_t addr, word; } sites[] = {
@@ -350,6 +373,7 @@ static void test_memcard_timing_patch(void) {
         { 0x800d4b94u, 0x240403e8u },   /* addiu $a0, $zero, 1000  (settle, frame write) */
         { 0x800d51b4u, 0x2c42001eu },   /* sltiu $v0, $v0, 30  (data frame retries, was 7) */
         { 0x800d5244u, 0x2c42001eu },   /* sltiu $v0, $v0, 30  (directory frame retries, was 9) */
+        { 0x800d8db0u, 0x0c0350bau },   /* jal 0x800d42e8  (first card detection goes through the Game ID routine) */
     };
     const uint8_t *exe = emb + (uint64_t)exe_lba * MH_MENU_SECTOR + 24;
     assert(!memcmp(exe, "PS-X EXE", 8) && rd_le32(exe + 0x18) == text_base);
@@ -372,6 +396,7 @@ int main(void) {
     test_validate();
     test_files();
     test_memcard_timing_patch();
+    test_menu_game_id_routine();
     free(emb);
     puts("test_menu: ok");
     return 0;

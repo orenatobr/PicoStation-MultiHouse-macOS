@@ -25,9 +25,13 @@ usage: patch_menu.py [--check] [path]      default path: resources/embedded/pico
   --check  do not write; exit 1 when the file is not fully patched
 The tool is idempotent and refuses a file whose instructions are neither original nor patched.
 """
+import hashlib
 import struct
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import menu_gameid_asm as gid   # noqa: E402  (the Game ID routine, see that file)
 
 RAW = 2352
 TEXT_BASE = 0x800D0000
@@ -47,6 +51,14 @@ PATCHES = [
     # data frames 7 -> 30 attempts (sltiu $v0, $v0, 7), directory frame 9 -> 30 (sltiu $v0, $v0, 9)
     (0x800D51B4, 0x2C420007, 0x2C42001E),
     (0x800D5244, 0x2C420009, 0x2C42001E),
+    # first card detection of the save/load state machine now goes through the Game ID routine (menu_gameid_asm.py)
+    (gid.HOOK_SITE, 3 << 26 | ((gid.DETECT & 0x0FFFFFFF) >> 2), gid.hook_word()),
+]
+# (text address, length, SHA-256 of the original bytes, new bytes): the unreferenced CD-ROM helper at 0x800d42e8 is
+# replaced by the Game ID routine and the rest of it is zeroed
+REGIONS = [
+    (gid.BASE, gid.MAX_BYTES, "8ddfd20035ca2a6c79393efd44cd65566c5dc6786464cf9d19e5542acc911c71",
+     gid.routine() + bytes(gid.MAX_BYTES - len(gid.routine()))),
 ]
 
 
@@ -159,6 +171,25 @@ def main(argv) -> int:
                 touched.add(sector)
         else:
             raise SystemExit(f"unexpected word {word:#010x} at {addr:#x}: not the menu this patch was written for")
+    for addr, length, sha, new in REGIONS:
+        # the region may span sectors: read and write it byte by byte through the cooked offsets
+        cooked0 = EXE_LBA * 2048 + EXE_HEADER + (addr - TEXT_BASE)
+
+        def raw_pos(i):
+            sec, off = divmod(cooked0 + i, 2048)
+            return sec, sec * RAW + 24 + off
+        cur = bytes(blob[raw_pos(i)[1]] for i in range(length))
+        if cur == new:
+            state.append("patched")
+        elif hashlib.sha256(cur).hexdigest() == sha:
+            state.append("original")
+            if not check:
+                for i in range(length):
+                    sec, pos = raw_pos(i)
+                    blob[pos] = new[i]
+                    touched.add(sec)
+        else:
+            raise SystemExit(f"unexpected bytes in the region at {addr:#x}: not the menu this patch was written for")
     for sector in sorted(touched):
         sec = bytearray(blob[sector * RAW:(sector + 1) * RAW])
         seal_form1(sec)
