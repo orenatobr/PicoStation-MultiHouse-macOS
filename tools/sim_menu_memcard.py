@@ -113,12 +113,15 @@ class Card:
 class McpCard(Card):
     """SD2PSX / MemCard PRO family model: answers 27 FF to `81 20`, switches virtual card on `81 21` (Game ID).
 
-    The switch makes the card ignore /CS for `reconnect_us` (it simulates a card swap). Every id has its own
-    virtual card; ids that were never seen get an empty one.
+    The switch makes the card stop answering for `reconnect_us`: the SD2PSX firmware (src/ps1/ps1_odeman.c) leaves the
+    card, waits 250 ms "so the ODE can register the card change", then opens or creates the .mcd and loads it from SD.
+    Ids found in its game database get a card of their own; any other id (like the menu's) selects the numbered card
+    `Card1`, channel 1 (src/ps1/ps1_cardman.c, ps1_cardman_set_gameid).
     """
 
-    def __init__(self, active, reconnect_us=300_000.0, **kw):
+    def __init__(self, active, reconnect_us=700_000.0, known_ids=("SLUS-01251",), **kw):
         Card.__init__(self, 8, 8, **kw)
+        self.known_ids = set(known_ids)
         self.channels = {}
         self.active = active
         self.reconnect_us = reconnect_us
@@ -127,10 +130,11 @@ class McpCard(Card):
         self.channels[active] = self.mem
 
     def switch_to(self, ident):
-        if ident not in self.channels:
-            self.channels[ident] = bytearray(0x20000)
-        self.active = ident
-        self.mem = self.channels[ident]
+        key = ident if ident in self.known_ids else "Card1"
+        if key not in self.channels:
+            self.channels[key] = bytearray(0x20000)
+        self.active = key
+        self.mem = self.channels[key]
 
     def exchange(self, b):
         i = self.idx
@@ -154,8 +158,7 @@ class McpCard(Card):
             ident = bytes(self.id_buf).split(b"\0")[0].decode("ascii", "replace")
             self.sent_ids.append(ident)
             self.id_buf = bytearray()
-            if ident != self.active:
-                self.switch_to(ident)
+            self.switch_to(ident)
             return self.reconnect_us
         return 0.0
 
@@ -376,13 +379,14 @@ def gameid(path):
         print(f"== {label}")
         for name, mk in (
             ("SD2PSX family, last game still active", lambda: McpCard("SLUS-01251")),
-            ("same, 2 s to switch card", lambda: McpCard("SLUS-01251", reconnect_us=2_000_000.0)),
+            ("same, needs 1.2 s to switch card", lambda: McpCard("SLUS-01251", reconnect_us=1_200_000.0)),
+            ("same, needs 2 s to switch card", lambda: McpCard("SLUS-01251", reconnect_us=2_000_000.0)),
             ("original card (does not answer 27 FF)", lambda: Card(8, 8)),
         ):
             card = mk()
             if isinstance(card, McpCard):
-                card.channels["SCES-31337"] = bytearray(0x20000)
-                card.channels["SCES-31337"][5 * 128:6 * 128] = fav
+                card.channels["Card1"] = bytearray(0x20000)       # where an id the device does not know ends up
+                card.channels["Card1"][5 * 128:6 * 128] = fav
             m = Machine(t, card)
             found = m.call(fn, (0,))
             took = m.us()
