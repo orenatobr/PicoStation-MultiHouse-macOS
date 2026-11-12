@@ -363,6 +363,20 @@ static void test_menu_game_id_routine(void) {
     for (uint32_t a = 0x800d42e8u + 564; a < 0x800d42e8u + 996; a++) assert(text_byte(a) == 0);   /* rest zeroed */
 }
 
+/* Same fixture as tests/test_menu_overlay.cpp of the firmware repository (FNV-1a over the little endian words of the
+ * patched raw sectors): the firmware swaps these five sectors in when the SD card still has the original menu. */
+static void test_menu_sector_fixture(void) {
+    static const struct { uint32_t sector, hash; } fx[] = {
+        { 33, 0x6c896883u }, { 34, 0x8bf3870bu }, { 35, 0x4ccc5389u }, { 42, 0x366974d3u }, { 54, 0x769e36ddu },
+    };
+    for (unsigned i = 0; i < sizeof fx / sizeof fx[0]; i++) {
+        const uint8_t *raw = emb + (uint64_t)fx[i].sector * MH_MENU_SECTOR;
+        uint32_t h = 0x811c9dc5u;
+        for (unsigned w = 0; w < MH_MENU_SECTOR; w += 4) h = (h ^ rd_le32(raw + w)) * 0x01000193u;
+        assert(h == fx[i].hash);
+    }
+}
+
 static void test_memcard_timing_patch(void) {
     const uint32_t exe_lba = 24, header = 0x800, text_base = 0x800d0000u;
     static const struct { uint32_t addr, word; } sites[] = {
@@ -397,6 +411,7 @@ int main(void) {
     test_files();
     test_memcard_timing_patch();
     test_menu_game_id_routine();
+    test_menu_sector_fixture();
     free(emb);
     puts("test_menu: ok");
     return 0;
