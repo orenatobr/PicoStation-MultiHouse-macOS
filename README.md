@@ -106,6 +106,7 @@ the confirmation checkbox. Even so, double-check the disk name in the list.
   firmware runs; the program refuses more.
 - Titles with accented characters show blanks in the console menu (the firmware only displays ASCII).
 - Names longer than 31 characters (up to 71) need firmware 0.2.0 or newer: the Manager stores them in reserved bytes that the original V3 firmware refuses. Names of 31 characters or less are written exactly as before. A name that is no longer cut is a different favorite key in the console menu, so favorites of that game must be added again.
+- The embedded menu waits longer for the Memory Card to acknowledge during detection (3 ms instead of 180 microseconds), so slower Memory Card emulators and adapters can be found for saving the menu settings and favorites. Not tested on hardware; see docs/map/menu.md.
 - Several messages still mention "Windows" or "PhysicalDrive": the texts were kept as in the original.
 
 ## Build

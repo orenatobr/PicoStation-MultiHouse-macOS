@@ -325,6 +325,35 @@ static void test_validate(void) {
     free(img);
 }
 
+/* The Memory Card compatibility patch (tools/patch_menu.py): the ACK wait of the card detection routine
+ * (menu text address 0x800d480c) was 0x78 units, now 2000 like the frame transfers, and the sector that holds
+ * the two instructions carries a valid EDC. */
+static uint32_t rd_le32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
+
+static uint32_t cd_edc(const uint8_t *p, size_t n) {
+    uint32_t e = 0;
+    while (n--) {
+        e ^= *p++;
+        for (int k = 0; k < 8; k++) e = (e >> 1) ^ (-(e & 1) & 0xD8018001u);
+    }
+    return e;
+}
+
+static void test_memcard_ack_window(void) {
+    const uint32_t exe_lba = 24, header = 0x800, text_base = 0x800d0000u;
+    const uint32_t sites[2] = { 0x800d48b4u, 0x800d48fcu };
+    const uint8_t *exe = emb + (uint64_t)exe_lba * MH_MENU_SECTOR + 24;
+    assert(!memcmp(exe, "PS-X EXE", 8) && rd_le32(exe + 0x18) == text_base);
+    for (int i = 0; i < 2; i++) {
+        uint32_t cooked = exe_lba * 2048 + header + (sites[i] - text_base);
+        uint32_t sector = cooked / 2048, off = cooked % 2048;
+        const uint8_t *raw = emb + (uint64_t)sector * MH_MENU_SECTOR;
+        assert(rd_le32(raw + 24 + off) == 0x240407d0u);   /* addiu $a0, $zero, 2000 */
+        assert(!(raw[0x12] & 0x20));                      /* Form 1 */
+        assert(cd_edc(raw + 0x10, 0x808) == rd_le32(raw + 0x818));
+    }
+}
+
 int main(void) {
     if (!mh_read_entire_file(MENU, &emb, &emb_n)) { puts("skip: run from the repo root"); return 0; }
     assert(emb_n == 218736);
@@ -333,6 +362,7 @@ int main(void) {
     test_iso();
     test_validate();
     test_files();
+    test_memcard_ack_window();
     free(emb);
     puts("test_menu: ok");
     return 0;
