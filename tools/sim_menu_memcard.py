@@ -10,8 +10,10 @@ approximate; the point is the comparison between the two blobs.
 
 usage: sim_menu_memcard.py <picostation_menu.bin> [<other.bin> ...]       (needs: pip install unicorn)
 """
+import os
 import struct
 import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from unicorn import (UC_ARCH_MIPS, UC_HOOK_CODE, UC_HOOK_MEM_READ, UC_HOOK_MEM_WRITE, UC_MODE_LITTLE_ENDIAN,
                      UC_MODE_MIPS32, Uc)
@@ -108,6 +110,56 @@ class Card:
         return r, not last
 
 
+class McpCard(Card):
+    """SD2PSX / MemCard PRO family model: answers 27 FF to `81 20`, switches virtual card on `81 21` (Game ID).
+
+    The switch makes the card ignore /CS for `reconnect_us` (it simulates a card swap). Every id has its own
+    virtual card; ids that were never seen get an empty one.
+    """
+
+    def __init__(self, active, reconnect_us=300_000.0, **kw):
+        Card.__init__(self, 8, 8, **kw)
+        self.channels = {}
+        self.active = active
+        self.reconnect_us = reconnect_us
+        self.sent_ids = []
+        self.id_buf = bytearray()
+        self.channels[active] = self.mem
+
+    def switch_to(self, ident):
+        if ident not in self.channels:
+            self.channels[ident] = bytearray(0x20000)
+        self.active = ident
+        self.mem = self.channels[ident]
+
+    def exchange(self, b):
+        i = self.idx
+        if i == 1 and b in (0x20, 0x21, 0x53):
+            self.cmd = b
+        if self.cmd == 0x20 and i >= 1:
+            self.idx += 1
+            return (0x27 if i == 4 else 0xFF if i == 5 else 0x08), i < 5
+        if self.cmd == 0x21 and i >= 1:
+            self.idx += 1
+            if i >= 4:
+                self.id_buf.append(b)
+            return 0x08, False                     # these devices do not ACK a Game ID
+        if self.cmd == 0x53 and i >= 1:
+            self.idx += 1
+            return (0x5A, 0x5D, 0x5C, 0x5D, 0x04, 0x00, 0x00, 0x80)[min(i - 1, 7)], i < 8
+        return Card.exchange(self, b)
+
+    def on_deselect(self):
+        if self.cmd == 0x21 and self.id_buf:
+            ident = bytes(self.id_buf).split(b"\0")[0].decode("ascii", "replace")
+            self.sent_ids.append(ident)
+            self.id_buf = bytearray()
+            if ident != self.active:
+                self.switch_to(ident)
+            return self.reconnect_us
+        return 0.0
+
+
 class Machine:
     def __init__(self, text, card):
         self.uc = Uc(UC_ARCH_MIPS, UC_MODE_MIPS32 | UC_MODE_LITTLE_ENDIAN)
@@ -186,6 +238,9 @@ class Machine:
             if self.selected and not was:
                 self.card.reset(); self.rx.clear(); self.sel_cycle = self.cycles
             if not self.selected and was:
+                hook = getattr(self.card, "on_deselect", None)
+                if hook:
+                    self.busy_until = max(self.busy_until, self.cycles + int(hook() * CPU_HZ / 1e6))
                 if self.card.cmd == 0x57 and self.card.idx >= 138:
                     self.busy_until = self.cycles + int(self.card.busy_after_write_us * CPU_HZ / 1e6)
                 self.card.reset(); self.rx.clear(); self.ack_cycle = None
@@ -300,8 +355,49 @@ def retries(paths):
             print(f"  {name:22}: gave up after {calls} attempts (result {r})")
 
 
+def patched_text(path):
+    """The blob's text with the Game ID routine applied in memory (what tools/patch_menu.py writes)."""
+    import menu_gameid_asm as g
+    t = bytearray(carve_text(path))
+    code = g.routine()
+    off = g.BASE - TEXT_BASE
+    t[off:off + g.MAX_BYTES] = code + bytes(g.MAX_BYTES - len(code))
+    struct.pack_into("<I", t, g.HOOK_SITE - TEXT_BASE, g.hook_word())
+    return bytes(t)
+
+
+def gameid(path):
+    """Does the menu land on its own virtual card? (original blob text vs the same text with the routine applied)"""
+    import menu_gameid_asm as g
+    text = carve_text(path)
+    fav = bytes((0xA0 + i) & 0xFF for i in range(128))
+    entry = {"menu blob": (text, 0x800D8C6C), "with the Game ID routine": (patched_text(path), g.BASE)}
+    for label, (t, fn) in entry.items():
+        print(f"== {label}")
+        for name, mk in (
+            ("SD2PSX family, last game still active", lambda: McpCard("SLUS-01251")),
+            ("same, 2 s to switch card", lambda: McpCard("SLUS-01251", reconnect_us=2_000_000.0)),
+            ("original card (does not answer 27 FF)", lambda: Card(8, 8)),
+        ):
+            card = mk()
+            if isinstance(card, McpCard):
+                card.channels["SCES-31337"] = bytearray(0x20000)
+                card.channels["SCES-31337"][5 * 128:6 * 128] = fav
+            m = Machine(t, card)
+            found = m.call(fn, (0,))
+            took = m.us()
+            ok_r = m.call(0x800DEA3C, (0, 5)) if found > 0 else 0
+            back = bytes(m.uc.mem_read(0x800E7860 & 0x1FFFFFFF, 128))
+            where = getattr(card, "active", "-")
+            sent = getattr(card, "sent_ids", [])
+            print(f"  {name:40} found={'yes' if found else 'NO '} active card={where:11} ids sent={sent} "
+                  f"menu favorites read={'yes' if ok_r and back == fav else 'no '} ({took / 1000:7.1f} ms)")
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["--retries"]:
+    if sys.argv[1:2] == ["--gameid"]:
+        gameid(sys.argv[2])
+    elif sys.argv[1:2] == ["--retries"]:
         retries(sys.argv[2:])
     elif sys.argv[1:2] == ["--busy"]:
         busy_sweep(sys.argv[2:])

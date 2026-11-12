@@ -92,7 +92,7 @@ This module does not use the VAG file itself.
 
 ## Memory Card compatibility patch (Manager 0.5.1, 0.5.2 and 0.5.3, deliberate deviation from the original)
 
-The embedded menu differs from the original in seven instruction words, applied by `tools/patch_menu.py` (idempotent,
+The embedded menu differs from the original in eight instruction words, plus the Game ID routine described below,, applied by `tools/patch_menu.py` (idempotent,
 with an EDC/ECC self test over the 89 Form 1 sectors) and pinned by `test_memcard_timing_patch` in `core/tests/test_menu.c`.
 The menu reads and writes the Memory Card through SIO0 itself, with two kinds of bounded waits that assume a card as
 fast as an original one.
@@ -132,15 +132,34 @@ profiles (CPU time is one cycle per instruction, so figures are approximate):
 Time on a normal card: detection 0.55 to 1.4 ms, frame read 14.7 to 15.6 ms, frame write 56.6 to 57.5 ms (before and after).
 This is a model, not a device.
 
-## Game ID and cards that switch (SD2PSX family)
+## Game ID and cards that switch (SD2PSX family), Manager 0.5.4
 
 When a game is launched the menu probes each slot with `81 53` and `81 20` (a MemCard PRO or SD2PSX answers `27 FF`) and then
-sends `81 21 00 len+1 <boot file name> 00` without waiting for ACKs (these devices do not ACK the Game ID bytes). Such a device
-switches to the virtual card of that game. The menu never sends an id for itself, so its settings and favorites file
-(`BASCES_31337PICO_CFG`) is read from and saved to whichever card is active, which after a game is that game's card. With an
-original card there is one card and this cannot happen. Workaround: turn off the PS1 Game ID switching in the device (or
-use a fixed channel). A menu change that sends the menu's own id (`SCES_313.37`) before reading and saving was not made: it
-cannot be tested here and it would move existing favorites. Hypothesis, not verified on a device.
+sends `81 21 00 len+1 <id> 00` without waiting for ACKs (these devices do not ACK the Game ID bytes). Such a device
+switches to the virtual card of that id. The original menu never sent an id for itself, so its settings and favorites file
+(`BASCES_31337PICO_CFG`) was read from and saved to whichever card was active, which after a game is that game's card, and
+favorites seemed to vanish after playing something else. With an original card there is one card and this cannot happen.
+
+0.5.4 adds a routine (`tools/menu_gameid_asm.py`, 564 bytes) that replaces the unreferenced CD-ROM helper at `0x800d42e8`
+and is entered by redirecting `jal 0x800d8c6c` at `0x800d8db0` (the first card detection of the save and load state
+machine). It repeats the probes of the launch flow, sends the menu's own id `SCES-31337` (its boot file is `SCES_313.37`) to
+every slot that answered `27 FF`, waits about 0.8 s for the device to switch card, and then continues into the original
+detection, so the caller sees the original result. A slot that does not answer `27 FF` (an original card) receives nothing
+but the probes the menu already sends at every game launch.
+
+`tools/sim_menu_memcard.py --gameid` runs the real code against a model of such a device (virtual card per id, 300 ms
+reconnect window, no ACK for the Game ID):
+
+| Device | before | with the routine |
+|---|---|---|
+| SD2PSX family, last game's card active | stays on that card, favorites not found | switches to `SCES-31337`, found, favorites read (about 0.8 s) |
+| same, needs 2 s to switch | n/a | first attempt does not find the card; the id is then active, the next attempt works |
+| original card | found | found, no id sent (about 10 ms more) |
+
+Consequences: the menu's settings and favorites now live on the virtual card `SCES-31337` of the device. Settings saved
+earlier on a game's card are not found there; save them once again. If the device does not support Game ID switching
+nothing changes. The id format (`ABCD-12345`) is the one the menu already sends for games; how a given device treats an id
+it has never seen is not verified. Hypothesis from the protocol and the device documentation, validated only in the model.
 
 ## Deviations
 
