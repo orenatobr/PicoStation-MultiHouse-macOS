@@ -132,6 +132,16 @@ profiles (CPU time is one cycle per instruction, so figures are approximate):
 Time on a normal card: detection 0.55 to 1.4 ms, frame read 14.7 to 15.6 ms, frame write 56.6 to 57.5 ms (before and after).
 This is a model, not a device.
 
+## Game ID and cards that switch (SD2PSX family)
+
+When a game is launched the menu probes each slot with `81 53` and `81 20` (a MemCard PRO or SD2PSX answers `27 FF`) and then
+sends `81 21 00 len+1 <boot file name> 00` without waiting for ACKs (these devices do not ACK the Game ID bytes). Such a device
+switches to the virtual card of that game. The menu never sends an id for itself, so its settings and favorites file
+(`BASCES_31337PICO_CFG`) is read from and saved to whichever card is active, which after a game is that game's card. With an
+original card there is one card and this cannot happen. Workaround: turn off the PS1 Game ID switching in the device (or
+use a fixed channel). A menu change that sends the menu's own id (`SCES_313.37`) before reading and saving was not made: it
+cannot be tested here and it would move existing favorites. Hypothesis, not verified on a device.
+
 ## Deviations
 
 * Sector 16 and sector index bounds are checked (the original trusted its callers).
