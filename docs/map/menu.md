@@ -96,10 +96,24 @@ The embedded menu differs from the original in two instruction words, applied by
 with an EDC/ECC self test over the 89 Form 1 sectors) and pinned by `test_memcard_ack_window` in `core/tests/test_menu.c`.
 The menu reads and writes the Memory Card through SIO0 itself. Its detection routine (text address `0x800d480c`) waits for
 the card's ACK after every byte for 0x78 units (about 180 microseconds); the frame read and write routines wait up to
-2000 units (about 3 ms). A device that acknowledges slower than 180 us (emulators, adapters) passed the transfers but was
+2000 units (about 2.4 ms measured). A device that acknowledges slower than 180 us (emulators, adapters) passed the transfers but was
 reported as "no Memory Card found". `addiu $a0, $zero, 0x78` at `0x800d48b4` and `0x800d48fc` is now `0x7d0`, the same
 budget. Quick devices are unaffected (the wait ends at the first ACK). The third `addiu $a0, $zero, 0x78` in the program
 (`0x800dece0`) belongs to the pad routine and is not touched. Not tested on a console or a real Memory Card device.
+
+`tools/sim_menu_memcard.py` runs the real MIPS code of the blob (Unicorn emulator, `pip install unicorn`) against a modelled
+card with a configurable ACK latency (the same frame protocol as a PS1 card; read and write routines are byte exact on it).
+Measured with this model, time to the ACK counted from the start of the byte:
+
+| Card (first ACK after the byte) | original menu | patched menu |
+|---|---|---|
+| 8 us (normal card) | found, 554 us | found, 554 us |
+| 150 us | not found | found |
+| 400 us / 1 ms | not found | found |
+| 2.5 ms and more | not found | not found (budget about 2.4 ms) |
+
+Frame read and write give correct data on both blobs. This shows the mechanism on the real instructions; it is a model,
+not a device.
 
 ## Deviations
 
