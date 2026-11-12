@@ -38,7 +38,9 @@ def carve_text(path):
 class Card:
     """PS1 Memory Card protocol (psx-spx): replies are one byte behind the host bytes."""
 
-    def __init__(self, first_ack_us, ack_us, ready_us=0.0):
+    def __init__(self, first_ack_us, ack_us, ready_us=0.0, busy_after_write_us=0.0):
+        self.busy_after_write_us = busy_after_write_us   # ignores /CS this long after the end of a write
+        self.wrote = False
         self.ready_us = ready_us          # bytes sent earlier than this after /CS goes low are lost
         self.mem = bytearray(0x20000)
         for i in range(len(self.mem)):
@@ -114,6 +116,7 @@ class Machine:
         self.uc.mem_write(TEXT_BASE & 0x1FFFFFFF, text)
         self.card = card
         self.cycles = 0
+        self.start = 0
         self.reg = {}
         self.ctrl = 0
         self.istat = 0
@@ -122,12 +125,13 @@ class Machine:
         self.tx_done = 0
         self.selected = False
         self.sel_cycle = 0
+        self.busy_until = 0
         self.uc.hook_add(UC_HOOK_CODE, self._tick)
         self.uc.hook_add(UC_HOOK_MEM_READ, self._io_read, begin=0x1F801000, end=0x1F801FFF)
         self.uc.hook_add(UC_HOOK_MEM_WRITE, self._io_write, begin=0x1F801000, end=0x1F801FFF)
 
     def us(self):
-        return self.cycles * 1e6 / CPU_HZ
+        return (self.cycles - self.start) * 1e6 / CPU_HZ
 
     def _tick(self, uc, addr, size, _):
         self.cycles += 1
@@ -162,7 +166,8 @@ class Machine:
         if a == 0x040:
             if self.selected:
                 first = self.card.idx == 0
-                if self.cycles < self.sel_cycle + int(self.card.ready_us * CPU_HZ / 1e6):
+                if (self.cycles < self.sel_cycle + int(self.card.ready_us * CPU_HZ / 1e6)
+                        or self.cycles < self.busy_until):
                     # the device is not listening yet: nothing answers, no ACK
                     self.tx_done = self.cycles + int(BYTE_US * CPU_HZ / 1e6)
                     self.rx.append((self.tx_done, 0xFF))
@@ -181,6 +186,8 @@ class Machine:
             if self.selected and not was:
                 self.card.reset(); self.rx.clear(); self.sel_cycle = self.cycles
             if not self.selected and was:
+                if self.card.cmd == 0x57 and self.card.idx >= 138:
+                    self.busy_until = self.cycles + int(self.card.busy_after_write_us * CPU_HZ / 1e6)
                 self.card.reset(); self.rx.clear(); self.ack_cycle = None
         elif a == 0x070:
             self.istat &= value & 0xFFFF
@@ -195,7 +202,7 @@ class Machine:
         u.mem_write(sp + 16, b"".join(struct.pack("<I", s) for s in stack))
         u.reg_write(UC_MIPS_REG_SP, sp)
         u.reg_write(UC_MIPS_REG_RA, STOP)
-        self.cycles = 0
+        self.start = self.cycles
         u.hook_add(UC_HOOK_CODE, lambda uc, a, s, _: uc.emu_stop() if a == STOP else None,
                    begin=STOP, end=STOP)
         u.emu_start(addr, STOP, count=limit)
@@ -258,8 +265,47 @@ def sweep(paths):
                   f"write={'yes' if ok_w and stored == pat else 'NO '}")
 
 
+def busy_sweep(paths):
+    """Write a frame, then read it back at once (as the menu's save does) with a device that ignores /CS for a while."""
+    pat = bytes((i * 5 + 2) & 0xFF for i in range(128))
+    for path in paths:
+        text = carve_text(path)
+        print(f"== {path}")
+        for busy_ms in (0, 5, 20, 50, 70, 100, 200):
+            m = Machine(text, Card(8, 8, 0, busy_after_write_us=busy_ms * 1000.0))
+            m.uc.mem_write(0x100000, pat)
+            w = m.call(0x800D4B00, (0, 9, 0x80100000))
+            r = m.call(0x800DEA3C, (0, 9))
+            back = bytes(m.uc.mem_read(0x800E7860 & 0x1FFFFFFF, 128))
+            print(f"  busy {busy_ms:3} ms after a write: write ok={w}  read back ok={r}  data equal={back == pat}")
+
+
+def retries(paths):
+    """Run the menu's save state machine (FUN_800d4c50) against a card that never answers; count the attempts."""
+    for path in paths:
+        text = carve_text(path)
+        print(f"== {path}")
+        for state, name in ((5, "data frame write"), (6, "directory frame write")):
+            m = Machine(text, Card(8, 8, ready_us=1e9))        # never listens
+            ram = lambda a: a & 0x1FFFFFFF
+            m.uc.mem_write(ram(0x800E77C8), struct.pack("<I", state))     # state
+            m.uc.mem_write(ram(0x800E77CC), struct.pack("<I", 0))         # slot 0
+            m.uc.mem_write(ram(0x800E77D2), struct.pack("<H", 0))         # block
+            calls = 0
+            while calls < 500:
+                r = m.call(0x800D4C50, (0x80100000,))
+                calls += 1
+                if r != 1:
+                    break
+            print(f"  {name:22}: gave up after {calls} attempts (result {r})")
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["--sweep"]:
+    if sys.argv[1:2] == ["--retries"]:
+        retries(sys.argv[2:])
+    elif sys.argv[1:2] == ["--busy"]:
+        busy_sweep(sys.argv[2:])
+    elif sys.argv[1:2] == ["--sweep"]:
         sweep(sys.argv[2:])
     else:
         main(sys.argv[1:])

@@ -328,7 +328,7 @@ static void test_validate(void) {
 /* The Memory Card compatibility patch (tools/patch_menu.py), pinned word by word: the ACK wait of the card
  * detection routine (menu text address 0x800d480c) was 0x78 units, now 2000 like the frame transfers, and the
  * settle time between /CS low and the first byte (detection, frame read, frame write) was 0x96, 0x64 and 0x50
- * units, now 1000. The sectors that hold the instructions carry a valid EDC. */
+ * units, now 1000, and the retry limits of a failed frame write (7 data, 9 directory), now 30. The sectors that hold the instructions carry a valid EDC. */
 static uint32_t rd_le32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
 
 static uint32_t cd_edc(const uint8_t *p, size_t n) {
@@ -348,6 +348,8 @@ static void test_memcard_timing_patch(void) {
         { 0x800d484cu, 0x240403e8u },   /* addiu $a0, $zero, 1000  (settle, detection) */
         { 0x800dea94u, 0x240403e8u },   /* addiu $a0, $zero, 1000  (settle, frame read) */
         { 0x800d4b94u, 0x240403e8u },   /* addiu $a0, $zero, 1000  (settle, frame write) */
+        { 0x800d51b4u, 0x2c42001eu },   /* sltiu $v0, $v0, 30  (data frame retries, was 7) */
+        { 0x800d5244u, 0x2c42001eu },   /* sltiu $v0, $v0, 30  (directory frame retries, was 9) */
     };
     const uint8_t *exe = emb + (uint64_t)exe_lba * MH_MENU_SECTOR + 24;
     assert(!memcmp(exe, "PS-X EXE", 8) && rd_le32(exe + 0x18) == text_base);
