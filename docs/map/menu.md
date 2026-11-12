@@ -90,9 +90,9 @@ defaults with `menu_defaults_patch`, and for the Umbrella theme appends a `PSTCF
 `umbrella_music.vag` (config text `theme=umbrella\nmusic=embedded:umbrella.vag\nmusic_loop=true\nmusic_volume=68\n`).
 This module does not use the VAG file itself.
 
-## Memory Card compatibility patch (Manager 0.5.1 and 0.5.2, deliberate deviation from the original)
+## Memory Card compatibility patch (Manager 0.5.1, 0.5.2 and 0.5.3, deliberate deviation from the original)
 
-The embedded menu differs from the original in five instruction words, applied by `tools/patch_menu.py` (idempotent,
+The embedded menu differs from the original in seven instruction words, applied by `tools/patch_menu.py` (idempotent,
 with an EDC/ECC self test over the 89 Form 1 sectors) and pinned by `test_memcard_timing_patch` in `core/tests/test_menu.c`.
 The menu reads and writes the Memory Card through SIO0 itself, with two kinds of bounded waits that assume a card as
 fast as an original one.
@@ -104,6 +104,13 @@ fast as an original one.
    (frame read, `0x800dea94`) or 0x50 (frame write, `0x800d4b94`) units after the device is selected (about 1 microsecond
    per unit). A device that is not listening yet (a microcontroller waking up) loses the byte. All three are now 1000
    (about 1 ms). Every frame operation takes about 0.9 ms longer.
+
+3. **Retries of a failed frame** (0.5.3): in the save state machine (`FUN_800d4c50`) a data frame that fails to write or to read
+   back is retried 7 times, the directory frame 9 times, one attempt per video frame, which only covers a device that stays
+   busy about 100 ms after a write (simulated: a device ignoring /CS for 50 ms after a write already breaks the first
+   read back). `sltiu $v0, $v0, 7` at `0x800d51b4` and `sltiu $v0, $v0, 9` at `0x800d5244` now compare with 30. Measured by
+   running the state machine against a card that never answers: 7 and 9 attempts before, 30 and 30 after. A save that really
+   fails now reports the error after about 2 seconds instead of about 0.1 seconds.
 
 The third `addiu $a0, $zero, 0x78` in the program (`0x800dece0`) belongs to the pad routine and is not touched. Not tested
 on a console or a real Memory Card device.

@@ -12,7 +12,11 @@ milliseconds.
 Second part: the menu starts the first byte only 0x96 (detection), 0x64 (frame read) or 0x50 (frame write) delay units
 (about 1 microsecond each) after /CS goes low. A device that is not listening yet at that moment (a microcontroller
 waking up) loses the byte and is not found. These are minimum waits, so the three `addiu $a0, $zero, N` become 1000
-(about 1 ms): every frame operation takes about 1 ms longer, nothing else changes. Nothing else is touched.
+(about 1 ms): every frame operation takes about 1 ms longer, nothing else changes.
+
+Third part: a frame that fails to write or to read back is retried 7 times (data) or 9 times (directory), one attempt per
+video frame, which covers a device that stays busy for only about 100 ms after a write. Both limits become 30 (about 2 s),
+so the save only reports an error after a longer wait. Nothing else is touched.
 
 The raw sectors that contain the instructions get fresh EDC and ECC (ECMA-130 Mode 2 Form 1), so the
 sector check done by the Manager (`mh_menu_validate_blob`) and by CD hardware keeps passing.
@@ -39,6 +43,10 @@ PATCHES = [
     (0x800D484C, 0x24040096, 0x240403E8),
     (0x800DEA94, 0x24040064, 0x240403E8),
     (0x800D4B94, 0x24040050, 0x240403E8),
+    # retries of a Memory Card frame that failed to write or read back, in the save state machine (FUN_800d4c50):
+    # data frames 7 -> 30 attempts (sltiu $v0, $v0, 7), directory frame 9 -> 30 (sltiu $v0, $v0, 9)
+    (0x800D51B4, 0x2C420007, 0x2C42001E),
+    (0x800D5244, 0x2C420009, 0x2C42001E),
 ]
 
 
