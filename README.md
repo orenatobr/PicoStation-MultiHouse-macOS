@@ -105,6 +105,7 @@ the confirmation checkbox. Even so, double-check the disk name in the list.
 - Custom cheat profiles that need the v4 format are limited to 256 code lines per disc, the most the
   firmware runs; the program refuses more.
 - Titles with accented characters show blanks in the console menu (the firmware only displays ASCII).
+- Names longer than 31 characters (up to 71) need firmware 0.2.0 or newer: the Manager stores them in reserved bytes that the original V3 firmware refuses. Names of 31 characters or less are written exactly as before. A name that is no longer cut is a different favorite key in the console menu, so favorites of that game must be added again.
 - Several messages still mention "Windows" or "PhysicalDrive": the texts were kept as in the original.
 
 ## Build

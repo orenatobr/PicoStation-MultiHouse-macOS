@@ -66,7 +66,8 @@ bool mh_v2_recover_header_from_body(MhIo *io, uint64_t size, const MhV2Env *env,
         if (r[4] == 0) continue;
         art = mh_v2_rd16(r + 0x38);
         if (memcmp(r, MH_V2_CASE_MAGIC, 4) != 0 || r[6] != i || (uint8_t)(r[5] - 1) > 4 ||
-            (art != 0xffff && art != i) || mh_crc_record(r, MH_V2_CASE_SIZE) != mh_v2_rd32(r + 0x4c))
+            (art != 0xffff && art != i) || mh_crc_record(r, MH_V2_CASE_SIZE) != mh_v2_rd32(r + 0x4c) ||
+            !mh_v2_case_ext_valid(r))
             goto done;
         for (j = 0; j < 5; j++) {
             uint8_t id = r[0x3a + j];
@@ -103,7 +104,8 @@ bool mh_v2_recover_header_from_body(MhIo *io, uint64_t size, const MhV2Env *env,
         if (size / 512 < raw_end) goto done;
         art = mh_v2_rd16(r + 0x62);
         if (!mh_disc_layout_valid(r) || (art != 0xffff && art != i) ||
-            mh_crc_record(r, MH_V2_DISC_SIZE) != mh_v2_rd32(r + 0xfc))
+            mh_crc_record(r, MH_V2_DISC_SIZE) != mh_v2_rd32(r + 0xfc) ||
+            !mh_v2_disc_ext_valid(r, cases + (size_t)case_of[i] * MH_V2_CASE_SIZE))
             goto done;
         ndiscs++;
     }
@@ -238,7 +240,7 @@ static bool tracks_from_sector(MhDisc *d, const uint8_t *t)
 }
 
 /* Loads one disc of a Case into a new MhDisc. Returns the disc or NULL (c->res set). */
-static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned slot, unsigned id)
+static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, const uint8_t *crec, unsigned ci, unsigned slot, unsigned id)
 {
     MhV2DiscRec r;
     MhDisc *d;
@@ -259,7 +261,7 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
         (uint8_t)(r.track_count - 1) > 0x62 || r.sectors == 0 || r.raw_blocks != (uint64_t)r.sectors * 5 ||
         (base & 0xff) != 0 || base != r.track_lba || r.raw_lba != base + 0x100 ||
         c->size / 512 < r.raw_blocks + r.raw_lba || !mh_disc_layout_valid(drec) ||
-        mh_crc_record(drec, MH_V2_DISC_SIZE) != r.crc) {
+        mh_crc_record(drec, MH_V2_DISC_SIZE) != r.crc || !mh_v2_disc_ext_valid(drec, crec)) {
         lfail(c, "The card has an invalid Disc record.");
         return NULL;
     }
@@ -318,8 +320,8 @@ static MhDisc *load_disc(LoadCtx *c, const uint8_t *drec, unsigned ci, unsigned 
     mh_str_copy(d->serial, sizeof d->serial, (const char *)drec + 0xc);
     /* the original copied the name with a 0x21 byte cap and the title with 0x60 from the same
      * source; both stop at the NUL that ends the 0x20 byte field */
-    mh_str_copy(d->name, MH_DISC_NAME_MAX, (const char *)drec + 0x1c);
-    mh_str_copy(d->title, MH_DISC_TITLE_MAX, (const char *)drec + 0x1c);
+    mh_v2_disc_full_title(drec, d->name, MH_DISC_NAME_MAX);
+    mh_v2_disc_full_title(drec, d->title, MH_DISC_TITLE_MAX);
     /* bin_count is a free byte on the card; MhDisc.files holds 99 entries and the rest of the code
      * indexes it by nfiles (the original had no such array walk for a loaded disc) */
     d->nfiles = r.bin_count > MH_DISC_MAX_FILES ? MH_DISC_MAX_FILES : r.bin_count;
@@ -679,14 +681,14 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         if (cr[4] == 0) continue;
         mh_v2_case_decode(cr, &r, NULL);
         if (!mh_v2_case_magic(cr) || r.index != i || (uint8_t)(r.disc_count - 1) > 4 ||
-            mh_crc_record(cr, MH_V2_CASE_SIZE) != r.crc) {
+            mh_crc_record(cr, MH_V2_CASE_SIZE) != r.crc || !mh_v2_case_ext_valid(cr)) {
             lfail(&c, "The card has an invalid Case record.");
             goto out;
         }
         cs->in_use = 1;
         cs->slot = (uint8_t)i;
         cs->pad5 = r.variant;
-        mh_str_copy(cs->title, MH_CASE_TITLE_MAX, (const char *)cr + 8);
+        mh_v2_case_full_name(cr, dtab + (size_t)r.disc_ids[0] * MH_V2_DISC_SIZE, cs->title, MH_CASE_TITLE_MAX);
         mh_str_copy(cs->serial, sizeof cs->serial, (const char *)cr + 0x28);
         if (r.art_id != MH_V2_ART_NONE) {
             char path[MH_PATH_MAX];
@@ -703,7 +705,7 @@ bool mh_v2_load_io(MhIo *io, MhV2SourceKind kind, uint32_t disk_number, uint64_t
         }
         for (k = 0; k < r.disc_count; k++) {
             unsigned id = r.disc_ids[k];
-            MhDisc *d = load_disc(&c, dtab + (size_t)id * MH_V2_DISC_SIZE, i, k, id);
+            MhDisc *d = load_disc(&c, dtab + (size_t)id * MH_V2_DISC_SIZE, cr, i, k, id);
             if (!d) goto out;
             cs->discs[cs->disc_count++] = d;
         }

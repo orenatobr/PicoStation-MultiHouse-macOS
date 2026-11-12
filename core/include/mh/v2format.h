@@ -197,6 +197,7 @@ typedef struct MhV2CaseRec {
     char code[MH_V2_CASE_CODE_MAX + 1]; /* +0x28 (the Case serial), NUL added by decode */
     uint16_t art_id;        /* +0x38, 0xFFFF = none, else must equal the Case index */
     uint8_t disc_ids[5];    /* +0x3A, Disc table indexes; entries >= disc_count must be 0 */
+    uint8_t long_name;      /* +0x3F, long names extension: 0 = name is whole, 1 = continues in case_ext of slot 0 (docs/LONG_NAMES.md) */
     uint32_t crc;           /* +0x4C, CRC-32 of bytes 0..0x4B */
 } MhV2CaseRec;
 
@@ -206,6 +207,9 @@ void mh_v2_case_decode(const uint8_t rec[MH_V2_CASE_SIZE], MhV2CaseRec *out, boo
 void mh_v2_case_encode(const MhV2CaseRec *in, uint8_t rec[MH_V2_CASE_SIZE]);
 /* True when the 4 magic bytes are "CASE". */
 bool mh_v2_case_magic(const uint8_t rec[MH_V2_CASE_SIZE]);
+/* Long names (docs/LONG_NAMES.md): +0x3F is 0 or 1, bytes +0x40..+0x4B are zero, and with 1 the
+ * name field holds exactly 31 printable characters (0x20..0x7E) and a NUL. */
+bool mh_v2_case_ext_valid(const uint8_t rec[MH_V2_CASE_SIZE]);
 
 /* ===================================================================== Disc record (0x100) */
 
@@ -215,6 +219,17 @@ bool mh_v2_case_magic(const uint8_t rec[MH_V2_CASE_SIZE]);
 #define MH_V2_DF_MASK 0x3             /* flags must be < 4 */
 #define MH_V2_SERIAL_MAX 0x10
 #define MH_V2_TITLE_MAX 0x20
+
+/* Long names extension (card format 2.1), Disc record bytes +0x94..+0xFB:
+ *   +0x94 "LNX1"  +0x98 title_ext_len (0..40)  +0x99 case_ext_len (0..40, slot 0 only)
+ *   +0x9A title_ext[40]  +0xC2 case_ext[40]  +0xEA 18 zero bytes.
+ * The 31 character base stays in the 0x20 byte field; the rest of the name goes in the extension. */
+#define MH_V2_LNX_OFF 0x94u
+#define MH_V2_LNX_MAGIC "LNX1"
+#define MH_V2_LNX_EXT_MAX 40u
+#define MH_V2_NAME_BASE 31u           /* characters kept in the 0x20 byte fields */
+#define MH_V2_NAME_LONG_MAX 71u       /* base + extension */
+#define MH_V2_CASE_FLAG_OFF 0x3Fu
 
 typedef struct MhV2DiscRec {
     uint8_t used;           /* +4 */
@@ -238,12 +253,33 @@ typedef struct MhV2DiscRec {
     uint32_t extra_size;    /* +0x78 == 0xA00 */
     uint32_t crc32;         /* +0x7C CRC-32 of the RAW data (0x930 bytes of each slot) */
     uint8_t sha1[20];       /* +0x80 SHA-1 over the same bytes */
+    bool has_ext;           /* +0x94 magic "LNX1" present */
+    uint8_t title_ext_len;  /* +0x98 raw (may be > 40 on a corrupt card) */
+    uint8_t case_ext_len;   /* +0x99 raw */
+    char title_ext[MH_V2_LNX_EXT_MAX + 1]; /* +0x9A, NUL added by decode */
+    char case_ext[MH_V2_LNX_EXT_MAX + 1];  /* +0xC2, NUL added by decode */
     uint32_t crc;           /* +0xFC CRC-32 of bytes 0..0xFB */
 } MhV2DiscRec;
 
 void mh_v2_disc_decode(const uint8_t rec[MH_V2_DISC_SIZE], MhV2DiscRec *out, bool *crc_ok);
 void mh_v2_disc_encode(const MhV2DiscRec *in, uint8_t rec[MH_V2_DISC_SIZE]);
 bool mh_v2_disc_magic(const uint8_t rec[MH_V2_DISC_SIZE]);
+/* Reserved bytes +0x94..+0xFB of a Disc record (docs/LONG_NAMES.md). Without the magic they must all
+ * be zero. With it: lengths <= 40, bytes after each length zero, extension bytes printable
+ * (0x20..0x7E), case_ext_len zero unless slot == 0, +0xEA..+0xFB zero, and a non zero length needs
+ * the matching 0x20 byte field to be 31 printable characters and a NUL. `case_rec` (may be NULL)
+ * is the record of the Case that owns the Disc and supplies the Case name field for case_ext_len. */
+bool mh_v2_disc_ext_valid(const uint8_t rec[MH_V2_DISC_SIZE], const uint8_t *case_rec);
+/* Full Disc title: the base field plus title_ext when the record carries a valid extension.
+ * Always NUL terminated, never longer than 71 characters. */
+void mh_v2_disc_full_title(const uint8_t rec[MH_V2_DISC_SIZE], char *out, size_t n);
+/* Full Case name from a Case record and the Disc record in slot 0 (may be NULL). The extension is
+ * used only when the Case is flagged and the Disc supplies a valid case_ext; otherwise the 31
+ * character base name is returned (a reader never fails over it). */
+void mh_v2_case_full_name(const uint8_t case_rec[MH_V2_CASE_SIZE], const uint8_t *slot0_rec, char *out, size_t n);
+/* Splits `name` for the writer: base (32 byte field, 31 characters + NUL) and extension. Characters
+ * outside 0x20..0x7E become spaces and the name is cut at 71. Returns the extension length. */
+unsigned mh_v2_name_split(const char *name, char base[MH_V2_TITLE_MAX], char ext[MH_V2_LNX_EXT_MAX + 1]);
 /* LBAs of the parts of a package with MH_V2_DF_EXT, from its base LBA. */
 #define MH_V2_PKG_TRACK(base) ((base) + 0)
 #define MH_V2_PKG_CHEAT(base) ((base) + 5)

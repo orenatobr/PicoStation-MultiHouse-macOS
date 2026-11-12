@@ -239,6 +239,8 @@ static bool build_tables(Ctx *c)
     c->max_end2 = c->max_end1;
     for (ci = 0; ci < MH_PROJECT_MAX_CASES; ci++) {
         const MhCase *cs = &c->p->cases[ci];
+        char base[MH_V2_TITLE_MAX], case_ext[MH_V2_LNX_EXT_MAX + 1], title_ext[MH_V2_LNX_EXT_MAX + 1], dname[MH_DISC_NAME_MAX];
+        unsigned case_ext_len, title_ext_len;
         uint8_t *crec = c->zone + MH_V2_CASE_OFF + (size_t)ci * MH_V2_CASE_SIZE;
         if (!cs->in_use) continue;
         memcpy(crec, MH_V2_CASE_MAGIC, 4);
@@ -246,7 +248,9 @@ static bool build_tables(Ctx *c)
         crec[5] = cs->disc_count;
         crec[6] = (uint8_t)ci;
         crec[7] = cs->pad5;
-        copy_str(crec + 8, MH_V2_CASE_NAME_MAX, cs->title);
+        case_ext_len = mh_v2_name_split(cs->title, base, case_ext);
+        copy_str(crec + 8, MH_V2_CASE_NAME_MAX, case_ext_len ? base : cs->title);
+        if (case_ext_len) crec[MH_V2_CASE_FLAG_OFF] = 1;
         copy_str(crec + 0x28, MH_V2_CASE_CODE_MAX, cs->serial);
         mh_v2_wr16(crec + 0x38, cs->art_path[0] ? (uint16_t)ci : 0xffff);
         for (j = 0; j < cs->disc_count; j++) {
@@ -269,7 +273,18 @@ static bool build_tables(Ctx *c)
             drec[7] = (uint8_t)j;
             mh_v2_wr32(drec + 8, ((d->flags >> 6) & 1) | MH_V2_DF_EXT);
             copy_str(drec + 0xc, MH_V2_SERIAL_MAX, d->serial);
-            copy_str(drec + 0x1c, MH_V2_TITLE_MAX, d->name);
+            mh_card_disc_name(d, cs->disc_count, dname, sizeof dname);
+            title_ext_len = mh_v2_name_split(dname, base, title_ext);
+            copy_str(drec + 0x1c, MH_V2_TITLE_MAX, title_ext_len ? base : dname);
+            if (title_ext_len || (j == 0 && case_ext_len)) {
+                memcpy(drec + MH_V2_LNX_OFF, MH_V2_LNX_MAGIC, 4);
+                drec[0x98] = (uint8_t)title_ext_len;
+                memcpy(drec + 0x9a, title_ext, title_ext_len);
+                if (j == 0) {
+                    drec[0x99] = (uint8_t)case_ext_len;
+                    memcpy(drec + 0xc2, case_ext, case_ext_len);
+                }
+            }
             mh_v2_wr64(drec + 0x3c, lba);
             mh_v2_wr64(drec + 0x44, lba);
             mh_v2_wr64(drec + 0x4c, lba + 0x100);

@@ -140,6 +140,7 @@ void mh_v2_case_decode(const uint8_t r[MH_V2_CASE_SIZE], MhV2CaseRec *o, bool *c
     o->code[MH_V2_CASE_CODE_MAX] = 0;
     o->art_id = mh_v2_rd16(r + 0x38);
     memcpy(o->disc_ids, r + 0x3a, 5);
+    o->long_name = r[MH_V2_CASE_FLAG_OFF];
     o->crc = mh_v2_rd32(r + 0x4c);
     if (crc_ok) *crc_ok = (o->crc == mh_crc_record(r, MH_V2_CASE_SIZE));
 }
@@ -156,7 +157,30 @@ void mh_v2_case_encode(const MhV2CaseRec *in, uint8_t r[MH_V2_CASE_SIZE])
     mh_str_copy((char *)r + 0x28, MH_V2_CASE_CODE_MAX, in->code);
     mh_v2_wr16(r + 0x38, in->art_id);
     memcpy(r + 0x3a, in->disc_ids, 5);
+    r[MH_V2_CASE_FLAG_OFF] = in->long_name;
     mh_v2_wr32(r + 0x4c, mh_crc_record(r, MH_V2_CASE_SIZE));
+}
+
+/* 31 printable characters (0x20..0x7E) followed by NUL in a 0x20 byte field */
+static bool field31(const uint8_t *f)
+{
+    unsigned i;
+    for (i = 0; i < MH_V2_NAME_BASE; i++)
+        if (f[i] < 0x20 || f[i] > 0x7e) return false;
+    return f[MH_V2_NAME_BASE] == 0;
+}
+
+static bool zero_run(const uint8_t *p, size_t n)
+{
+    while (n--)
+        if (*p++) return false;
+    return true;
+}
+
+bool mh_v2_case_ext_valid(const uint8_t r[MH_V2_CASE_SIZE])
+{
+    if (r[MH_V2_CASE_FLAG_OFF] > 1 || !zero_run(r + 0x40, 0xc)) return false;
+    return r[MH_V2_CASE_FLAG_OFF] == 0 || field31(r + 8);
 }
 
 /* ---- Disc record ------------------------------------------------------------------------- */
@@ -189,6 +213,13 @@ void mh_v2_disc_decode(const uint8_t r[MH_V2_DISC_SIZE], MhV2DiscRec *o, bool *c
     o->extra_size = mh_v2_rd32(r + 0x78);
     o->crc32 = mh_v2_rd32(r + 0x7c);
     memcpy(o->sha1, r + 0x80, 20);
+    o->has_ext = memcmp(r + MH_V2_LNX_OFF, MH_V2_LNX_MAGIC, 4) == 0;
+    if (o->has_ext) {
+        o->title_ext_len = r[0x98];
+        o->case_ext_len = r[0x99];
+        memcpy(o->title_ext, r + 0x9a, MH_V2_LNX_EXT_MAX);
+        memcpy(o->case_ext, r + 0xc2, MH_V2_LNX_EXT_MAX);
+    }
     o->crc = mh_v2_rd32(r + 0xfc);
     if (crc_ok) *crc_ok = (o->crc == mh_crc_record(r, MH_V2_DISC_SIZE));
 }
@@ -218,6 +249,15 @@ void mh_v2_disc_encode(const MhV2DiscRec *in, uint8_t r[MH_V2_DISC_SIZE])
     mh_v2_wr32(r + 0x78, in->extra_size);
     mh_v2_wr32(r + 0x7c, in->crc32);
     memcpy(r + 0x80, in->sha1, 20);
+    if (in->has_ext) {
+        unsigned tl = in->title_ext_len > MH_V2_LNX_EXT_MAX ? MH_V2_LNX_EXT_MAX : in->title_ext_len;
+        unsigned cl = in->case_ext_len > MH_V2_LNX_EXT_MAX ? MH_V2_LNX_EXT_MAX : in->case_ext_len;
+        memcpy(r + MH_V2_LNX_OFF, MH_V2_LNX_MAGIC, 4);
+        r[0x98] = (uint8_t)tl;
+        r[0x99] = (uint8_t)cl;
+        memcpy(r + 0x9a, in->title_ext, tl);
+        memcpy(r + 0xc2, in->case_ext, cl);
+    }
     mh_v2_wr32(r + 0xfc, mh_crc_record(r, MH_V2_DISC_SIZE));
 }
 
@@ -303,4 +343,72 @@ bool mh_v2_resume_decode(const uint8_t b[512], MhV2Resume *o)
         o->verify_stamp = mh_v2_rd64(b + MH_V2_RSM_VFY_VAL_OFF);
     }
     return true;
+}
+
+/* ---- long names (docs/LONG_NAMES.md) ------------------------------------------------------- */
+
+bool mh_v2_disc_ext_valid(const uint8_t r[MH_V2_DISC_SIZE], const uint8_t *case_rec)
+{
+    unsigned tl, cl, i;
+    if (memcmp(r + MH_V2_LNX_OFF, MH_V2_LNX_MAGIC, 4) != 0) return zero_run(r + MH_V2_LNX_OFF, 0xfc - MH_V2_LNX_OFF);
+    tl = r[0x98];
+    cl = r[0x99];
+    if (tl > MH_V2_LNX_EXT_MAX || cl > MH_V2_LNX_EXT_MAX) return false;
+    if (!zero_run(r + 0x9a + tl, MH_V2_LNX_EXT_MAX - tl) || !zero_run(r + 0xc2 + cl, MH_V2_LNX_EXT_MAX - cl) ||
+        !zero_run(r + 0xea, 0xfc - 0xea))
+        return false;
+    for (i = 0; i < tl; i++)
+        if (r[0x9a + i] < 0x20 || r[0x9a + i] > 0x7e) return false;
+    for (i = 0; i < cl; i++)
+        if (r[0xc2 + i] < 0x20 || r[0xc2 + i] > 0x7e) return false;
+    if (cl != 0 && r[7] != 0) return false;
+    if (tl != 0 && !field31(r + 0x1c)) return false;
+    if (cl != 0 && case_rec && !field31(case_rec + 8)) return false;
+    return true;
+}
+
+static void join_name(const uint8_t *field, const uint8_t *ext, unsigned elen, char *out, size_t n)
+{
+    char tmp[MH_V2_NAME_LONG_MAX + 1];
+    size_t b = strnlen((const char *)field, MH_V2_TITLE_MAX);
+    if (b > MH_V2_NAME_BASE) b = MH_V2_NAME_BASE;
+    memcpy(tmp, field, b);
+    if (elen) memcpy(tmp + b, ext, elen);
+    tmp[b + elen] = 0;
+    mh_str_copy(out, n, tmp);
+}
+
+void mh_v2_disc_full_title(const uint8_t r[MH_V2_DISC_SIZE], char *out, size_t n)
+{
+    unsigned tl = 0;
+    if (memcmp(r + MH_V2_LNX_OFF, MH_V2_LNX_MAGIC, 4) == 0 && mh_v2_disc_ext_valid(r, NULL)) tl = r[0x98];
+    join_name(r + 0x1c, r + 0x9a, tl, out, n);
+}
+
+void mh_v2_case_full_name(const uint8_t cr[MH_V2_CASE_SIZE], const uint8_t *d0, char *out, size_t n)
+{
+    unsigned cl = 0;
+    if (cr[MH_V2_CASE_FLAG_OFF] == 1 && mh_v2_case_ext_valid(cr) && d0 && memcmp(d0, MH_V2_DISC_MAGIC, 4) == 0 &&
+        memcmp(d0 + MH_V2_LNX_OFF, MH_V2_LNX_MAGIC, 4) == 0 && d0[7] == 0 && mh_v2_disc_ext_valid(d0, cr))
+        cl = d0[0x99];
+    join_name(cr + 8, d0 ? d0 + 0xc2 : (const uint8_t *)"", cl, out, n);
+}
+
+unsigned mh_v2_name_split(const char *name, char base[MH_V2_TITLE_MAX], char ext[MH_V2_LNX_EXT_MAX + 1])
+{
+    size_t len = name ? strlen(name) : 0, i;
+    unsigned el;
+    if (len > MH_V2_NAME_LONG_MAX) len = MH_V2_NAME_LONG_MAX;
+    memset(base, 0, MH_V2_TITLE_MAX);
+    ext[0] = 0;
+    for (i = 0; i < len && i < MH_V2_NAME_BASE; i++) base[i] = name[i];
+    if (len <= MH_V2_NAME_BASE) return 0;
+    el = (unsigned)(len - MH_V2_NAME_BASE);
+    for (i = 0; i < el; i++) ext[i] = name[MH_V2_NAME_BASE + i];
+    ext[el] = 0;
+    for (i = 0; i < MH_V2_NAME_BASE; i++)
+        if ((uint8_t)base[i] < 0x20 || (uint8_t)base[i] > 0x7e) base[i] = ' ';
+    for (i = 0; i < el; i++)
+        if ((uint8_t)ext[i] < 0x20 || (uint8_t)ext[i] > 0x7e) ext[i] = ' ';
+    return el;
 }
