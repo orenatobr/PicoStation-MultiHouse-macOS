@@ -359,7 +359,7 @@ static uint32_t crc32_zlib(uint32_t addr, uint32_t n) {
 static void test_menu_game_id_routine(void) {
     assert(rd_le32(&(uint8_t[]){ text_byte(0x800d42e8u), text_byte(0x800d42e9u), text_byte(0x800d42eau),
                                  text_byte(0x800d42ebu) }[0]) == 0x27bdff98u);       /* addiu $sp, $sp, -0x68 */
-    assert(crc32_zlib(0x800d42e8u, 564) == 0x0ef2f4b9u);                                /* the 564 byte routine */
+    assert(crc32_zlib(0x800d42e8u, 564) == 0x4b6c4023u);                                /* the 564 byte routine */
     for (uint32_t a = 0x800d42e8u + 564; a < 0x800d42e8u + 996; a++) assert(text_byte(a) == 0);   /* rest zeroed */
 }
 

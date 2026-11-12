@@ -22,7 +22,7 @@ MAX_BYTES = 996            # size of the dead function that is replaced
 HOOK_SITE = 0x800D8DB0      # jal 0x800d8c6c  ->  jal BASE
 DETECT = 0x800D8C6C
 GAME_ID = b"SCES-31337"
-WAIT_UNITS = 800_000        # about 0.8 s for the device to switch card (FUN_800d4738 unit is about 1 us)
+WAIT_UNITS = 1_500_000      # about 1.5 s: the device waits 250 ms, then opens the card and loads it from SD
 SETTLE_UNITS = 1000
 
 REG = {n: i for i, n in enumerate(

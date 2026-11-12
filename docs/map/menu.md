@@ -143,23 +143,30 @@ favorites seemed to vanish after playing something else. With an original card t
 0.5.4 adds a routine (`tools/menu_gameid_asm.py`, 564 bytes) that replaces the unreferenced CD-ROM helper at `0x800d42e8`
 and is entered by redirecting `jal 0x800d8c6c` at `0x800d8db0` (the first card detection of the save and load state
 machine). It repeats the probes of the launch flow, sends the menu's own id `SCES-31337` (its boot file is `SCES_313.37`) to
-every slot that answered `27 FF`, waits about 0.8 s for the device to switch card, and then continues into the original
+every slot that answered `27 FF`, waits about 1.5 s for the device to switch card, and then continues into the original
 detection, so the caller sees the original result. A slot that does not answer `27 FF` (an original card) receives nothing
 but the probes the menu already sends at every game launch.
 
-`tools/sim_menu_memcard.py --gameid` runs the real code against a model of such a device (virtual card per id, 300 ms
-reconnect window, no ACK for the Game ID):
+What the device does, from its firmware source (https://github.com/ogg1e/Sd2psx-firmware, `src/ps1/ps1_odeman.c`,
+`ps1_cardman.c`, `ps1_memory_card.c`; the BitFunx firmware may differ): the command bytes are `81 21 00 <len> <id...>` with the
+length including the NUL, exactly what the menu sends; the device stops answering, closes the card, waits 250 ms (`CARD_SWITCH_DELAY_MS`,
+"required so the ODE can register the card change"), opens or creates the `.mcd` and loads it from the SD card, and answers
+again. An id found in its game database selects a card of its own; **any other id selects the numbered card `Card1`, channel 1**
+(`card_idx = IDX_MIN`), so `SCES-31337` lands on the ordinary default card, which is stable and shared.
+
+`tools/sim_menu_memcard.py --gameid` runs the real code against a model of such a device (700 ms switch by default, no ACK
+for the Game ID, unknown ids go to `Card1`):
 
 | Device | before | with the routine |
 |---|---|---|
-| SD2PSX family, last game's card active | stays on that card, favorites not found | switches to `SCES-31337`, found, favorites read (about 0.8 s) |
+| SD2PSX family, last game's card active | stays on that card, favorites not found | switches to `Card1`, found, favorites read (about 1.5 s) |
+| same, needs 1.2 s to switch | n/a | found and favorites read |
 | same, needs 2 s to switch | n/a | first attempt does not find the card; the id is then active, the next attempt works |
 | original card | found | found, no id sent (about 10 ms more) |
 
 Consequences: the menu's settings and favorites now live on the virtual card `SCES-31337` of the device. Settings saved
 earlier on a game's card are not found there; save them once again. If the device does not support Game ID switching
-nothing changes. The id format (`ABCD-12345`) is the one the menu already sends for games; how a given device treats an id
-it has never seen is not verified. Hypothesis from the protocol and the device documentation, validated only in the model.
+nothing changes. The id format (`ABCD-12345`) is the one the menu already sends for games. The behavior of the BitFunx itself is not verified; the behavior described above is read from the SD2PSX firmware source. Validated only in the model.
 
 ## Deviations
 
