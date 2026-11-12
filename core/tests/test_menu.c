@@ -325,9 +325,10 @@ static void test_validate(void) {
     free(img);
 }
 
-/* The Memory Card compatibility patch (tools/patch_menu.py): the ACK wait of the card detection routine
- * (menu text address 0x800d480c) was 0x78 units, now 2000 like the frame transfers, and the sector that holds
- * the two instructions carries a valid EDC. */
+/* The Memory Card compatibility patch (tools/patch_menu.py), pinned word by word: the ACK wait of the card
+ * detection routine (menu text address 0x800d480c) was 0x78 units, now 2000 like the frame transfers, and the
+ * settle time between /CS low and the first byte (detection, frame read, frame write) was 0x96, 0x64 and 0x50
+ * units, now 1000. The sectors that hold the instructions carry a valid EDC. */
 static uint32_t rd_le32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
 
 static uint32_t cd_edc(const uint8_t *p, size_t n) {
@@ -339,16 +340,22 @@ static uint32_t cd_edc(const uint8_t *p, size_t n) {
     return e;
 }
 
-static void test_memcard_ack_window(void) {
+static void test_memcard_timing_patch(void) {
     const uint32_t exe_lba = 24, header = 0x800, text_base = 0x800d0000u;
-    const uint32_t sites[2] = { 0x800d48b4u, 0x800d48fcu };
+    static const struct { uint32_t addr, word; } sites[] = {
+        { 0x800d48b4u, 0x240407d0u },   /* addiu $a0, $zero, 2000  (ACK wait, after the select byte) */
+        { 0x800d48fcu, 0x240407d0u },   /* addiu $a0, $zero, 2000  (ACK wait, after every byte) */
+        { 0x800d484cu, 0x240403e8u },   /* addiu $a0, $zero, 1000  (settle, detection) */
+        { 0x800dea94u, 0x240403e8u },   /* addiu $a0, $zero, 1000  (settle, frame read) */
+        { 0x800d4b94u, 0x240403e8u },   /* addiu $a0, $zero, 1000  (settle, frame write) */
+    };
     const uint8_t *exe = emb + (uint64_t)exe_lba * MH_MENU_SECTOR + 24;
     assert(!memcmp(exe, "PS-X EXE", 8) && rd_le32(exe + 0x18) == text_base);
-    for (int i = 0; i < 2; i++) {
-        uint32_t cooked = exe_lba * 2048 + header + (sites[i] - text_base);
+    for (unsigned i = 0; i < sizeof sites / sizeof sites[0]; i++) {
+        uint32_t cooked = exe_lba * 2048 + header + (sites[i].addr - text_base);
         uint32_t sector = cooked / 2048, off = cooked % 2048;
         const uint8_t *raw = emb + (uint64_t)sector * MH_MENU_SECTOR;
-        assert(rd_le32(raw + 24 + off) == 0x240407d0u);   /* addiu $a0, $zero, 2000 */
+        assert(rd_le32(raw + 24 + off) == sites[i].word);
         assert(!(raw[0x12] & 0x20));                      /* Form 1 */
         assert(cd_edc(raw + 0x10, 0x808) == rd_le32(raw + 0x818));
     }
@@ -362,7 +369,7 @@ int main(void) {
     test_iso();
     test_validate();
     test_files();
-    test_memcard_ack_window();
+    test_memcard_timing_patch();
     free(emb);
     puts("test_menu: ok");
     return 0;

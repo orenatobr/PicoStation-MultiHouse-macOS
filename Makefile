@@ -11,7 +11,7 @@ BUILD    ?= $(HOME)/.cache/picostation-mh-build
 
 .PHONY: test clean app
 
-VERSION ?= 0.5.1
+VERSION ?= 0.5.2
 APPNAME := PicoStation Multi House V3
 APPDIR  := $(BUILD)/$(APPNAME).app
 APP_M   := $(wildcard app/*.m) $(wildcard platform/mac/*.m)
