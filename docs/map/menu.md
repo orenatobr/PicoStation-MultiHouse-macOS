@@ -90,6 +90,17 @@ defaults with `menu_defaults_patch`, and for the Umbrella theme appends a `PSTCF
 `umbrella_music.vag` (config text `theme=umbrella\nmusic=embedded:umbrella.vag\nmusic_loop=true\nmusic_volume=68\n`).
 This module does not use the VAG file itself.
 
+## Memory Card compatibility patch (Manager 0.5.1, deliberate deviation from the original)
+
+The embedded menu differs from the original in two instruction words, applied by `tools/patch_menu.py` (idempotent,
+with an EDC/ECC self test over the 89 Form 1 sectors) and pinned by `test_memcard_ack_window` in `core/tests/test_menu.c`.
+The menu reads and writes the Memory Card through SIO0 itself. Its detection routine (text address `0x800d480c`) waits for
+the card's ACK after every byte for 0x78 units (about 180 microseconds); the frame read and write routines wait up to
+2000 units (about 3 ms). A device that acknowledges slower than 180 us (emulators, adapters) passed the transfers but was
+reported as "no Memory Card found". `addiu $a0, $zero, 0x78` at `0x800d48b4` and `0x800d48fc` is now `0x7d0`, the same
+budget. Quick devices are unaffected (the wait ends at the first ACK). The third `addiu $a0, $zero, 0x78` in the program
+(`0x800dece0`) belongs to the pad routine and is not touched. Not tested on a console or a real Memory Card device.
+
 ## Deviations
 
 * Sector 16 and sector index bounds are checked (the original trusted its callers).
